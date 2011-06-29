@@ -1,7 +1,7 @@
 MODELNAME := _ConvNet
 
 INCLUDES :=  -I$(PYTHON_INCLUDE) -I$(NUMPY_INCLUDE) -I./include
-LIB := -lpthread
+LIB := -lpthread -lcblas
 
 USECUBLAS   := 1
 
