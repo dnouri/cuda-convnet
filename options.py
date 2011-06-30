@@ -95,7 +95,7 @@ class OptionsParser:
         assert name not in self.options
         self.options[name] = Option(letter, name, desc, parser, set_once, default, excuses, requires, save)
     
-    def set_option(self, name, value, parse=True):
+    def set_value(self, name, value, parse=True):
         self.options[name].set_value(value, parse=parse)
     
     def get_value(self, name):

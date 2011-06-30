@@ -23,7 +23,14 @@ class GPUModel(IGPUModel):
             ms['layers'] = LayerParser.parse_layers(self.layer_def, self.layer_params, self, ms['layers'])
         else:
             ms['layers'] = LayerParser.parse_layers(self.layer_def, self.layer_params, self)
-
+            
+    def fill_excused_options(self):
+        if self.op.get_value('save_path') is None:
+            self.op.set_value('save_path', "")
+            self.op.set_value('train_batch_range', '0')
+            self.op.set_value('test_batch_range', '0')
+            self.op.set_value('data_path', '')
+            
     # Not necessary here
     def parse_batch_data(self, batch_data, train=True):
         return batch_data
@@ -86,7 +93,7 @@ if __name__ == "__main__":
     op.add_option("mini", "minibatch_size", IntegerOptionParser, "Minibatch size", default=128)
     op.add_option("layer-def", "layer_def", StringOptionParser, "Layer definition file", set_once=True)
     op.add_option("layer-params", "layer_params", StringOptionParser, "Layer parameter file")
-    op.add_option("check-grads", "check_grads", BooleanOptionParser, "Check gradients and quit?", default=0)
+    op.add_option("check-grads", "check_grads", BooleanOptionParser, "Check gradients and quit?", default=0, excuses=['data_path','save_path','train_batch_range','test_batch_range'])
     
     op.delete_option('max_test_err')
     op.options["max_filesize_mb"].default = 0

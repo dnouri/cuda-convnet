@@ -1,5 +1,4 @@
 /* 
- * File:   layer.cu
  * Author: Alex Krizhevsky (akrizhevsky@gmail.com)
  */
 
