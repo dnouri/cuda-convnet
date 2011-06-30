@@ -158,7 +158,7 @@ NVMatrix& Layer::getActGrads() {
  * =======================
  */
 
-LayerGraph::LayerGraph(PyListObject* layerParams) {
+LayerGraph::LayerGraph(PyListObject* layerParams) : _data(NULL), _checkingGrads(false) {
     int numDefs = PyList_GET_SIZE(layerParams);
     
     for (int i = 0; i < numDefs; i++) {
@@ -166,34 +166,33 @@ LayerGraph::LayerGraph(PyListObject* layerParams) {
         char* layerType = PyString_AS_STRING(PyDict_GetItemString(paramsDict, "type"));
         
         if (string(layerType) == string("fc")) {
-            layers.push_back(dynamic_cast<Layer*>(new FCLayer(paramsDict, this)));
+            _layers.push_back(dynamic_cast<Layer*>(new FCLayer(paramsDict, this)));
         } else if (string(layerType) == string("conv")) {
-            layers.push_back(dynamic_cast<Layer*>(new ConvLayer(paramsDict, this)));
+            _layers.push_back(dynamic_cast<Layer*>(new ConvLayer(paramsDict, this)));
         } else if (string(layerType) == string("pool")) {
-            layers.push_back(dynamic_cast<Layer*>(new PoolLayer(paramsDict, this)));
+            _layers.push_back(dynamic_cast<Layer*>(new PoolLayer(paramsDict, this)));
         } else if (string(layerType) == string("data")) {
             DataLayer *d = new DataLayer(paramsDict, this);
-            layers.push_back(dynamic_cast<Layer*>(d));
-            dataLayers.push_back(d);
+            _layers.push_back(dynamic_cast<Layer*>(d));
+            _dataLayers.push_back(d);
         } else if (string(layerType) == string("softmax")) {
-            layers.push_back(dynamic_cast<Layer*>(new SoftmaxLayer(paramsDict, this)));
+            _layers.push_back(dynamic_cast<Layer*>(new SoftmaxLayer(paramsDict, this)));
         } else if (strncmp(layerType, "cost.logreg", 32) == 0) {
             Cost *c = new LogregCost(paramsDict, this);
-            layers.push_back(dynamic_cast<Layer*>(c));
-            costs.push_back(c);
+            _layers.push_back(dynamic_cast<Layer*>(c));
+            _costs.push_back(c);
         } else {
             throw string("Unknown layer type ") + string(layerType);
         }
     }
     
     // Connect the forward links in the graph
-    for (int i = 0; i < layers.size(); i++) {
-        vector<Layer*>& prev = layers[i]->getPrev();
+    for (int i = 0; i < _layers.size(); i++) {
+        vector<Layer*>& prev = _layers[i]->getPrev();
         for (int j = 0; j < prev.size(); j++) {
-            prev[j]->addNext(layers[i]);
+            prev[j]->addNext(_layers[i]);
         }
     }
-    data = NULL;
     reset(); // For good measure
 }
 
@@ -213,7 +212,7 @@ bool LayerGraph::checkGradientsW(const string& name, float eps, Weights& weights
             weightsCPU(i,j) = v;
             fprop();
             double err = getCostFunctionValue();
-            numGrads(i,j) = (err - baseErr) / (getNumCases() * eps);
+            numGrads(i,j) = (err - _baseErr) / (getNumCases() * eps);
             weights.getW().copyFromHost(weightsCPU);
         }
     }
@@ -239,82 +238,82 @@ bool LayerGraph::checkGradientsW(const string& name, float eps, Weights& weights
         printf("Numeric norm:  %e\n", numNorm);
         printf("Relative error: %e\n", relErr);
     }
-    numTests++;
-    numFailures += fail;
+    _numTests++;
+    _numFailures += fail;
     return fail;
 }
 
 Layer& LayerGraph::operator[](const int idx) {
-    return *layers[idx];
+    return *_layers[idx];
 }
 
 Layer& LayerGraph::getLayer(const int idx) {
-    return *layers[idx];
+    return *_layers[idx];
 }
 
 void LayerGraph::copyToCPU() {
-    for (int i = 0; i < layers.size(); i++) {
-        layers[i]->copyToCPU();
+    for (int i = 0; i < _layers.size(); i++) {
+        _layers[i]->copyToCPU();
     }
 }
 
 void LayerGraph::copyToGPU() {
-    for (int i = 0; i < layers.size(); i++) {
-        layers[i]->copyToGPU();
+    for (int i = 0; i < _layers.size(); i++) {
+        _layers[i]->copyToGPU();
     }
 }
 
 void LayerGraph::updateWeights() {
-    for (int i = 0; i < layers.size(); i++) {
-        layers[i]->updateWeights();
+    for (int i = 0; i < _layers.size(); i++) {
+        _layers[i]->updateWeights();
     }
 }
 
 void LayerGraph::reset() {
-    for (int i = 0; i < layers.size(); i++) {
-        layers[i]->reset();
+    for (int i = 0; i < _layers.size(); i++) {
+        _layers[i]->reset();
     }
 }
 
 vector<DataLayer*>& LayerGraph::getDataLayers() {
-    return dataLayers;
+    return _dataLayers;
 }
 
 int LayerGraph::getNumLayers() {
-    return layers.size();
+    return _layers.size();
 }
 
 int LayerGraph::getNumCases() {
-    return data->getNumCases();
+    return _data->getNumCases();
 }
 
 void LayerGraph::bprop() {
-    for (int i = 0; i < costs.size(); i++) {
-        costs[i]->bprop();
+    for (int i = 0; i < _costs.size(); i++) {
+        _costs[i]->bprop();
     }
     reset();
 }
 
 void LayerGraph::fprop() {
-    assert(data != NULL);
-    fprop(*data);
+    assert(_data != NULL);
+    fprop(*_data);
 }
 
 void LayerGraph::fprop(Data& data) {
     setData(data);
     reset();
     for (int i = 0; i < data.getData().size(); i++) {
-        dataLayers[i]->fprop(data.getData());
+        _dataLayers[i]->fprop(data.getData());
     }
 }
 
 void LayerGraph::setData(Data& data) {
     assert(&data != NULL);
-    this->data = &data;
+    this->_data = &data;
 }
 
 ErrorResult& LayerGraph::getError() {
-    return *new ErrorResult(costs);
+    return *new ErrorResult(_costs);
 }
 
 double LayerGraph::getCostFunctionValue() {
@@ -324,25 +323,30 @@ double LayerGraph::getCostFunctionValue() {
     return val;
 }
 
+bool LayerGraph::isCheckingGrads() {
+    return _checkingGrads;
+}
+
 void LayerGraph::checkGradients(Data& data) {
-    numFailures = 0;
-    numTests = 0;
+    _checkingGrads = true;
+    _numFailures = 0;
+    _numTests = 0;
     fprop(data);
-    baseErr = getCostFunctionValue();
+    _baseErr = getCostFunctionValue();
     bprop();
     
-    for (vector<Layer*>::iterator it = layers.begin(); it != layers.end(); ++it) {
+    for (vector<Layer*>::iterator it = _layers.begin(); it != _layers.end(); ++it) {
         (*it)->checkGradients();
     }
     
     cout << "------------------------" << endl;
-    if (numFailures > 0) {
-        cout << numFailures << "/" << numTests << " TESTS FAILED" << endl;
+    if (_numFailures > 0) {
+        cout << _numFailures << "/" << _numTests << " TESTS FAILED" << endl;
     } else {
-        cout << "ALL " << numTests << " TESTS PASSED" << endl;
+        cout << "ALL " << _numTests << " TESTS PASSED" << endl;
     }
+    _checkingGrads = false;
 }
-
 
 /* 
  * =======================
@@ -371,8 +375,8 @@ FCLayer::FCLayer(PyObject* paramsDict, LayerGraph* layerList) : Layer(paramsDict
     floatv* epsW = getFloatVec((PyListObject*)PyDict_GetItemString(paramsDict, "epsW"));
     float epsB = PyFloat_AS_DOUBLE((PyFloatObject*)PyDict_GetItemString(paramsDict, "epsB"));
     floatv* wc = getFloatVec((PyListObject*)PyDict_GetItemString(paramsDict, "wc"));
-    weights.initialize(hWeights, hWeightsInc, epsW, wc, momW);
-    biases.initialize(hBiases, hBiasesInc, epsB, momB);
+    weights.initialize(hWeights, hWeightsInc, epsW, wc, momW, false);
+    biases.initialize(hBiases, hBiasesInc, epsB, 0, momB, true);
 
     char* neuronType = PyString_AS_STRING((PyStringObject*)PyDict_GetItemString(paramsDict, "neuron"));
     neuron = &Neuron::makeNeuron(neuronType);
@@ -404,7 +408,9 @@ void FCLayer::_bprop(NVMatrix& v) {
             delete &weights_T;
         }
         NVMatrix& prevActs_T = _prev[i]->getActs().getTranspose();
-        prevActs_T.rightMult(v, weights[i].getGrads());
+        weights[i].getInc().addProduct(prevActs_T, v,  weights[i].getMom(),
+                                       _layerGraph->isCheckingGrads() ? 1 : weights[i].getEps() / _layerGraph->getNumCases());
+//        prevActs_T.rightMult(v, weights[i].getGrads());
         delete &prevActs_T;
         
         if (_prev[i]->isPropagateGrad()) {
@@ -467,8 +473,8 @@ ConvLayer::ConvLayer(PyObject* paramsDict, LayerGraph* layerList) : Layer(params
     filterPixels = filterSize * filterSize;
     imgPixels = imgSize * imgSize;
     
-    weights.initialize(hWeights, hWeightsInc, epsW, wc, momW);
-    biases.initialize(hBiases, hBiasesInc, epsB, momB);
+    weights.initialize(hWeights, hWeightsInc, epsW, wc, momW, true);
+    biases.initialize(hBiases, hBiasesInc, epsB, 0, momB, true);
 
     char* neuronType = PyString_AS_STRING((PyStringObject*)PyDict_GetItemString(paramsDict, "neuron"));
     neuron = &Neuron::makeNeuron(neuronType);

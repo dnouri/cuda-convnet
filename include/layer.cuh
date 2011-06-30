@@ -90,15 +90,16 @@ public:
 
 class LayerGraph {
 private:
-    std::vector<Layer*> layers;
-    std::vector<DataLayer*> dataLayers;
-    std::vector<Cost*> costs;
-    Data* data;
+    std::vector<Layer*> _layers;
+    std::vector<DataLayer*> _dataLayers;
+    std::vector<Cost*> _costs;
+    Data* _data;
     
     // For gradient checking
-    int numFailures;
-    int numTests;
-    double baseErr;
+    int _numFailures;
+    int _numTests;
+    double _baseErr;
+    bool _checkingGrads;
 public:
     LayerGraph(PyListObject* layerParams);
     
@@ -118,6 +119,7 @@ public:
 
     bool checkGradientsW(const std::string& name, float eps, Weights& weights); 
     void checkGradients(Data& data);
+    bool isCheckingGrads();
     ErrorResult& getError();
     double getCostFunctionValue();
 };
