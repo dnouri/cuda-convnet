@@ -9,16 +9,9 @@ PYTHON_VERSION=$(shell python -V 2>&1 | cut -d ' ' -f 2 | cut -d '.' -f 1,2)
 LIB += -lpython$(PYTHON_VERSION)
 
 GENCODE_ARCH := -gencode=arch=compute_20,code=\"sm_20,compute_20\"
-#SM_ARCH := sm20
-
-MODELNAME := $(MODELNAME)
 COMMONFLAGS := -DNUMPY_INTERFACE -DMODELNAME=$(MODELNAME) -DINITNAME=init$(MODELNAME)
-ifeq ($(exec), 1)
-	EXECUTABLE	:= $(MODELNAME)
-	COMMONFLAGS	+= -DEXEC
-else
-	EXECUTABLE	:= $(MODELNAME).so
-endif
+
+EXECUTABLE	:= $(MODELNAME).so
 
 CUFILES				:= $(shell echo src/*.cu)
 CU_DEPS				:= $(shell echo include/*.cuh )
