@@ -1,8 +1,12 @@
+/* 
+ * File:   layer.cu
+ * Author: Alex Krizhevsky (akrizhevsky@gmail.com)
+ */
+
 #include "matrix.h"
 #include "matrix_funcs.h"
 
 using namespace std;
-/* c++ constructors can't call each other?! */
 
 void Matrix::_init(MTYPE* data, int numRows, int numCols, bool transpose, bool ownsData) {
     _updateDims(numRows, numCols);

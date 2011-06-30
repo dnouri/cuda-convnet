@@ -2,7 +2,7 @@
  * queue.h
  *
  *  Created on: 28-Dec-2008
- *      Author: spoon
+ *      Author: Alex Krizhevsky (akrizhevsky@gmail.com)
  */
 
 #ifndef QUEUE_H_

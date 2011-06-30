@@ -20,9 +20,9 @@ class GPUModel(IGPUModel):
     def init_model_state(self):
         ms = self.model_state
         if self.load_file:
-            ms['layers'] = LayerParser.parse_layers(self.layer_cfg, self.layer_params, self, ms['layers'])
+            ms['layers'] = LayerParser.parse_layers(self.layer_def, self.layer_params, self, ms['layers'])
         else:
-            ms['layers'] = LayerParser.parse_layers(self.layer_cfg, self.layer_params, self)
+            ms['layers'] = LayerParser.parse_layers(self.layer_def, self.layer_params, self)
 
     # Not necessary here
     def parse_batch_data(self, batch_data, train=True):
@@ -84,15 +84,15 @@ if __name__ == "__main__":
     #nr.seed(5)
     op = IGPUModel.get_default_options_parser()
     op.add_option("mini", "minibatch_size", IntegerOptionParser, "Minibatch size", default=128)
-    op.add_option("layer-cfg", "layer_cfg", StringOptionParser, "Layer config file", set_once=True)
-    op.add_option("layer-params", "layer_params", StringOptionParser, "Layer param file")
+    op.add_option("layer-def", "layer_def", StringOptionParser, "Layer definition file", set_once=True)
+    op.add_option("layer-params", "layer_params", StringOptionParser, "Layer parameter file")
     op.add_option("check-grads", "check_grads", BooleanOptionParser, "Check gradients and quit?", default=0)
     
-    op.options["max_test_err"].default = 250
+    op.delete_option('max_test_err')
     op.options["max_filesize_mb"].default = 0
     op.options["testing_freq"].default = 50
     op.options["num_epochs"].default = 50000
-    op.options['dp_type'].default = 'cifar'
+    op.options['dp_type'].default = None
     
     DataProvider.register_data_provider('cifar', 'CIFAR', CIFARDataProvider)
     DataProvider.register_data_provider('dummy-cn-n', 'Dummy ConvNet', DummyConvNetDataProvider)

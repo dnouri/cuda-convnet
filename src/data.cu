@@ -1,5 +1,8 @@
 #include "../include/data.cuh"
-
+/* 
+ * Author: Alex Krizhevsky (akrizhevsky@gmail.com)
+ * June 2011
+ */
 using namespace std;
 
 Data::Data(NVMatrixV& data, int numCases) : _data(&data), _numCases(numCases) {

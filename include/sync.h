@@ -2,7 +2,7 @@
  * sync.h
  *
  *  Created on: 29-Dec-2008
- *      Author: spoon
+ *      Author: Alex Krizhevsky (akrizhevsky@gmail.com)
  */
 
 #ifndef SYNC_H_

@@ -1,3 +1,7 @@
+/* 
+ * Author: Alex Krizhevsky (akrizhevsky@gmail.com)
+ */
+
 #ifndef MATRIX_FUNCS_H_
 #define MATRIX_FUNCS_H_
 

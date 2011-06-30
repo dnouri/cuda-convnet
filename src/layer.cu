@@ -79,6 +79,7 @@ void Layer::fprop(NVMatrixV& v) {
     for (NVMatrixV::iterator it = v.begin(); it != v.end(); ++it) {
         (*it)->transpose(_trans);
     }
+    _acts.transpose(_trans);
     _fprop(v);
 }
 

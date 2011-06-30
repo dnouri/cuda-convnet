@@ -97,6 +97,7 @@ class IGPUModel:
         self.print_model_state()
         print "Running on CUDA device(s) %s" % ", ".join("%d" % d for d in self.device_ids)
         print "Current time: %s" % asctime(localtime())
+        print "Saving checkpoints to %s" % os.path.join(self.save_path, self.save_file)
         next_data = self.get_next_batch()
         while self.epoch <= self.num_epochs:
             data = next_data
