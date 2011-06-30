@@ -1,7 +1,3 @@
-/* 
- * Author: Alex Krizhevsky (akrizhevsky@gmail.com)
- * June 2011
- */
 #include "../include/data.cuh"
 
 using namespace std;

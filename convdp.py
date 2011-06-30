@@ -5,7 +5,6 @@ class CIFARDataProvider(LabeledMemoryDataProvider):
         LabeledMemoryDataProvider.__init__(self, data_dir, batch_range, init_epoch, init_batchnum, dp_params, test)
         self.minibatch_size = dp_params['minibatch_size']
         
-    # discards dic param, always returns dic
     def get_next_batch(self):
         epoch, batchnum, datadic = LabeledMemoryDataProvider.get_next_batch(self)
         data_mean = self.batch_meta['data_mean']
@@ -14,13 +13,14 @@ class CIFARDataProvider(LabeledMemoryDataProvider):
             datadic['data'] = n.require((datadic['data'].astype(n.single) - data_mean), dtype=n.single, requirements='C')# / 255
             datadic['labels'] = datadic['labels'].reshape((1, datadic['data'].shape[1]))
             datadic['num_real_cases'] = datadic['data'].shape[1]
+            # Pad data to size of minibatch
             if datadic['data'].shape[1] % self.minibatch_size != 0:
                 datadic['data'] = n.require(n.c_[datadic['data'], n.zeros((datadic['data'].shape[0], self.minibatch_size - datadic['data'].shape[1] % self.minibatch_size), dtype=n.single)], requirements='C', dtype=n.single)
                 datadic['labels'] = n.require(n.c_[datadic['labels'], -1*n.ones((1, self.minibatch_size - datadic['labels'].shape[1] % self.minibatch_size), dtype=n.single)], requirements='C', dtype=n.single)
                 
             datadic['processed'] = True
 
-        return epoch, batchnum, datadic
+        return epoch, batchnum, datadic['num_real_cases'], [datadic['data'], datadic['labels']]
 
     def get_data_dims(self, idx=0):
         return 3072 if idx == 0 else 1

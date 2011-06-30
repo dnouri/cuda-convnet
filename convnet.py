@@ -29,8 +29,8 @@ class GPUModel(IGPUModel):
         return batch_data
 
     def start_batch(self, batch_data, train=True):
-        data = [batch_data[2]['data'], batch_data[2]['labels']]
-        num_real_cases = batch_data[2]['num_real_cases']
+        num_real_cases = batch_data[2]
+        data = batch_data[3]
         if self.check_grads:
             self.libmodel.checkGradients(data, num_real_cases)
         else:

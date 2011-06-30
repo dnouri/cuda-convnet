@@ -64,7 +64,8 @@ __global__ void kLocalMaxUndo(float* imgs, float* maxGrads, float* maxActs, floa
         }
     }
     
-    if  (blockPxX >= startX && blockPxX < startX + strideX * (outputsX-1) + subsX && blockPxY >= startX && blockPxY < startX + strideX * (outputsX-1) + subsX) {
+    if  (blockPxX >= startX && blockPxX < startX + strideX * (outputsX-1) + subsX 
+         && blockPxY >= startX && blockPxY < startX + strideX * (outputsX-1) + subsX) {
         #pragma unroll
         for (int f = 0; f < filtersPerThread; f++) {
             #pragma unroll
