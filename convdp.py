@@ -1,3 +1,7 @@
+# Abstract feed-forward neural net
+# 
+# Author: Alex Krizhevsky (akrizhevsky@gmail.com)
+
 from data import *
 
 class CIFARDataProvider(LabeledMemoryDataProvider):

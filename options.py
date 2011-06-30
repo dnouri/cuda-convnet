@@ -1,3 +1,8 @@
+# Command-line argument passing module
+# specifically for training models that save checkpoints.
+# 
+# Author: Alex Krizhevsky (akrizhevsky@gmail.com)
+
 import sys
 from getopt import getopt
 import os

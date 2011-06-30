@@ -1,3 +1,7 @@
+# Abstract feed-forward neural net
+# 
+# Author: Alex Krizhevsky (akrizhevsky@gmail.com)
+
 import numpy as n
 import numpy.random as nr
 from util import *

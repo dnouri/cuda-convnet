@@ -1,3 +1,7 @@
+# Abstract feed-forward neural net
+# 
+# Author: Alex Krizhevsky (akrizhevsky@gmail.com)
+
 import options as op
 import sys
 import ConfigParser as cfg

@@ -1,3 +1,7 @@
+# Abstract GPU model interface
+# 
+# Author: Alex Krizhevsky (akrizhevsky@gmail.com)
+
 import numpy as n
 import os
 from time import time, asctime, localtime
@@ -58,7 +62,7 @@ class IGPUModel:
         self.init_model_lib()
         
     def import_model(self):
-        print "Importing %s" % ('_' + self.model_name)
+        print "Importing %s C++ module" % ('_' + self.model_name)
         self.libmodel = __import__('_' + self.model_name) 
                    
     def fill_excused_options(self):
