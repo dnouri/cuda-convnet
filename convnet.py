@@ -72,7 +72,7 @@ class GPUModel(IGPUModel):
             print ", ".join("%6f" % v for v in errvals),
         print ""
         print "-------------------------------------------------------", 
-        for i,l in enumerate(self.layers):
+        for i,l in enumerate(self.layers): # This is kind of hacky but will do for now.
             if 'weights' in l:
                 if type(l['weights']) == n.ndarray:
                     print "\nLayer '%s' weights: %g [%g]" % (l['name'], n.mean(n.abs(l['weights'])), n.mean(n.abs(l['weightsInc']))),

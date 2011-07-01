@@ -542,7 +542,7 @@ void ConvLayer::copyToGPU() {
 
 void ConvLayer::checkGradients() {
     _layerGraph->checkGradientsW(string(_name) + string(" weights"), 0.01, _weights);
-    _layerGraph->checkGradientsW(string(_name) + string(" biases"), 0.002, _biases);
+    _layerGraph->checkGradientsW(string(_name) + string(" biases"), 0.02, _biases);
 }
 
 /* 
