@@ -62,6 +62,7 @@ class IGPUModel:
         self.init_model_lib()
         
     def import_model(self):
+        print "========================="
         print "Importing %s C++ module" % ('_' + self.model_name)
         self.libmodel = __import__('_' + self.model_name) 
                    
@@ -95,6 +96,7 @@ class IGPUModel:
         self.train()
     
     def train(self):
+        print "========================="
         print "Training %s" % self.model_name
         self.op.print_values()
         print "========================="
@@ -102,6 +104,7 @@ class IGPUModel:
         print "Running on CUDA device(s) %s" % ", ".join("%d" % d for d in self.device_ids)
         print "Current time: %s" % asctime(localtime())
         print "Saving checkpoints to %s" % os.path.join(self.save_path, self.save_file)
+        print "========================="
         next_data = self.get_next_batch()
         while self.epoch <= self.num_epochs:
             data = next_data

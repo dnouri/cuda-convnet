@@ -71,7 +71,7 @@ class GPUModel(IGPUModel):
             print "%s: " % errname,
             print ", ".join("%6f" % v for v in errvals),
         print ""
-        print "-------------------------------------------------------", # (1.0 sec)
+        print "-------------------------------------------------------", 
         for i,l in enumerate(self.layers):
             if 'weights' in l:
                 if type(l['weights']) == n.ndarray:
@@ -79,10 +79,13 @@ class GPUModel(IGPUModel):
                 elif type(l['weights']) == list:
                     print ""
                     print "\n".join("Layer '%s' weights[%d]: %g [%g]" % (l['name'], i, n.mean(n.abs(w)), n.mean(n.abs(wi))) for i,(w,wi) in enumerate(zip(l['weights'],l['weightsInc']))),
-        print "\n=======================================================",
+        print ""
         
     def conditional_save(self):
         self.save_state()
+        print "-------------------------------------------------------"
+        print "Saved checkpoint to %s" % os.path.join(self.save_path, self.save_file)
+        print "=======================================================",
         
     def aggregate_test_outputs(self, test_outputs):
         for i in xrange(1 ,len(test_outputs)):

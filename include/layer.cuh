@@ -126,9 +126,9 @@ public:
 
 class FCLayer : public Layer {
 private:
-    WeightList weights;
-    Weights biases;
-    Neuron* neuron;
+    WeightList _weights;
+    Weights _biases;
+    Neuron* _neuron;
     void multByInput(NVMatrix& input, int idx);
 protected:
     void _fprop(NVMatrixV& v);
@@ -152,7 +152,7 @@ public:
 
 class DataLayer : public Layer {
 private:
-    int dataIdx;
+    int _dataIdx;
 protected:
     void _fprop(NVMatrixV& data);
     void _bprop(NVMatrix& v);
@@ -166,12 +166,12 @@ public:
 
 class ConvLayer : public Layer {
 private:
-    Weights weights, biases;
-    Neuron* neuron;
-    int modulesX, padding, stride, filterSize, channels, imgSize;
-    int imgPixels, filterPixels, modules;
-    int partialSum;
-    int numFilters;
+    Weights _weights, _biases;
+    Neuron* _neuron;
+    int _modulesX, _padding, _stride, _filterSize, _channels, _imgSize;
+    int _imgPixels, _filterPixels, _modules;
+    int _partialSum;
+    int _numFilters;
 protected:
     void _fprop(NVMatrixV& v);
     void _bprop(NVMatrix& v);
@@ -186,9 +186,9 @@ public:
 
 class PoolLayer : public Layer {
 protected:
-    int channels, subsX, start, stride, outputsX;
-    int imgSize;
-    string pool;
+    int _channels, _subsX, _start, _stride, _outputsX;
+    int _imgSize;
+    string _pool;
 protected:
     void _fprop(NVMatrixV& v);
     void _bprop(NVMatrix& v);
@@ -198,8 +198,8 @@ public:
 
 class Cost : public Layer {
 protected:
-    double coeff;
-    doublev err;
+    double _coeff;
+    doublev _err;
 protected:
     void _bprop(NVMatrix& v);
 public:
