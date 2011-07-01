@@ -23,12 +23,12 @@
 
 class ConvNet : public Thread {
 private:
-    DataProvider* dp;
-    int deviceID;
-    LayerGraph* layers;
+    DataProvider* _dp;
+    int _deviceID;
+    LayerGraph* _layers;
     
-    Queue<WorkRequest*> requestQueue;
-    Queue<WorkResult*> resultQueue;
+    Queue<WorkRequest*> _requestQueue;
+    Queue<WorkResult*> _resultQueue;
     
     void initCuda();
     void engage(WorkRequest& req);
@@ -38,11 +38,11 @@ public:
     ConvNet(PyListObject* layerParams, int minibatchSize, int deviceID);
     
     Queue<WorkRequest*>& getRequestQueue() {
-        return requestQueue;
+        return _requestQueue;
     }
 
     Queue<WorkResult*>& getResultQueue() {
-        return resultQueue;
+        return _resultQueue;
     }
 };
 

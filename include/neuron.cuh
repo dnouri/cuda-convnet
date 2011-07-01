@@ -45,7 +45,9 @@ public:
  */
 class Neuron {
 protected:
-    bool activated;
+    bool _activated;
+    virtual void _activate(NVMatrix& input);
+    virtual void _computeInputGrads(NVMatrix& actGrads);
 public:
     Neuron();
     virtual void activate(NVMatrix& input);
@@ -58,11 +60,10 @@ public:
  */
 class LogisticNeuron : public Neuron {
 private:
-    NVMatrix* acts; // Logistic neuron must remember activities for gradient computation
-public:
-
-    void activate(NVMatrix& input);
-    void computeInputGrads(NVMatrix& actGrads);
+    NVMatrix* _acts; // Logistic neuron must remember activities for gradient computation
+protected:
+    void _activate(NVMatrix& input);
+    void _computeInputGrads(NVMatrix& actGrads);
 };
 
 /*
@@ -70,10 +71,10 @@ public:
  */
 class ReluNeuron : public Neuron {
 private:
-    NVMatrix* acts; // Relu neuron must remember activities for gradient computation
-public:
-    void activate(NVMatrix& input);
-    void computeInputGrads(NVMatrix& actGrads);
+    NVMatrix* _acts; // Relu neuron must remember activities for gradient computation
+protected:
+    void _activate(NVMatrix& input);
+    void _computeInputGrads(NVMatrix& actGrads);
 };
 
 /*
@@ -81,10 +82,10 @@ public:
  */
 class AbsNeuron : public Neuron {
 private:
-    NVMatrix input; // Abs neuron must remember input for gradient computation
-public:
-    void activate(NVMatrix& input);
-    void computeInputGrads(NVMatrix& actGrads);
+    NVMatrix _input; // Abs neuron must remember input for gradient computation
+protected:
+    void _activate(NVMatrix& input);
+    void _computeInputGrads(NVMatrix& actGrads);
 };
 #endif	/* NEURONS_CUH */
 

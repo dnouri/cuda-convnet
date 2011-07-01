@@ -11,14 +11,22 @@ using namespace std;
  * Neuron
  * =======================
  */
-Neuron::Neuron() : activated(false) {
+Neuron::Neuron() : _activated(false) {
+}
 
+void Neuron::_activate(NVMatrix& input) {
 }
+void Neuron::_computeInputGrads(NVMatrix& actGrads) {
+}
+
 void Neuron::activate(NVMatrix& input) {
-    activated = true;
+    _activated = true;
+    _activate(input);
 }
+
 void Neuron::computeInputGrads(NVMatrix& actGrads) {
-    assert(activated);
+    assert(_activated);
+    _computeInputGrads(actGrads);
 }
 
 Neuron& Neuron::makeNeuron(char* type) {
@@ -45,15 +53,13 @@ Neuron& Neuron::makeNeuron(char* type) {
  * LogisticNeuron
  * =======================
  */
-void LogisticNeuron::activate(NVMatrix& input) {
+void LogisticNeuron::_activate(NVMatrix& input) {
     input.apply(NVMatrix::LOGISTIC1);
-    acts = &input;
-    activated = true;
+    _acts = &input;
 }
 
-void LogisticNeuron::computeInputGrads(NVMatrix& actGrads) {
-    assert(activated);
-    actGrads._eltwiseBinaryOp(*acts, LogisticGradientOperator());
+void LogisticNeuron::_computeInputGrads(NVMatrix& actGrads) {
+    actGrads._eltwiseBinaryOp(*_acts, LogisticGradientOperator());
 }
 
 /* 
@@ -61,15 +67,13 @@ void LogisticNeuron::computeInputGrads(NVMatrix& actGrads) {
  * ReluNeuron
  * =======================
  */
-void ReluNeuron::activate(NVMatrix& input) {
+void ReluNeuron::_activate(NVMatrix& input) {
     input._eltwiseUnaryOp(ReluOperator());
-    acts = &input;
-    activated = true;
+    _acts = &input;
 }
 
-void ReluNeuron::computeInputGrads(NVMatrix& actGrads) {
-    assert(activated);
-    actGrads._eltwiseBinaryOp(*acts, ReluGradientOperator());
+void ReluNeuron::_computeInputGrads(NVMatrix& actGrads) {
+    actGrads._eltwiseBinaryOp(*_acts, ReluGradientOperator());
 }
 
 /* 
@@ -77,14 +81,12 @@ void ReluNeuron::computeInputGrads(NVMatrix& actGrads) {
  * AbsNeuron
  * =======================
  */
-void AbsNeuron::activate(NVMatrix& input) {
-    input.copy(this->input);
+void AbsNeuron::_activate(NVMatrix& input) {
+    input.copy(this->_input);
     input.apply(NVMatrix::ABS);
-    activated = true;
 }
 
-void AbsNeuron::computeInputGrads(NVMatrix& actGrads) {
-    assert(activated);
-    actGrads._eltwiseBinaryOp(input, AbsGradientOperator());
-    input.truncate(); // Forget input to conserve memory
+void AbsNeuron::_computeInputGrads(NVMatrix& actGrads) {
+    actGrads._eltwiseBinaryOp(_input, AbsGradientOperator());
+    _input.truncate(); // Forget input to conserve memory
 }

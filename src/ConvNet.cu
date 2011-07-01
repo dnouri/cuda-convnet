@@ -11,9 +11,9 @@ using namespace std;
 
 ConvNet::ConvNet(PyListObject* layerParams, int minibatchSize, int deviceID) : Thread(false) {
     try {
-        this->layers = new LayerGraph(layerParams);
-        this->dp = new DataProvider(minibatchSize);
-        this->deviceID = deviceID;
+        this->_layers = new LayerGraph(layerParams);
+        this->_dp = new DataProvider(minibatchSize);
+        this->_deviceID = deviceID;
     } catch(string& s) {
         cout << "Error creating ConvNet: " << s << endl;
         exit(1);
@@ -24,29 +24,29 @@ ConvNet::ConvNet(PyListObject* layerParams, int minibatchSize, int deviceID) : T
  * This executes in a new CPU thread so it's OK to initialize CUDA stuff here. 
  */
 void ConvNet::initCuda() { 
-    cudaSetDevice(deviceID < 0 ? cutGetMaxGflopsDeviceId() : deviceID);
+    cudaSetDevice(_deviceID < 0 ? cutGetMaxGflopsDeviceId() : _deviceID);
     cudaDeviceSetCacheConfig(cudaFuncCachePreferShared);
     cublasInit();
     NVMatrix::initRandom(time(0));
     
-    layers->copyToGPU();
+    _layers->copyToGPU();
 }
 
 void* ConvNet::run() {
     initCuda();
 
     while (true) {
-        WorkRequest& req = *requestQueue.dequeue();
+        WorkRequest& req = *_requestQueue.dequeue();
 
         if (req.getRequestType() == WorkRequest::TRAIN || req.getRequestType() == WorkRequest::TEST) {
-            dp->setData(req.getData(), req.getNumCases());
+            _dp->setData(req.getData(), req.getNumCases());
             engage(req);
         } else if (req.getRequestType() == WorkRequest::SYNC) {
-            layers->copyToCPU();
-            resultQueue.enqueue(new WorkResult(WorkResult::SYNC_DONE));
+            _layers->copyToCPU();
+            _resultQueue.enqueue(new WorkResult(WorkResult::SYNC_DONE));
         } else if (req.getRequestType() == WorkRequest::CHECK_GRADS) {
-            dp->setData(req.getData(), req.getNumCases());
-            layers->checkGradients(dp->getMinibatch(0));
+            _dp->setData(req.getData(), req.getNumCases());
+            _layers->checkGradients(_dp->getMinibatch(0));
             exit(0);
         }
         
@@ -57,16 +57,16 @@ void* ConvNet::run() {
 
 void ConvNet::engage(WorkRequest& req) {
     ErrorResult& batchErr = *new ErrorResult();
-    for (int i = 0; i < dp->getNumMinibatches(); i++) {
-        Data& mini = dp->getMinibatch(i);
+    for (int i = 0; i < _dp->getNumMinibatches(); i++) {
+        Data& mini = _dp->getMinibatch(i);
         
-        layers->fprop(mini);
-        ErrorResult& miniErr = layers->getError();
+        _layers->fprop(mini);
+        ErrorResult& miniErr = _layers->getError();
         batchErr += miniErr;
         
         if (req.getRequestType() == WorkRequest::TRAIN) {
-            layers->bprop();
-            layers->updateWeights();
+            _layers->bprop();
+            _layers->updateWeights();
         }
         
         delete &mini;
@@ -74,6 +74,6 @@ void ConvNet::engage(WorkRequest& req) {
     }
     cudaThreadSynchronize();
 
-    batchErr /= dp->getNumCases();
-    resultQueue.enqueue(new WorkResult(WorkResult::BATCH_DONE, batchErr));
+    batchErr /= _dp->getNumCases();
+    _resultQueue.enqueue(new WorkResult(WorkResult::BATCH_DONE, batchErr));
 }

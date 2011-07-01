@@ -18,8 +18,8 @@ class Cost;
 
 class ErrorResult {
 private:
-    ErrorMap errMap;
-    std::map<std::string,double> costCoeffs;
+    ErrorMap _errMap;
+    std::map<std::string,double> _costCoeffs;
 public:
     ErrorResult();
     ErrorResult(std::vector<Cost*>& costs);
