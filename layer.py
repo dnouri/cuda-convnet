@@ -79,6 +79,10 @@ class LayerParser:
     @staticmethod
     def parse_layers(layer_cfg_path, param_cfg_path, model, layers=[]):
         try:
+            if not os.path.exists(layer_cfg_path):
+                raise LayerParsingError("Layer definition file '%s' does not exist" % layer_cfg_path)
+            if not os.path.exists(param_cfg_path):
+                raise LayerParsingError("Layer parameter file '%s' does not exist" % param_cfg_path)
             if len(layers) == 0:
                 mcp = MyConfigParser(dict_type=OrderedDict)
                 mcp.read([layer_cfg_path])
