@@ -4,4 +4,4 @@
  */
 #include "../include/weights.cuh"
 
-bool Weights::autoCopyToGPU = false;
+bool Weights::_autoCopyToGPU = false;

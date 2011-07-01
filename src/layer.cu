@@ -161,7 +161,7 @@ NVMatrix& Layer::getActGrads() {
 
 /* 
  * =======================
- * LayerList
+ * LayerGraph
  * =======================
  */
 
@@ -371,7 +371,7 @@ void FCLayer::multByInput(NVMatrix& input, int idx) {
     input.transpose(inpTrans);
 }
 
-FCLayer::FCLayer(PyObject* paramsDict, LayerGraph* layerList) : Layer(paramsDict, layerList, true, true, true) {
+FCLayer::FCLayer(PyObject* paramsDict, LayerGraph* layerGraph) : Layer(paramsDict, layerGraph, true, true, true) {
     MatrixV* hWeights = getMatrixVec((PyListObject*)PyDict_GetItemString(paramsDict, "weights"));
     MatrixV* hWeightsInc = getMatrixVec((PyListObject*)PyDict_GetItemString(paramsDict, "weightsInc"));
     Matrix* hBiases = new Matrix((PyArrayObject*)PyDict_GetItemString(paramsDict, "biases"));
@@ -454,7 +454,7 @@ void FCLayer::checkGradients() {
  * ConvLayer
  * =======================
  */
-ConvLayer::ConvLayer(PyObject* paramsDict, LayerGraph* layerList) : Layer(paramsDict, layerList, true, true, false) {
+ConvLayer::ConvLayer(PyObject* paramsDict, LayerGraph* layerGraph) : Layer(paramsDict, layerGraph, true, true, false) {
     Matrix* hWeights = new Matrix((PyArrayObject*)PyDict_GetItemString(paramsDict, "weights"));
     Matrix* hWeightsInc = new Matrix((PyArrayObject*)PyDict_GetItemString(paramsDict, "weightsInc"));
     Matrix* hBiases = new Matrix((PyArrayObject*)PyDict_GetItemString(paramsDict, "biases"));
@@ -551,8 +551,8 @@ void ConvLayer::checkGradients() {
  * =======================
  */
 
-SoftmaxLayer::SoftmaxLayer(PyObject* paramsDict, LayerGraph* layerList) 
-: Layer(paramsDict, layerList, true, true, true) {
+SoftmaxLayer::SoftmaxLayer(PyObject* paramsDict, LayerGraph* layerGraph) 
+: Layer(paramsDict, layerGraph, true, true, true) {
 }
 
 void SoftmaxLayer::_bprop(NVMatrix& v) {
@@ -604,8 +604,8 @@ void SoftmaxLayer::_fprop(NVMatrixV& v) {
  * =======================
  */
 
-DataLayer::DataLayer(PyObject* paramsDict, LayerGraph* layerList) 
-: Layer(paramsDict, layerList, false, false, false) {
+DataLayer::DataLayer(PyObject* paramsDict, LayerGraph* layerGraph) 
+: Layer(paramsDict, layerGraph, false, false, false) {
     _dataIdx = PyInt_AS_LONG((PyIntObject*)PyDict_GetItemString(paramsDict, "dataIdx"));
 }
 
@@ -640,8 +640,8 @@ void DataLayer::_bprop(NVMatrix& v) {
  * =====================
  */
 
-PoolLayer::PoolLayer(PyObject* paramsDict, LayerGraph* layerList) 
-    : Layer(paramsDict, layerList, true, true, false) {
+PoolLayer::PoolLayer(PyObject* paramsDict, LayerGraph* layerGraph) 
+    : Layer(paramsDict, layerGraph, true, true, false) {
     _channels = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "channels"));
     _subsX = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "subsX"));
     _start = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "start"));
@@ -650,6 +650,9 @@ PoolLayer::PoolLayer(PyObject* paramsDict, LayerGraph* layerList)
     _imgSize = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "imgSize"));
     
     _pool = string(PyString_AS_STRING((PyStringObject*)PyDict_GetItemString(paramsDict, "pool")));
+    if (_pool != string("max") && _pool != string("avg")) {
+        throw string("Unknown pooling type ") + _pool;
+    }
 }
 
 void PoolLayer::_fprop(NVMatrixV& v) {
@@ -676,8 +679,6 @@ void PoolLayer::_bprop(NVMatrix& v) {
             } else {
                 convLocalAvgUndo(v, _prev[0]->getActGrads(), _subsX, _start, _stride, _outputsX, _imgSize, 1, 1);
             }
-        } else {
-            assert(false);
         }
 
         truncActGrads();
@@ -690,8 +691,8 @@ void PoolLayer::_bprop(NVMatrix& v) {
  * Cost
  * =====================
  */
-Cost::Cost(PyObject* paramsDict, LayerGraph* layerList, bool propagateGrad, bool gradProducer, bool trans) 
-    : Layer(paramsDict, layerList, propagateGrad, gradProducer, trans) {
+Cost::Cost(PyObject* paramsDict, LayerGraph* layerGraph, bool propagateGrad, bool gradProducer, bool trans) 
+    : Layer(paramsDict, layerGraph, propagateGrad, gradProducer, trans) {
     _coeff = PyFloat_AS_DOUBLE((PyFloatObject*)PyDict_GetItemString(paramsDict, "coeff"));
     _gradProducer = _coeff != 0;
 }
@@ -718,8 +719,8 @@ doublev& Cost::getError() {
  * =====================
  */
 
-LogregCost::LogregCost(PyObject* paramsDict, LayerGraph* layerList) 
-    : Cost(paramsDict, layerList, true, true, false) {
+LogregCost::LogregCost(PyObject* paramsDict, LayerGraph* layerGraph) 
+    : Cost(paramsDict, layerGraph, true, true, false) {
 }
 
 void LogregCost::_fprop(NVMatrixV& v) {
@@ -728,7 +729,7 @@ void LogregCost::_fprop(NVMatrixV& v) {
     NVMatrix& probs = *v[1];
     NVMatrix& maxProbs = probs.max(0);
     
-    int caseStride = probs.getLeadingDim(); // num caes incl. padding
+    int caseStride = probs.getLeadingDim(); // num cases incl. padding
     int numOut = probs.getFollowingDim(); 
     NVMatrix trueLabelLogProbs(1, _layerGraph->getNumCases());
     NVMatrix correctProbs(1, _layerGraph->getNumCases());
@@ -750,7 +751,7 @@ void LogregCost::bprop() {
         NVMatrix& labels = _prev[0]->getActs();
         NVMatrix& probs = _prev[1]->getActs();
         NVMatrix& target = _prev[1]->getActGrads();
-        int caseStride = probs.getLeadingDim(); // num caes incl. padding
+        int caseStride = probs.getLeadingDim(); // num cases incl. padding
         int numOut = probs.getFollowingDim();
         assert(labels.getNumElements() == caseStride);
         assert(probs.isContiguous());

@@ -134,7 +134,7 @@ protected:
     void _fprop(NVMatrixV& v);
     void _bprop(NVMatrix& v);
 public:
-    FCLayer(PyObject* paramsDict, LayerGraph* layerList);
+    FCLayer(PyObject* paramsDict, LayerGraph* layerGraph);
  
     void updateWeights();  
     void copyToCPU();
@@ -147,7 +147,7 @@ protected:
     void _fprop(NVMatrixV& v);
     void _bprop(NVMatrix& v);
 public:
-    SoftmaxLayer(PyObject* paramsDict, LayerGraph* layerList);
+    SoftmaxLayer(PyObject* paramsDict, LayerGraph* layerGraph);
 };
 
 class DataLayer : public Layer {
@@ -157,7 +157,7 @@ protected:
     void _fprop(NVMatrixV& data);
     void _bprop(NVMatrix& v);
 public:
-    DataLayer(PyObject* paramsDict, LayerGraph* layerList);
+    DataLayer(PyObject* paramsDict, LayerGraph* layerGraph);
     
     void fprop();
     void fprop(NVMatrixV& data);
@@ -176,7 +176,7 @@ protected:
     void _fprop(NVMatrixV& v);
     void _bprop(NVMatrix& v);
 public:
-    ConvLayer(PyObject* paramsDict, LayerGraph* layerList);
+    ConvLayer(PyObject* paramsDict, LayerGraph* layerGraph);
 
     void updateWeights();  
     void copyToCPU();
@@ -193,7 +193,7 @@ protected:
     void _fprop(NVMatrixV& v);
     void _bprop(NVMatrix& v);
 public:
-    PoolLayer(PyObject* paramsDict, LayerGraph* layerList);
+    PoolLayer(PyObject* paramsDict, LayerGraph* layerGraph);
 }; 
 
 class Cost : public Layer {
@@ -204,9 +204,7 @@ protected:
     void _bprop(NVMatrix& v);
 public:
     Cost(PyObject* paramsDict, LayerGraph* layerList, bool propagateGrad, bool gradProducer, bool trans);
-    
-    virtual void bprop() = 0; // why won't it compile without this line? bprop is defined in Layer...
-    
+
     virtual doublev& getError();
     double getCoeff();
 };
@@ -219,7 +217,7 @@ class LogregCost : public Cost {
 protected:
     void _fprop(NVMatrixV& v);
 public:
-    LogregCost(PyObject* paramsDict, LayerGraph* layerList);
+    LogregCost(PyObject* paramsDict, LayerGraph* layerGraph);
     
     void bprop();
 };
