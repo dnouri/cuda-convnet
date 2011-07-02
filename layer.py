@@ -228,8 +228,8 @@ class ConvLayerParser(LayerWithInputParser):
         if dic['partialSum'] != 0 and dic['modules'] % dic['partialSum'] != 0:
             raise LayerParsingError("Layer '%s': convolutional layer produces %d outputs per filter, but given partialSum parameter (%d) does not divide this number" % (name, dic['modules'], dic['partialSum']))
         
-        LayerParser.verify_int_range(dic['stride'], name, 'stride', 1, dic['imgSize'])
-        LayerParser.verify_int_range(dic['filterSize'], name, 'filterSize', 1, dic['imgSize'])
+        LayerParser.verify_int_range(dic['stride'], name, 'stride', 1, None)
+        LayerParser.verify_int_range(dic['filterSize'], name, 'filterSize', 1, None)
         LayerParser.verify_int_range(dic['padding'], name, 'padding', 0, None)
         LayerParser.verify_int_range(dic['channels'], name, 'channels', 1, None)
         LayerParser.verify_int_range(dic['imgSize'], name, 'imgSize', 1, None)

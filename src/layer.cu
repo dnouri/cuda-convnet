@@ -482,8 +482,7 @@ ConvLayer::ConvLayer(PyObject* paramsDict, LayerGraph* layerGraph) : Layer(param
 }
 
 void ConvLayer::_fprop(NVMatrixV& v) {
-    NVMatrix& images = *v[0];
-    convFilterActs(images, *_weights, _acts, _modulesX, _padding, _stride, _channels, FILTER_MODULE_IMAGE);
+    convFilterActs(*v[0], *_weights, _acts, _modulesX, _padding, _stride, _channels, FILTER_MODULE_IMAGE);
     _acts.addVector(*_biases);
     _neuron->activate(_acts);
 }
@@ -491,7 +490,6 @@ void ConvLayer::_fprop(NVMatrixV& v) {
 void ConvLayer::_bprop(NVMatrix& v) {
     _neuron->computeInputGrads(v);
     v.sum(1, _biases.getGrads());
-    NVMatrix& prevActs = _prev[0]->getActs();
 
     if (_prev[0]->isPropagateGrad()) {
         if (_prev[0]->getRcvdBInputs() == 0) {
@@ -502,12 +500,12 @@ void ConvLayer::_bprop(NVMatrix& v) {
     }
     if (_partialSum > 0 && _partialSum < _modules) {
         NVMatrix tmp;
-        convWeightActs(prevActs, v, tmp, _modulesX, _filterSize, _padding, _stride, _channels, 0, 1, FILTER_MODULE_IMAGE, _partialSum);
+        convWeightActs(_prev[0]->getActs(), v, tmp, _modulesX, _filterSize, _padding, _stride, _channels, 0, 1, FILTER_MODULE_IMAGE, _partialSum);
         tmp.reshape(_modules / _partialSum, _channels * _filterPixels * _numFilters);
         tmp.sum(0, _weights.getGrads());
         _weights.getGrads().reshape(_channels * _filterPixels, _numFilters);
     } else {
-        convWeightActs(prevActs, v, _weights.getGrads(), _modulesX, _filterSize, _padding, _stride, _channels, FILTER_MODULE_IMAGE);
+        convWeightActs(_prev[0]->getActs(), v, _weights.getGrads(), _modulesX, _filterSize, _padding, _stride, _channels, FILTER_MODULE_IMAGE);
     }
     
     truncActGrads();
@@ -542,7 +540,7 @@ void ConvLayer::checkGradients() {
  */
 
 SoftmaxLayer::SoftmaxLayer(PyObject* paramsDict, LayerGraph* layerGraph) 
-: Layer(paramsDict, layerGraph, true, true, true) {
+    : Layer(paramsDict, layerGraph, true, true, true) {
 }
 
 void SoftmaxLayer::_bprop(NVMatrix& v) {
@@ -723,6 +721,7 @@ void LogregCost::_fprop(NVMatrixV& v) {
     NVMatrix correctProbs(1, _layerGraph->getNumCases());
     assert(labels.getNumElements() == caseStride);
     assert(labels.isContiguous());
+    assert(probs.isContiguous());
     dim3 threads(LOGREG_ERR_THREADS_X, 1);
     dim3 blocks(DIVUP(_layerGraph->getNumCases(), LOGREG_ERR_THREADS_X), 1);
     cudaFuncSetCacheConfig(kLogregCost, cudaFuncCachePreferL1);
@@ -732,6 +731,8 @@ void LogregCost::_fprop(NVMatrixV& v) {
     cutilCheckMsg("kLogregCost: Kernel execution failed");
     _err.push_back(-trueLabelLogProbs.sum());
     _err.push_back(_layerGraph->getNumCases() - correctProbs.sum());
+    
+    delete &maxProbs;
 }
 
 void LogregCost::bprop() {
@@ -755,8 +756,7 @@ void LogregCost::bprop() {
             kLogregCostGrads<true><<<blocks, threads>>>(probs.getDevData(), labels.getDevData(), target.getDevData(),
                                                         _layerGraph->getNumCases(), numOut, caseStride, _coeff);
         }
-
         cutilCheckMsg("kLogregCostGrads: Kernel execution failed");
+        _prev[1]->bprop();
     }
-    _prev[1]->bprop();
 }
