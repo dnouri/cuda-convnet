@@ -606,6 +606,7 @@ void DataLayer::_fprop(NVMatrixV& data) {
     // TODO: this is slightly inelegant because it creates a copy of the data structure
     // (though not of any GPU memory)
     _acts = d;
+    // Make sure that _acts knows that it does not own its GPU memory
     _acts.setView(true);
 }
 
@@ -730,7 +731,7 @@ void LogregCost::_fprop(NVMatrixV& v) {
                                      _layerGraph->getNumCases(), caseStride, numOut);
     cutilCheckMsg("kLogregCost: Kernel execution failed");
     _err.push_back(-trueLabelLogProbs.sum());
-    _err.push_back((_layerGraph->getNumCases() - correctProbs.sum()) * 100);
+    _err.push_back(_layerGraph->getNumCases() - correctProbs.sum());
 }
 
 void LogregCost::bprop() {
