@@ -75,7 +75,16 @@ class LayerParser:
         dic['type'] = mcp.get(name, 'type')
 
         return dic
-        
+    
+    @classmethod
+    def verify_int_range(cls, v, layer_name, param_name, _min, _max):
+        if _min is not None and _max is not None and (v < _min or v > _max):
+            raise LayerParsingError("Layer '%s': parameter '%s' must be in the range %d-%d" % (layer_name, param_name, _min, _max))
+        elif _min is not None and v < _min:
+            raise LayerParsingError("Layer '%s': parameter '%s' must be greater than %d" % (layer_name, param_name, _min))
+        elif _max is not None and v > _max:
+            raise LayerParsingError("Layer '%s': parameter '%s' must be smaller than %d" % (layer_name, param_name, _max))
+
     @staticmethod
     def parse_layers(layer_cfg_path, param_cfg_path, model, layers=[]):
         try:
@@ -144,7 +153,7 @@ class FCLayerParser(LayerWithInputParser):
         return True
     
     @classmethod
-    def verifyNumParams(cls, dic, param):
+    def verify_num_params(cls, dic, param):
         if len(dic[param]) != len(dic['inputs']):
             raise LayerParsingError("Layer '%s': %s list length does not match number of inputs" % (dic['name'], param))
     
@@ -156,9 +165,9 @@ class FCLayerParser(LayerWithInputParser):
         dic['momB'] = mcp.getfloat(name, 'momB')
         dic['wc'] = mcp.getFloatList(name, 'wc')
         
-        FCLayerParser.verifyNumParams(dic, 'epsW')
-        FCLayerParser.verifyNumParams(dic, 'momW')
-        FCLayerParser.verifyNumParams(dic, 'wc')
+        FCLayerParser.verify_num_params(dic, 'epsW')
+        FCLayerParser.verify_num_params(dic, 'momW')
+        FCLayerParser.verify_num_params(dic, 'wc')
     
     @classmethod
     def parse(cls, name, mcp, prev_layers, model):
@@ -167,8 +176,9 @@ class FCLayerParser(LayerWithInputParser):
         dic['numOutputs'] = mcp.getint(name, 'numOutputs')
         dic['neuron'] = mcp.get(name, 'neuron')
         dic['initW'] = mcp.getFloatList(name, 'initW')
-
-        FCLayerParser.verifyNumParams(dic, 'initW')
+        
+        LayerParser.verify_int_range(dic['numOutputs'], name, 'numOutputs', 1, None)
+        FCLayerParser.verify_num_params(dic, 'initW')
         
         weights = [make_weights(numIn, dic['numOutputs'], init, order='F') for numIn,init in zip(dic['numInputs'], dic['initW'])]
         biases = make_weights(1, dic['numOutputs'], 0, order='F')
@@ -218,6 +228,12 @@ class ConvLayerParser(LayerWithInputParser):
         if dic['partialSum'] != 0 and dic['modules'] % dic['partialSum'] != 0:
             raise LayerParsingError("Layer '%s': convolutional layer produces %d outputs per filter, but given partialSum parameter (%d) does not divide this number" % (name, dic['modules'], dic['partialSum']))
         
+        LayerParser.verify_int_range(dic['stride'], name, 'stride', 1, dic['imgSize'])
+        LayerParser.verify_int_range(dic['filterSize'], name, 'filterSize', 1, dic['imgSize'])
+        LayerParser.verify_int_range(dic['padding'], name, 'padding', 0, None)
+        LayerParser.verify_int_range(dic['channels'], name, 'channels', 1, None)
+        LayerParser.verify_int_range(dic['imgSize'], name, 'imgSize', 1, None)
+        
         dic['padding'] = -dic['padding']
         dic['neuron'] = mcp.get(name, 'neuron')
         dic['initW'] = mcp.getfloat(name, 'initW')
@@ -265,14 +281,20 @@ class PoolLayerParser(LayerWithInputParser):
         dic['stride'] = mcp.getint(name, 'stride')
         dic['pool'] = mcp.get(name, 'pool')
         
+        dic['imgPixels'] = dic['numInputs'][0] / dic['channels']
+        dic['imgSize'] = int(n.sqrt(dic['imgPixels']))
+        
+        LayerParser.verify_int_range(dic['subsX'], name, 'subsX', 1, dic['imgSize'])
+        LayerParser.verify_int_range(dic['stride'], name, 'stride', 1, dic['subsX'])
+        LayerParser.verify_int_range(dic['outputsX'], name, 'outputsX', 0, None)
+        LayerParser.verify_int_range(dic['channels'], name, 'channels', 1, None)
+        
         if dic['channels'] % 16 != 0:
             raise LayerParsingError("Layer '%s': parameter 'channels' must be multiple of 16")
         
         if dic['pool'] not in ('max', 'avg'):
             raise LayerParsingError("Layer '%s': parameter 'pool' must be one of 'max', 'avg'", name)
         
-        dic['imgPixels'] = dic['numInputs'][0] / dic['channels']
-        dic['imgSize'] = int(n.sqrt(dic['imgPixels']))
         if dic['numInputs'][0] % dic['imgPixels'] != 0 or dic['imgSize'] * dic['imgSize'] != dic['imgPixels']:
             raise LayerParsingError("Layer '%s': has %-d dimensional input, not interpretable as %d-channel images" % (name, dic['numInputs'][0], dic['channels']))
         if dic['outputsX'] <= 0:

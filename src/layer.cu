@@ -88,6 +88,7 @@ void Layer::fprop(NVMatrixV& v) {
     }
     _acts.transpose(_trans);
     _fprop(v);
+    fpropNext();
 }
 
 void Layer::bprop() {
@@ -362,13 +363,11 @@ void LayerGraph::checkGradients(Data& data) {
  */
 
 void FCLayer::multByInput(NVMatrix& input, int idx) {
-    bool inpTrans = input.transpose(true);
     if (idx == 0) {
         input.rightMult(*_weights[idx], _acts);
     } else {
         _acts.addProduct(input, *_weights[idx]);
     }
-    input.transpose(inpTrans);
 }
 
 FCLayer::FCLayer(PyObject* paramsDict, LayerGraph* layerGraph) : Layer(paramsDict, layerGraph, true, true, true) {
@@ -397,8 +396,6 @@ void FCLayer::_fprop(NVMatrixV& v) {
     
     _acts.addVector(*_biases);
     _neuron->activate(_acts);
-
-    fpropNext();
 }
 
 void FCLayer::_bprop(NVMatrix& v) {
@@ -417,12 +414,9 @@ void FCLayer::_bprop(NVMatrix& v) {
         NVMatrix& prevActs_T = _prev[i]->getActs().getTranspose();
         _weights[i].getInc().addProduct(prevActs_T, v,  (!_layerGraph->isCheckingGrads()) * _weights[i].getMom(),
                                        _layerGraph->isCheckingGrads() ? 1 : _weights[i].getEps() / _layerGraph->getNumCases());
-//        prevActs_T.rightMult(v, weights[i].getGrads());
         delete &prevActs_T;
         
-        if (_prev[i]->isPropagateGrad()) {
-            _prev[i]->bprop();
-        }
+        _prev[i]->bprop();
     }
     truncActGrads();
 }
@@ -473,7 +467,6 @@ ConvLayer::ConvLayer(PyObject* paramsDict, LayerGraph* layerGraph) : Layer(param
     _channels = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "channels"));
     _imgSize = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "imgSize"));
     _numFilters = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "numFilters"));
-    
     _partialSum = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "partialSum"));
     
     _modules = _modulesX * _modulesX;
@@ -493,7 +486,6 @@ void ConvLayer::_fprop(NVMatrixV& v) {
     convFilterActs(images, *_weights, _acts, _modulesX, _padding, _stride, _channels, FILTER_MODULE_IMAGE);
     _acts.addVector(*_biases);
     _neuron->activate(_acts);
-    fpropNext();
 }
 
 void ConvLayer::_bprop(NVMatrix& v) {
@@ -520,9 +512,7 @@ void ConvLayer::_bprop(NVMatrix& v) {
     
     truncActGrads();
     
-    if (_prev[0]->isPropagateGrad()) {
-        _prev[0]->bprop();
-    }
+    _prev[0]->bprop();
 }
 
 void ConvLayer::updateWeights() {
@@ -594,8 +584,6 @@ void SoftmaxLayer::_fprop(NVMatrixV& v) {
     
     delete &max;
     delete &sum;
-
-    fpropNext();
 }
 
 /* 
@@ -605,7 +593,7 @@ void SoftmaxLayer::_fprop(NVMatrixV& v) {
  */
 
 DataLayer::DataLayer(PyObject* paramsDict, LayerGraph* layerGraph) 
-: Layer(paramsDict, layerGraph, false, false, false) {
+    : Layer(paramsDict, layerGraph, false, false, false) {
     _dataIdx = PyInt_AS_LONG((PyIntObject*)PyDict_GetItemString(paramsDict, "dataIdx"));
 }
 
@@ -619,11 +607,11 @@ void DataLayer::_fprop(NVMatrixV& data) {
     // (though not of any GPU memory)
     _acts = d;
     _acts.setView(true);
-    fpropNext();
 }
 
 void DataLayer::fprop(NVMatrixV& data) {
     _fprop(data);
+    fpropNext();
 }
 
 void DataLayer::bprop() {
@@ -662,7 +650,6 @@ void PoolLayer::_fprop(NVMatrixV& v) {
     } else if (_pool == string("avg")) {
         convLocalPool(images, _acts, _channels, _subsX, _start, _stride, _outputsX, AvgAggregator(_subsX*_subsX));
     }
-    fpropNext();
 }
 
 void PoolLayer::_bprop(NVMatrix& v) {
@@ -743,7 +730,7 @@ void LogregCost::_fprop(NVMatrixV& v) {
                                      _layerGraph->getNumCases(), caseStride, numOut);
     cutilCheckMsg("kLogregCost: Kernel execution failed");
     _err.push_back(-trueLabelLogProbs.sum());
-    _err.push_back(correctProbs.sum());
+    _err.push_back((_layerGraph->getNumCases() - correctProbs.sum()) * 100);
 }
 
 void LogregCost::bprop() {

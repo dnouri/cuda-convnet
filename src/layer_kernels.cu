@@ -12,7 +12,10 @@
  * labelLogProbs:   (1, numCases)   (*out)
  * correctProbs:    (1, numCases)   (*out)
  * 
- * target:  (1, numCases) == log(y_l[labels,:]
+ * target:          (1, numCases) == log(y_l[labels,:]
+ * 
+ * numCases is the actual number of cases
+ * caseStride is the number of cases including padding cases
  */
 __global__ void kLogregCost(float* probs, float* labels, float* maxProbs, float* labelLogProbs, float* correctProbs,
                             const int numCases, const int caseStride, const int numOut) {
@@ -25,6 +28,18 @@ __global__ void kLogregCost(float* probs, float* labels, float* maxProbs, float*
         
         labelLogProbs[tx] = __logf(labelp);
         
+        /*
+         * Compute the probability of guessing the correct case if you take the most-probable label.
+         * 
+         * This is done like this:
+         * 
+         * - If the most probable label is not equal to the true label, then the probability is zero.
+         * - Otherwise, the probability is 1 / (number of labels whose probability is equal to the maximum).
+         * 
+         * This is certainly overkill -- in practice, it's just about impossible for two labels to get assigned
+         * maximum probability. But it's a safety measure to prevent over-estimating your accuracy.
+         * Though it could never happen in reality. Well it could. But it wouldn't. Cool?
+         */
         if (labelp != maxp) {
             correctProbs[tx] = 0;
         } else {
