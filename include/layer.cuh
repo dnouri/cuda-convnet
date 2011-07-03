@@ -39,7 +39,7 @@ protected:
     int _rcvdFInputs, _rcvdBInputs;
     NVMatrix _acts, _actGrads;
     static bool saveBwdActs;
-    bool _propagateGrad, _gradProducer, _trans;
+    bool _gradConsumer, _gradProducer, _trans;
     int _numGradProducersNext;
     char* _name;
     void fpropNext();
@@ -69,7 +69,7 @@ public:
     void reset();
     int getRcvdFInputs();
     int getRcvdBInputs();
-    bool isPropagateGrad();
+    bool isGradConsumer();
     bool isGradProducer();
     const char* getName();
     void addNext(Layer* l);

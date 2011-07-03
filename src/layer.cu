@@ -23,7 +23,7 @@ bool Layer::saveBwdActs = false;
 
 Layer::Layer(PyObject* paramsDict, LayerGraph* layerGraph,
              bool propagateGrad, bool gradProducer, bool trans) : 
-             _layerGraph(layerGraph), _propagateGrad(propagateGrad),
+             _layerGraph(layerGraph), _gradConsumer(propagateGrad),
              _gradProducer(gradProducer), _trans(trans){
     _name = PyString_AS_STRING((PyStringObject*)PyDict_GetItemString(paramsDict, "name"));
     // Connect backward links in graph for this layer
@@ -135,8 +135,8 @@ void Layer::addPrev(Layer* l) {
 }
 
 // Propagate gradient through this layer?
-bool Layer::isPropagateGrad() {
-    return _propagateGrad;
+bool Layer::isGradConsumer() {
+    return _gradConsumer;
 }
 
 // Does this layer produce gradient for layers below?
@@ -402,7 +402,7 @@ void FCLayer::_bprop(NVMatrix& v) {
     _neuron->computeInputGrads(v);
     v.sum(0, _biases.getGrads());
     for (int i = 0; i < _prev.size(); i++) {
-        if (_prev[i]->isPropagateGrad()) {
+        if (_prev[i]->isGradConsumer()) {
             NVMatrix& weights_T = _weights[i].getW().getTranspose();
             if (_prev[i]->getRcvdBInputs() == 0) {
                 v.rightMult(weights_T, _prev[i]->getActGrads());
@@ -491,7 +491,7 @@ void ConvLayer::_bprop(NVMatrix& v) {
     _neuron->computeInputGrads(v);
     v.sum(1, _biases.getGrads());
 
-    if (_prev[0]->isPropagateGrad()) {
+    if (_prev[0]->isGradConsumer()) {
         if (_prev[0]->getRcvdBInputs() == 0) {
             convImgActs(v, *_weights, _prev[0]->getActGrads(), _imgSize, _padding, _stride, _channels, FILTER_MODULE_IMAGE);
         } else {
@@ -544,7 +544,7 @@ SoftmaxLayer::SoftmaxLayer(PyObject* paramsDict, LayerGraph* layerGraph)
 }
 
 void SoftmaxLayer::_bprop(NVMatrix& v) {
-    if (_prev[0]->isPropagateGrad()) {
+    if (_prev[0]->isGradConsumer()) {
         
         assert(_prev.size() == 1);
         NVMatrix& target = _prev[0]->getActGrads();
@@ -652,7 +652,7 @@ void PoolLayer::_fprop(NVMatrixV& v) {
 }
 
 void PoolLayer::_bprop(NVMatrix& v) {
-    if (_prev[0]->isPropagateGrad()) {
+    if (_prev[0]->isGradConsumer()) {
         if (_pool == string("max")) {
             if (_prev[0]->getRcvdBInputs() == 0) {
                 convLocalMaxUndo(_prev[0]->getActs(), v, _acts, _prev[0]->getActGrads(), _subsX, _start, _stride, _outputsX);
