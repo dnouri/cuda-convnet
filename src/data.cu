@@ -32,6 +32,7 @@ Data& DataProvider::operator[](int idx) {
     return getMinibatch(idx);
 }
 
+
 void DataProvider::setData(MatrixV& hData, int numCases) {
     assert(&hData != NULL);
     assert(hData.size() > 0);
@@ -42,7 +43,12 @@ void DataProvider::setData(MatrixV& hData, int numCases) {
     }
     _numCases = numCases;
     _hData = &hData;
-    if (STORE_ALL_DATA_ON_GPU) {
+    _dataSize = 0;
+    for (int i = 0; i < hData.size(); i++) {
+        _dataSize += hData[i]->getNumDataBytes();
+    }
+    _dataSize /= 1024 * 1024;
+    if (_dataSize < MAX_DATA_ON_GPU) {
         for (int i = 0; i < hData.size(); i++) {
             if (i >= _data.size()) {
                 _data.push_back(new NVMatrix());
@@ -60,7 +66,7 @@ Data& DataProvider::getMinibatch(int idx) {
     
     for (int i = 0; i < _hData->size(); i++) {
         miniData.push_back(new NVMatrix());
-        if (STORE_ALL_DATA_ON_GPU) {
+        if (_dataSize < MAX_DATA_ON_GPU) {
             if (_data[i]->isTrans()) {
                 _data[i]->sliceRows(idx * _minibatchSize, (idx + 1) * _minibatchSize, *miniData[i]);
             } else {

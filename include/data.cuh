@@ -12,8 +12,11 @@
 #include <algorithm>
 #include "util.cuh"
 
-// Set to true for slight speed boost, higher memory consumption
-#define STORE_ALL_DATA_ON_GPU       true
+/*
+ * Store entire data matrix on GPU if its size does not exceed this many MB.
+ * Otherwise store only one minibatch at a time.
+ */ 
+#define MAX_DATA_ON_GPU             200 
 
 class Data {
 private:
@@ -32,6 +35,7 @@ private:
     NVMatrixV _data;
     int _minibatchSize;
     int _numCases;
+    int _dataSize;
 public:
     DataProvider(int minibatchSize);
     Data& operator[](int idx);

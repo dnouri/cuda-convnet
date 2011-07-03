@@ -49,7 +49,7 @@ protected:
     
 public:
     Layer(PyObject* paramsDict, LayerGraph* layerGraph,
-          bool propagateGrad, bool gradProducer, bool trans);
+          bool gradConsumer, bool gradProducer, bool trans);
     
     static void setSaveBwdActs(bool saveBwdActs);
     

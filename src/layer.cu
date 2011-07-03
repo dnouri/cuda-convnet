@@ -22,8 +22,8 @@ using namespace std;
 bool Layer::saveBwdActs = false;
 
 Layer::Layer(PyObject* paramsDict, LayerGraph* layerGraph,
-             bool propagateGrad, bool gradProducer, bool trans) : 
-             _layerGraph(layerGraph), _gradConsumer(propagateGrad),
+             bool gradConsumer, bool gradProducer, bool trans) : 
+             _layerGraph(layerGraph), _gradConsumer(gradConsumer),
              _gradProducer(gradProducer), _trans(trans){
     _name = PyString_AS_STRING((PyStringObject*)PyDict_GetItemString(paramsDict, "name"));
     // Connect backward links in graph for this layer
