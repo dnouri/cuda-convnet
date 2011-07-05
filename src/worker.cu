@@ -45,21 +45,20 @@ TrainingWorker::TrainingWorker(ConvNet* convNet, CPUData& data, bool test)
 void TrainingWorker::run() {
     // Need to setData here (as opposed to the constructor) because the constructor executes in
     // the original CPU thread, which is not the one with GPU access.
-    _convNet->getDataProvider().setData(*_data);
+    _convNet->setData(*_data);
     ErrorResult& batchErr = *new ErrorResult();
     for (int i = 0; i < _convNet->getDataProvider().getNumMinibatches(); i++) {
-        GPUData& mini = _convNet->getDataProvider()[i];
-
-        _convNet->getLayerGraph().fprop(mini);
-        ErrorResult& miniErr = _convNet->getLayerGraph().getError();
+        _convNet->setMinibatch(i);
+        
+        _convNet->fprop();
+        ErrorResult& miniErr = _convNet->getError();
         batchErr += miniErr;
-
+        
         if (!_test) {
-            _convNet->getLayerGraph().bprop();
-            _convNet->getLayerGraph().updateWeights();
+            _convNet->bprop();
+            _convNet->updateWeights();
         }
 
-        delete &mini;
         delete &miniErr;
     }
     cudaThreadSynchronize();
@@ -77,7 +76,7 @@ SyncWorker::SyncWorker(ConvNet* convNet) : Worker(convNet) {
 }
 
 void SyncWorker::run() {
-    _convNet->getLayerGraph().copyToCPU();
+    _convNet->copyToCPU();
     _convNet->getResultQueue().enqueue(new WorkResult(WorkResult::SYNC_DONE));
 }
 
@@ -91,7 +90,8 @@ GradCheckWorker::GradCheckWorker(ConvNet* convNet, CPUData& data)
 }
 
 void GradCheckWorker::run() {
-    _convNet->getDataProvider().setData(*_data);
-    _convNet->getLayerGraph().checkGradients(_convNet->getDataProvider().getMinibatch(0));
+    _convNet->setData(*_data);
+    _convNet->setMinibatch(0);
+    _convNet->checkGradients();
     exit(0);
 }

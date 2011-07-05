@@ -17,6 +17,10 @@
 #include <nvmatrix.cuh>
 #include <matrix.h>
 
+// For gradient checking
+#define GC_SUPPRESS_PASSES     true
+#define GC_REL_ERR_THRESH      0.02
+
 typedef std::vector<Matrix*> MatrixV;
 typedef std::vector<NVMatrix*> NVMatrixV;
 typedef std::map<std::string,std::vector<double>*> ErrorMap;

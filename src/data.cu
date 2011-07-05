@@ -23,9 +23,8 @@ void DataProvider::setData(CPUData& hData) {
     for (int i = 1; i < hData.getSize(); i++) {
         assert(hData[i-1].getLeadingDim() == hData[i].getLeadingDim());
     }
-    if (_hData != NULL) { // Delete old CPU matrices
-        delete _hData;
-    }
+
+    delete _hData; // Delete old CPU matrices
 
     _hData = &hData;
     _dataSize = 0;

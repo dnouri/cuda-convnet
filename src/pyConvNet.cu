@@ -100,7 +100,7 @@ PyObject* startBatch(PyObject *self, PyObject *args) {
     }
     
     TrainingWorker* wr = new TrainingWorker(model, *new CPUData(mvec, numCases), test);
-    model->getWorkQueue().enqueue(wr);
+    model->getWorkerQueue().enqueue(wr);
     return Py_BuildValue("i", 0);
 }
 
@@ -143,7 +143,7 @@ PyObject* checkGradients(PyObject *self, PyObject *args) {
     }
     
     GradCheckWorker* wr = new GradCheckWorker(model, *new CPUData(mvec, numCases));
-    model->getWorkQueue().enqueue(wr);
+    model->getWorkerQueue().enqueue(wr);
     WorkResult* res = model->getResultQueue().dequeue();
     assert(res != NULL);
     assert(res->getResultType() == WorkResult::BATCH_DONE);
@@ -157,7 +157,7 @@ PyObject* checkGradients(PyObject *self, PyObject *args) {
 PyObject* syncWithHost(PyObject *self, PyObject *args) {
     assert(model != NULL);
     SyncWorker* wr = new SyncWorker(model);
-    model->getWorkQueue().enqueue(wr);
+    model->getWorkerQueue().enqueue(wr);
     WorkResult* res = model->getResultQueue().dequeue();
     assert(res != NULL);
     assert(res->getResultType() == WorkResult::SYNC_DONE);

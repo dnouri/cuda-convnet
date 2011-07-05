@@ -20,28 +20,64 @@
 #include "../include/util.cuh"
 #include "../include/data.cuh"
 #include "../include/worker.cuh"
+#include "../include/weights.cuh"
 
 class Worker;
 class WorkResult;
+class Layer;
+class DataLayer;
+class Cost;
 
 class ConvNet : public Thread {
 protected:
+    std::vector<Layer*> _layers;
+    std::vector<DataLayer*> _dataLayers;
+    std::vector<Cost*> _costs;
+    GPUData* _data;
+
     DataProvider* _dp;
     int _deviceID;
-    LayerGraph* _layers;
     
-    Queue<Worker*> _workQueue;
+    Queue<Worker*> _workerQueue;
     Queue<WorkResult*> _resultQueue;
+    
+    // For gradient checking
+    int _numFailures;
+    int _numTests;
+    double _baseErr;
+    bool _checkingGrads;
     
     void initCuda();
     void* run();
 public:
     ConvNet(PyListObject* layerParams, int minibatchSize, int deviceID);
     
-    Queue<Worker*>& getWorkQueue();
+    Queue<Worker*>& getWorkerQueue();
     Queue<WorkResult*>& getResultQueue();
     DataProvider& getDataProvider();
-    LayerGraph& getLayerGraph();
+    
+    // DP wrappers
+    void setData(CPUData& data);
+    void setMinibatch(int idx);
+    int getNumCases();
+    
+    Layer& operator[](const int idx);
+    Layer& getLayer(const int idx);
+    void copyToCPU();
+    void copyToGPU();
+    void updateWeights();
+    void reset();
+    int getNumLayers();
+    
+    void bprop();
+    void fprop();
+    void fprop(GPUData& data);
+
+    bool checkGradientsW(const std::string& name, float eps, Weights& weights); 
+    void checkGradients();
+    bool isCheckingGrads();
+    ErrorResult& getError();
+    double getCostFunctionValue();
 };
 
 #endif	/* CONVNET3 */

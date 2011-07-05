@@ -17,6 +17,7 @@
 #include <matrix.h>
 #include <CudaConv2.cuh>
 
+#include "ConvNet.cuh"
 #include "data.cuh"
 #include "error.cuh"
 #include "weights.cuh"
@@ -25,7 +26,7 @@
 #include "layer_kernels.cuh"
 
 class ErrorResult;
-class LayerGraph;
+class ConvNet;
 class Cost;
 class DataLayer;
 
@@ -34,7 +35,7 @@ class DataLayer;
  */
 class Layer {
 protected:
-    LayerGraph* _layerGraph;
+    ConvNet* _convNet;
     std::vector<Layer*> _prev, _next;
     int _rcvdFInputs, _rcvdBInputs;
     NVMatrix _acts, _actGrads;
@@ -48,7 +49,7 @@ protected:
     virtual void _bprop(NVMatrix& v) = 0;
     
 public:
-    Layer(PyObject* paramsDict, LayerGraph* layerGraph,
+    Layer(PyObject* paramsDict, ConvNet* convNet,
           bool gradConsumer, bool gradProducer, bool trans);
     
     static void setSaveBwdActs(bool saveBwdActs);
@@ -88,42 +89,6 @@ public:
     }
 };
 
-class LayerGraph {
-private:
-    std::vector<Layer*> _layers;
-    std::vector<DataLayer*> _dataLayers;
-    std::vector<Cost*> _costs;
-    GPUData* _data;
-    
-    // For gradient checking
-    int _numFailures;
-    int _numTests;
-    double _baseErr;
-    bool _checkingGrads;
-public:
-    LayerGraph(PyListObject* layerParams);
-    
-    Layer& operator[](const int idx);
-    Layer& getLayer(const int idx);
-    void copyToCPU();
-    void copyToGPU();
-    void updateWeights();
-    void reset();
-    std::vector<DataLayer*>& getDataLayers();
-    int getNumLayers();
-    int getNumCases();
-    void setData(GPUData& data);
-    void bprop();
-    void fprop();
-    void fprop(GPUData& data);
-
-    bool checkGradientsW(const std::string& name, float eps, Weights& weights); 
-    void checkGradients(GPUData& data);
-    bool isCheckingGrads();
-    ErrorResult& getError();
-    double getCostFunctionValue();
-};
-
 class FCLayer : public Layer {
 private:
     WeightList _weights;
@@ -134,7 +99,7 @@ protected:
     void _fprop(NVMatrixV& v);
     void _bprop(NVMatrix& v);
 public:
-    FCLayer(PyObject* paramsDict, LayerGraph* layerGraph);
+    FCLayer(PyObject* paramsDict, ConvNet* convNet);
  
     void updateWeights();  
     void copyToCPU();
@@ -147,7 +112,7 @@ protected:
     void _fprop(NVMatrixV& v);
     void _bprop(NVMatrix& v);
 public:
-    SoftmaxLayer(PyObject* paramsDict, LayerGraph* layerGraph);
+    SoftmaxLayer(PyObject* paramsDict, ConvNet* convNet);
 };
 
 class DataLayer : public Layer {
@@ -157,7 +122,7 @@ protected:
     void _fprop(NVMatrixV& data);
     void _bprop(NVMatrix& v);
 public:
-    DataLayer(PyObject* paramsDict, LayerGraph* layerGraph);
+    DataLayer(PyObject* paramsDict, ConvNet* convNet);
     
     void fprop();
     void fprop(NVMatrixV& data);
@@ -177,7 +142,7 @@ protected:
     void _fprop(NVMatrixV& v);
     void _bprop(NVMatrix& v);
 public:
-    ConvLayer(PyObject* paramsDict, LayerGraph* layerGraph);
+    ConvLayer(PyObject* paramsDict, ConvNet* convNet);
 
     void updateWeights();  
     void copyToCPU();
@@ -194,7 +159,7 @@ protected:
     void _fprop(NVMatrixV& v);
     void _bprop(NVMatrix& v);
 public:
-    PoolLayer(PyObject* paramsDict, LayerGraph* layerGraph);
+    PoolLayer(PyObject* paramsDict, ConvNet* convNet);
 }; 
 
 class Cost : public Layer {
@@ -204,7 +169,7 @@ protected:
 protected:
     void _bprop(NVMatrix& v);
 public:
-    Cost(PyObject* paramsDict, LayerGraph* layerList, bool propagateGrad, bool gradProducer, bool trans);
+    Cost(PyObject* paramsDict, ConvNet* layerList, bool propagateGrad, bool gradProducer, bool trans);
 
     virtual doublev& getError();
     double getCoeff();
@@ -218,7 +183,7 @@ class LogregCost : public Cost {
 protected:
     void _fprop(NVMatrixV& v);
 public:
-    LogregCost(PyObject* paramsDict, LayerGraph* layerGraph);
+    LogregCost(PyObject* paramsDict, ConvNet* convNet);
     
     void bprop();
 };

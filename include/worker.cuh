@@ -14,6 +14,7 @@
 #include "data.cuh"
 
 class ConvNet;
+class ErrorResult;
 
 class WorkResult {
 public:
