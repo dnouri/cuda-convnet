@@ -48,9 +48,7 @@ void TrainingWorker::run() {
     _convNet->setData(*_data);
     ErrorResult& batchErr = *new ErrorResult();
     for (int i = 0; i < _convNet->getDataProvider().getNumMinibatches(); i++) {
-        _convNet->setMinibatch(i);
-        
-        _convNet->fprop();
+        _convNet->fprop(i);
         ErrorResult& miniErr = _convNet->getError();
         batchErr += miniErr;
         
@@ -91,7 +89,6 @@ GradCheckWorker::GradCheckWorker(ConvNet* convNet, CPUData& data)
 
 void GradCheckWorker::run() {
     _convNet->setData(*_data);
-    _convNet->setMinibatch(0);
     _convNet->checkGradients();
     exit(0);
 }

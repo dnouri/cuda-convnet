@@ -43,6 +43,7 @@ void DataProvider::setData(CPUData& hData) {
 }
 
 GPUData& DataProvider::getMinibatch(int idx) {
+    assert(_hData != NULL);
     assert(_hData->getNumCases() > 0);
     assert(idx >= 0 && idx < getNumMinibatches());
     

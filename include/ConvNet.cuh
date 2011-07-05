@@ -58,7 +58,6 @@ public:
     
     // DP wrappers
     void setData(CPUData& data);
-    void setMinibatch(int idx);
     int getNumCases();
     
     Layer& operator[](const int idx);
@@ -71,7 +70,7 @@ public:
     
     void bprop();
     void fprop();
-    void fprop(GPUData& data);
+    void fprop(int miniIdx);
 
     bool checkGradientsW(const std::string& name, float eps, Weights& weights); 
     void checkGradients();

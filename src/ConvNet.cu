@@ -96,11 +96,6 @@ DataProvider& ConvNet::getDataProvider() {
     return *_dp;
 }
 
-void ConvNet::setMinibatch(int idx) {
-    delete _data;
-    _data = &_dp->getMinibatch(idx);
-}
-
 Layer& ConvNet::operator[](const int idx) {
     return *_layers[idx];
 }
@@ -153,18 +148,16 @@ void ConvNet::bprop() {
 
 void ConvNet::fprop() {
     assert(_data != NULL);
-    fprop(*_data);
+    reset();
+    for (int i = 0; i < _data->getData().size(); i++) {
+        _dataLayers[i]->fprop(_data->getData());
+    }
 }
 
-void ConvNet::fprop(GPUData& data) {
-    if (&data != _data) {
-        delete _data;
-        _data = &data;
-    }
-    reset();
-    for (int i = 0; i < data.getData().size(); i++) {
-        _dataLayers[i]->fprop(data.getData());
-    }
+void ConvNet::fprop(int miniIdx) {
+    delete _data;
+    _data = &_dp->getMinibatch(miniIdx);
+    fprop();
 }
 
 void ConvNet::setData(CPUData& data) {
@@ -190,7 +183,7 @@ void ConvNet::checkGradients() {
     _checkingGrads = true;
     _numFailures = 0;
     _numTests = 0;
-    fprop();
+    fprop(0);
     _baseErr = getCostFunctionValue();
     bprop();
     
