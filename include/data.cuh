@@ -18,29 +18,56 @@
  */ 
 #define MAX_DATA_ON_GPU             200 
 
+template <class T>
 class Data {
-private:
-    NVMatrixV* _data;
+protected:
+    std::vector<T*>* _data;
     int _numCases;
 public:
-    Data(NVMatrixV& data, int numCases);
-    virtual ~Data();
-    NVMatrixV& getData();
-    int getNumCases();
+    typedef typename std::vector<T*>::iterator T_iter;
+    
+    Data(std::vector<T*>& data, int numCases) : _data(&data), _numCases(numCases) {
+    }
+
+//    template<class T>
+    ~Data() {
+        for(T_iter it = _data->begin(); it != _data->end(); ++it) {
+            delete *it;
+        }
+        delete _data;
+    }
+    
+    T& operator [](int idx) {
+        return *_data->at(idx);
+    }
+    
+    int getSize() {
+        return _data->size();
+    }
+    
+    std::vector<T*>& getData() {
+        return *_data;
+    }
+
+    int getNumCases() {
+        return _numCases;
+    }
 };
 
+typedef Data<NVMatrix> GPUData;
+typedef Data<Matrix> CPUData;
+
 class DataProvider {
-private:
-    MatrixV* _hData;
+protected:
+    CPUData* _hData;
     NVMatrixV _data;
     int _minibatchSize;
-    int _numCases;
     int _dataSize;
 public:
     DataProvider(int minibatchSize);
-    Data& operator[](int idx);
-    void setData(MatrixV& hData, int numCases);
-    Data& getMinibatch(int idx);
+    GPUData& operator[](int idx);
+    void setData(CPUData&);
+    GPUData& getMinibatch(int idx);
     int getNumMinibatches();
     int getMinibatchSize();
     int getNumCases();

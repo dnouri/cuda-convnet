@@ -93,7 +93,7 @@ private:
     std::vector<Layer*> _layers;
     std::vector<DataLayer*> _dataLayers;
     std::vector<Cost*> _costs;
-    Data* _data;
+    GPUData* _data;
     
     // For gradient checking
     int _numFailures;
@@ -112,13 +112,13 @@ public:
     std::vector<DataLayer*>& getDataLayers();
     int getNumLayers();
     int getNumCases();
-    void setData(Data& data);
+    void setData(GPUData& data);
     void bprop();
     void fprop();
-    void fprop(Data& data);
+    void fprop(GPUData& data);
 
     bool checkGradientsW(const std::string& name, float eps, Weights& weights); 
-    void checkGradients(Data& data);
+    void checkGradients(GPUData& data);
     bool isCheckingGrads();
     ErrorResult& getError();
     double getCostFunctionValue();

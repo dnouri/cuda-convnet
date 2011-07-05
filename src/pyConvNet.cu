@@ -8,7 +8,7 @@
 
 #include <matrix.h>
 #include <queue.h>
-#include "../include/work.cuh"
+#include "../include/worker.cuh"
 #include "../include/util.cuh"
 #include "../include/error.cuh"
 
@@ -99,9 +99,8 @@ PyObject* startBatch(PyObject *self, PyObject *args) {
         mvec.push_back(new Matrix((PyArrayObject*)PyList_GET_ITEM(data, i)));
     }
     
-    WorkRequest* wr = new WorkRequest(test ? WorkRequest::TEST : WorkRequest::TRAIN, mvec, numCases);
-
-    model->getRequestQueue().enqueue(wr);
+    TrainingWorker* wr = new TrainingWorker(model, *new CPUData(mvec, numCases), test);
+    model->getWorkQueue().enqueue(wr);
     return Py_BuildValue("i", 0);
 }
 
@@ -143,8 +142,8 @@ PyObject* checkGradients(PyObject *self, PyObject *args) {
         mvec.push_back(new Matrix((PyArrayObject*)PyList_GET_ITEM(data, i)));
     }
     
-    WorkRequest* wr = new WorkRequest(WorkRequest::CHECK_GRADS, mvec, numCases);
-    model->getRequestQueue().enqueue(wr);
+    GradCheckWorker* wr = new GradCheckWorker(model, *new CPUData(mvec, numCases));
+    model->getWorkQueue().enqueue(wr);
     WorkResult* res = model->getResultQueue().dequeue();
     assert(res != NULL);
     assert(res->getResultType() == WorkResult::BATCH_DONE);
@@ -157,8 +156,8 @@ PyObject* checkGradients(PyObject *self, PyObject *args) {
  */
 PyObject* syncWithHost(PyObject *self, PyObject *args) {
     assert(model != NULL);
-    WorkRequest* wr = new WorkRequest(WorkRequest::SYNC);
-    model->getRequestQueue().enqueue(wr);
+    SyncWorker* wr = new SyncWorker(model);
+    model->getWorkQueue().enqueue(wr);
     WorkResult* res = model->getResultQueue().dequeue();
     assert(res != NULL);
     assert(res->getResultType() == WorkResult::SYNC_DONE);

@@ -19,31 +19,29 @@
 #include "../include/layer.cuh"
 #include "../include/util.cuh"
 #include "../include/data.cuh"
-#include "../include/work.cuh"
+#include "../include/worker.cuh"
+
+class Worker;
+class WorkResult;
 
 class ConvNet : public Thread {
-private:
+protected:
     DataProvider* _dp;
     int _deviceID;
     LayerGraph* _layers;
     
-    Queue<WorkRequest*> _requestQueue;
+    Queue<Worker*> _workQueue;
     Queue<WorkResult*> _resultQueue;
     
     void initCuda();
-    void engage(WorkRequest& req);
-protected:
     void* run();
 public:
     ConvNet(PyListObject* layerParams, int minibatchSize, int deviceID);
     
-    Queue<WorkRequest*>& getRequestQueue() {
-        return _requestQueue;
-    }
-
-    Queue<WorkResult*>& getResultQueue() {
-        return _resultQueue;
-    }
+    Queue<Worker*>& getWorkQueue();
+    Queue<WorkResult*>& getResultQueue();
+    DataProvider& getDataProvider();
+    LayerGraph& getLayerGraph();
 };
 
 #endif	/* CONVNET3 */

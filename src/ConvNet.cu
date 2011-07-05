@@ -36,44 +36,25 @@ void* ConvNet::run() {
     initCuda();
 
     while (true) {
-        WorkRequest& req = *_requestQueue.dequeue();
-
-        if (req.getRequestType() == WorkRequest::TRAIN || req.getRequestType() == WorkRequest::TEST) {
-            _dp->setData(req.getData(), req.getNumCases());
-            engage(req);
-        } else if (req.getRequestType() == WorkRequest::SYNC) {
-            _layers->copyToCPU();
-            _resultQueue.enqueue(new WorkResult(WorkResult::SYNC_DONE));
-        } else if (req.getRequestType() == WorkRequest::CHECK_GRADS) {
-            _dp->setData(req.getData(), req.getNumCases());
-            _layers->checkGradients(_dp->getMinibatch(0));
-            exit(0);
-        }
-        
-        delete &req; // This also deletes the host data matrices
+        Worker& worker = *_workQueue.dequeue();
+        worker.run();
+        delete &worker;
     }
     return NULL;
 }
 
-void ConvNet::engage(WorkRequest& req) {
-    ErrorResult& batchErr = *new ErrorResult();
-    for (int i = 0; i < _dp->getNumMinibatches(); i++) {
-        Data& mini = _dp->getMinibatch(i);
-        
-        _layers->fprop(mini);
-        ErrorResult& miniErr = _layers->getError();
-        batchErr += miniErr;
-        
-        if (req.getRequestType() == WorkRequest::TRAIN) {
-            _layers->bprop();
-            _layers->updateWeights();
-        }
-        
-        delete &mini;
-        delete &miniErr;
-    }
-    cudaThreadSynchronize();
+Queue<Worker*>& ConvNet::getWorkQueue() {
+    return _workQueue;
+}
 
-    batchErr /= _dp->getNumCases();
-    _resultQueue.enqueue(new WorkResult(WorkResult::BATCH_DONE, batchErr));
+Queue<WorkResult*>& ConvNet::getResultQueue() {
+    return _resultQueue;
+}
+
+DataProvider& ConvNet::getDataProvider() {
+    return *_dp;
+}
+
+LayerGraph& ConvNet::getLayerGraph() {
+    return *_layers;
 }

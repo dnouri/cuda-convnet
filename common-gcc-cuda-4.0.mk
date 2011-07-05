@@ -143,7 +143,7 @@ endif
 
 CXXFLAGS  += $(CXXWARN_FLAGS) $(CXX_ARCH_FLAGS)
 CFLAGS    += $(CWARN_FLAGS) $(CXX_ARCH_FLAGS)
-LINKFLAGS +=
+LINKFLAGS += -Wl,-no-undefined
 LINK      += $(LINKFLAGS) $(CXX_ARCH_FLAGS)
 
 # This option for Mac allows CUDA applications to work without requiring to set DYLD_LIBRARY_PATH

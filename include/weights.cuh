@@ -22,7 +22,7 @@ using namespace std;
 class Weights {
 private:
     Matrix* _hWeights, *_hWeightsInc;
-    NVMatrix* _weights, *_weightsInc, *_weightsGrads;
+    NVMatrix _weights, _weightsInc, _weightsGrads;
     
     float _epsW, _wc, _mom;
     
@@ -30,11 +30,11 @@ private:
     static bool _autoCopyToGPU;
  
 public:
-    NVMatrix& operator*() const {
-        return *_weights;
+    NVMatrix& operator*() {
+        return _weights;
     }
     
-    Weights(Matrix* hWeights, Matrix* hWeightsInc, float epsW, float wc, float mom, bool useGrads) {
+    Weights(Matrix& hWeights, Matrix& hWeightsInc, float epsW, float wc, float mom, bool useGrads) {
         _initialized = false;
         initialize(hWeights, hWeightsInc, epsW, wc, mom, useGrads);
     }
@@ -43,16 +43,18 @@ public:
     Weights() : _initialized(false), _onGPU(false), _useGrads(true) {
     }
     
-    void initialize(Matrix* hWeights, Matrix* hWeightsInc, float epsW, float wc, float mom, bool useGrads) {
+    ~Weights() {
+        delete _hWeights;
+        delete _hWeightsInc;
+    }
+    
+    void initialize(Matrix& hWeights, Matrix& hWeightsInc, float epsW, float wc, float mom, bool useGrads) {
         assert(!_initialized);
-        this->_hWeights = hWeights;
-        this->_hWeightsInc = hWeightsInc;
+        this->_hWeights = &hWeights;
+        this->_hWeightsInc = &hWeightsInc;
         this->_epsW = epsW;
         this->_wc = wc;
         this->_mom = mom;
-        this->_weights = new NVMatrix();
-        this->_weightsInc = new NVMatrix();
-        this->_weightsGrads = new NVMatrix();
         this->_onGPU = false;
         this->_useGrads = useGrads;
         if (_autoCopyToGPU) {
@@ -67,17 +69,17 @@ public:
     
     NVMatrix& getW() {
         assert(_onGPU);
-        return *_weights;
+        return _weights;
     }
     
     NVMatrix& getInc() {
         assert(_onGPU);
-        return *_weightsInc;
+        return _weightsInc;
     }
         
     NVMatrix& getGrads() {
         assert(_onGPU);
-        return _useGrads ? *_weightsGrads : *_weightsInc;
+        return _useGrads ? _weightsGrads : _weightsInc;
     }
     
     Matrix& getCPUW() {
@@ -102,26 +104,26 @@ public:
     
     void copyToCPU() {
         assert(_onGPU);
-        _weights->copyToHost(*_hWeights);
-        _weightsInc->copyToHost(*_hWeightsInc);
+        _weights.copyToHost(*_hWeights);
+        _weightsInc.copyToHost(*_hWeightsInc);
     }
     
     void copyToGPU() {
         assert(_initialized);
-        _weights->copyFromHost(*_hWeights, true);
-        _weightsInc->copyFromHost(*_hWeightsInc, true);
+        _weights.copyFromHost(*_hWeights, true);
+        _weightsInc.copyFromHost(*_hWeightsInc, true);
         _onGPU = true;
     }
     
     void update(int numCases) {
         assert(_onGPU);
         if (_useGrads) {
-            _weightsInc->add(*_weightsGrads, _mom, _epsW / numCases);
+            _weightsInc.add(_weightsGrads, _mom, _epsW / numCases);
         }
         if (_wc > 0) {
-            _weightsInc->add(*_weights, -_wc * _epsW);
+            _weightsInc.add(_weights, -_wc * _epsW);
         }
-        _weights->add(*_weightsInc);
+        _weights.add(_weightsInc);
     }
     
     float getEps() {
@@ -157,7 +159,13 @@ public:
         return *_weightList[idx];
     }
     
-    WeightList(MatrixV* hWeights, MatrixV* hWeightsInc, floatv* epsW, floatv* wc, floatv* mom, bool useGrads) {
+    ~WeightList() {
+        for (int i = 0; i < _weightList.size(); i++) {
+            delete _weightList[i];
+        }
+    }
+    
+    WeightList(MatrixV& hWeights, MatrixV& hWeightsInc, floatv& epsW, floatv& wc, floatv& mom, bool useGrads) {
         _initialized = false;
         initialize(hWeights, hWeightsInc, epsW, wc, mom, useGrads);
     }
@@ -166,14 +174,17 @@ public:
         _initialized = false;
     }
     
-    void initialize(MatrixV* hWeights, MatrixV* hWeightsInc, floatv* epsW, floatv* wc, floatv* mom, bool useGrads) {
+    void initialize(MatrixV& hWeights, MatrixV& hWeightsInc, floatv& epsW, floatv& wc, floatv& mom, bool useGrads) {
         assert(!_initialized);
-        for (int i = 0; i < hWeights->size(); i++) {
-            _weightList.push_back(new Weights(hWeights->at(i), hWeightsInc->at(i), epsW->at(i), wc->at(i), mom->at(i), useGrads));
+        for (int i = 0; i < hWeights.size(); i++) {
+            _weightList.push_back(new Weights(*hWeights[i], *hWeightsInc[i], epsW[i], wc[i], mom[i], useGrads));
         }
         _initialized = true;
-        delete hWeights;
-        delete hWeightsInc;
+        delete &hWeights;
+        delete &hWeightsInc;
+        delete &epsW;
+        delete &wc;
+        delete &mom;
     }
     
     long unsigned int getSize() {

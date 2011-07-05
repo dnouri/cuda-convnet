@@ -14,9 +14,11 @@ from layer import LayerParser
 from convdp import *   
 
 class GPUModel(IGPUModel):
-    def __init__(self, model_name, op, load_dic):
+    def __init__(self, model_name, op, load_dic, dp_params=None):
         filename_options = []
-        IGPUModel.__init__(self, model_name, op, load_dic, filename_options, dp_params={'minibatch_size': op.get_value('minibatch_size')})
+        if dp_params is None:
+            dp_params={'minibatch_size': op.get_value('minibatch_size')}
+        IGPUModel.__init__(self, model_name, op, load_dic, filename_options, dp_params=dp_params)
         
     def init_model_lib(self):
         self.libmodel.initModel(self.layers, self.minibatch_size, self.device_ids[0])
@@ -75,10 +77,10 @@ class GPUModel(IGPUModel):
         for i,l in enumerate(self.layers): # This is kind of hacky but will do for now.
             if 'weights' in l:
                 if type(l['weights']) == n.ndarray:
-                    print "\nLayer '%s' weights: %g [%g]" % (l['name'], n.mean(n.abs(l['weights'])), n.mean(n.abs(l['weightsInc']))),
+                    print "\nLayer '%s' weights: %e [%e]" % (l['name'], n.mean(n.abs(l['weights'])), n.mean(n.abs(l['weightsInc']))),
                 elif type(l['weights']) == list:
                     print ""
-                    print "\n".join("Layer '%s' weights[%d]: %g [%g]" % (l['name'], i, n.mean(n.abs(w)), n.mean(n.abs(wi))) for i,(w,wi) in enumerate(zip(l['weights'],l['weightsInc']))),
+                    print "\n".join("Layer '%s' weights[%d]: %e [%e]" % (l['name'], i, n.mean(n.abs(w)), n.mean(n.abs(wi))) for i,(w,wi) in enumerate(zip(l['weights'],l['weightsInc']))),
         print ""
         
     def conditional_save(self):
@@ -94,19 +96,25 @@ class GPUModel(IGPUModel):
                     test_outputs[0][k][j] += test_outputs[i][k][j]
         return test_outputs[0]
     
+    @classmethod
+    def get_options_parser(cls):
+        op = IGPUModel.get_options_parser()
+        op.add_option("mini", "minibatch_size", IntegerOptionParser, "Minibatch size", default=128)
+        op.add_option("layer-def", "layer_def", StringOptionParser, "Layer definition file", set_once=True)
+        op.add_option("layer-params", "layer_params", StringOptionParser, "Layer parameter file")
+        op.add_option("check-grads", "check_grads", BooleanOptionParser, "Check gradients and quit?", default=0, excuses=['data_path','save_path','train_batch_range','test_batch_range'])
+        
+        op.delete_option('max_test_err')
+        op.options["max_filesize_mb"].default = 0
+        op.options["testing_freq"].default = 50
+        op.options["num_epochs"].default = 50000
+        op.options['dp_type'].default = None
+        
+        return op
+    
 if __name__ == "__main__":
     #nr.seed(5)
-    op = IGPUModel.get_default_options_parser()
-    op.add_option("mini", "minibatch_size", IntegerOptionParser, "Minibatch size", default=128)
-    op.add_option("layer-def", "layer_def", StringOptionParser, "Layer definition file", set_once=True)
-    op.add_option("layer-params", "layer_params", StringOptionParser, "Layer parameter file")
-    op.add_option("check-grads", "check_grads", BooleanOptionParser, "Check gradients and quit?", default=0, excuses=['data_path','save_path','train_batch_range','test_batch_range'])
-    
-    op.delete_option('max_test_err')
-    op.options["max_filesize_mb"].default = 0
-    op.options["testing_freq"].default = 50
-    op.options["num_epochs"].default = 50000
-    op.options['dp_type'].default = None
+    op = GPUModel.get_options_parser()
     
     DataProvider.register_data_provider('cifar', 'CIFAR', CIFARDataProvider)
     DataProvider.register_data_provider('dummy-cn-n', 'Dummy ConvNet', DummyConvNetDataProvider)

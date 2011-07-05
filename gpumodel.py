@@ -235,7 +235,7 @@ class IGPUModel:
         return unpickle(load_dir)
     
     @staticmethod
-    def get_default_options_parser():
+    def get_options_parser():
         op = OptionsParser()
         op.add_option("f", "load_file", StringOptionParser, "Load file", default="", excuses=OptionsParser.EXCLUDE_ALL)
         op.add_option("train-range", "train_batch_range", RangeOptionParser, "Data batch range: training")

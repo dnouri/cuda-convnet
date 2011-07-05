@@ -307,7 +307,7 @@ void LayerGraph::fprop() {
     fprop(*_data);
 }
 
-void LayerGraph::fprop(Data& data) {
+void LayerGraph::fprop(GPUData& data) {
     setData(data);
     reset();
     for (int i = 0; i < data.getData().size(); i++) {
@@ -315,7 +315,7 @@ void LayerGraph::fprop(Data& data) {
     }
 }
 
-void LayerGraph::setData(Data& data) {
+void LayerGraph::setData(GPUData& data) {
     assert(&data != NULL);
     this->_data = &data;
 }
@@ -335,7 +335,7 @@ bool LayerGraph::isCheckingGrads() {
     return _checkingGrads;
 }
 
-void LayerGraph::checkGradients(Data& data) {
+void LayerGraph::checkGradients(GPUData& data) {
     _checkingGrads = true;
     _numFailures = 0;
     _numTests = 0;
@@ -381,8 +381,8 @@ FCLayer::FCLayer(PyObject* paramsDict, LayerGraph* layerGraph) : Layer(paramsDic
     floatv* epsW = getFloatVec((PyListObject*)PyDict_GetItemString(paramsDict, "epsW"));
     float epsB = PyFloat_AS_DOUBLE((PyFloatObject*)PyDict_GetItemString(paramsDict, "epsB"));
     floatv* wc = getFloatVec((PyListObject*)PyDict_GetItemString(paramsDict, "wc"));
-    _weights.initialize(hWeights, hWeightsInc, epsW, wc, momW, false);
-    _biases.initialize(hBiases, hBiasesInc, epsB, 0, momB, true);
+    _weights.initialize(*hWeights, *hWeightsInc, *epsW, *wc, *momW, false);
+    _biases.initialize(*hBiases, *hBiasesInc, epsB, 0, momB, true);
 
     char* neuronType = PyString_AS_STRING((PyStringObject*)PyDict_GetItemString(paramsDict, "neuron"));
     _neuron = &Neuron::makeNeuron(neuronType);
@@ -473,8 +473,8 @@ ConvLayer::ConvLayer(PyObject* paramsDict, LayerGraph* layerGraph) : Layer(param
     _filterPixels = _filterSize * _filterSize;
     _imgPixels = _imgSize * _imgSize;
     
-    _weights.initialize(hWeights, hWeightsInc, epsW, wc, momW, true);
-    _biases.initialize(hBiases, hBiasesInc, epsB, 0, momB, true);
+    _weights.initialize(*hWeights, *hWeightsInc, epsW, wc, momW, true);
+    _biases.initialize(*hBiases, *hBiasesInc, epsB, 0, momB, true);
 
     char* neuronType = PyString_AS_STRING((PyStringObject*)PyDict_GetItemString(paramsDict, "neuron"));
     _neuron = &Neuron::makeNeuron(neuronType);
@@ -563,7 +563,7 @@ void SoftmaxLayer::_bprop(NVMatrix& v) {
             kSoftmaxGrads<true><<<blocks, threads>>>(v.getDevData(), _acts.getDevData(), target.getDevData(), numCases, numOut);
         }
 
-        cutilCheckMsg("kLogregGrads: Kernel execution failed");
+        cutilCheckMsg("kSoftmaxGrads: Kernel execution failed");
 
         truncActGrads();
         
