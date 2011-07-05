@@ -172,6 +172,7 @@ private:
     int _imgPixels, _filterPixels, _modules;
     int _partialSum;
     int _numFilters;
+    bool _sharedBiases;
 protected:
     void _fprop(NVMatrixV& v);
     void _bprop(NVMatrix& v);

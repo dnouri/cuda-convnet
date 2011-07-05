@@ -230,7 +230,6 @@ bool LayerGraph::checkGradientsW(const string& name, float eps, Weights& weights
     weights.getGrads().copyToHost(gradsCPU, true);
     float analNorm = gradsCPU.norm();
     float numNorm = numGrads.norm();
-
     numGrads.subtract(gradsCPU, diff);
     float relErr = diff.norm() / analNorm;
     bool fail = relErr >= GC_REL_ERR_THRESH;
@@ -468,7 +467,8 @@ ConvLayer::ConvLayer(PyObject* paramsDict, LayerGraph* layerGraph) : Layer(param
     _imgSize = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "imgSize"));
     _numFilters = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "numFilters"));
     _partialSum = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "partialSum"));
-    
+    _sharedBiases = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "sharedBiases"));
+
     _modules = _modulesX * _modulesX;
     _filterPixels = _filterSize * _filterSize;
     _imgPixels = _imgSize * _imgSize;
@@ -483,13 +483,26 @@ ConvLayer::ConvLayer(PyObject* paramsDict, LayerGraph* layerGraph) : Layer(param
 
 void ConvLayer::_fprop(NVMatrixV& v) {
     convFilterActs(*v[0], *_weights, _acts, _modulesX, _padding, _stride, _channels, FILTER_MODULE_IMAGE);
-    _acts.addVector(*_biases);
+    if (_sharedBiases) {
+        _acts.reshape(_numFilters, _acts.getNumElements() / _numFilters);
+        _acts.addVector(*_biases);
+        _acts.reshape(_numFilters * _modules, _acts.getNumElements() / (_numFilters * _modules));
+    } else {
+        _acts.addVector(*_biases);
+    }
+    
     _neuron->activate(_acts);
 }
 
 void ConvLayer::_bprop(NVMatrix& v) {
     _neuron->computeInputGrads(v);
-    v.sum(1, _biases.getGrads());
+    if (_sharedBiases) {
+        v.reshape(_numFilters, v.getNumElements() / _numFilters);
+        v.sum(1, _biases.getGrads());
+        v.reshape(_numFilters * _modules, v.getNumElements() / (_numFilters * _modules));
+    } else {
+        v.sum(1, _biases.getGrads());
+    }
 
     if (_prev[0]->isGradConsumer()) {
         if (_prev[0]->getRcvdBInputs() == 0) {

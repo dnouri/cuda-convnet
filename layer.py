@@ -48,7 +48,7 @@ class MyConfigParser(cfg.SafeConfigParser):
         return self.safeGet(section, option, cfg.SafeConfigParser.getfloat, 'float')
     
     def getbool(self, section, option):
-        return self.safeGet(section, option, cfg.SafeConfigParser.getbool, 'bool')
+        return self.safeGet(section, option, cfg.SafeConfigParser.getboolean, 'bool')
     
     def getFloatList(self, section, option):
         return self.safeGetList(section, option, float, typestr='floats')
@@ -227,6 +227,7 @@ class ConvLayerParser(LayerWithInputParser):
         dic['partialSum'] = mcp.getint(name, 'partialSum')
         if dic['partialSum'] != 0 and dic['modules'] % dic['partialSum'] != 0:
             raise LayerParsingError("Layer '%s': convolutional layer produces %d outputs per filter, but given partialSum parameter (%d) does not divide this number" % (name, dic['modules'], dic['partialSum']))
+        dic['sharedBiases'] = mcp.getbool(name, 'sharedBiases')
         
         LayerParser.verify_int_range(dic['stride'], name, 'stride', 1, None)
         LayerParser.verify_int_range(dic['filterSize'], name, 'filterSize', 1, None)
@@ -238,9 +239,10 @@ class ConvLayerParser(LayerWithInputParser):
         dic['neuron'] = mcp.get(name, 'neuron')
         dic['initW'] = mcp.getfloat(name, 'initW')
         
+        num_biases = dic['numFilters'] if dic['sharedBiases'] else dic['modules']*dic['numFilters']
         dic['weights'], dic['weightsInc'] = make_weights(dic['filterPixels']*dic['channels'], \
                                                          dic['numFilters'], dic['initW'], order='C')
-        dic['biases'], dic['biasesInc'] = make_weights(dic['modules']*dic['numFilters'], 1, 0, order='C')
+        dic['biases'], dic['biasesInc'] = make_weights(num_biases, 1, 0, order='C')
         
         print "Initialized convolutional layer '%s', producing %dx%d %d-channel output" % (name, dic['modulesX'], dic['modulesX'], dic['numFilters'])
         
