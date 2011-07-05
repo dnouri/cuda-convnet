@@ -214,7 +214,7 @@ class ConvLayerParser(LayerWithInputParser):
         if dic['numInputs'][0] % dic['imgPixels'] != 0 or dic['imgSize'] * dic['imgSize'] != dic['imgPixels']:
             raise LayerParsingError("Layer '%s': has %-d dimensional input, not interpretable as %d-channel images" % (name, dic['numInputs'][0], dic['channels']))
         if dic['channels'] > 3 and dic['channels'] % 4 != 0:
-            raise LayerParsingError("Layer '%s': number of channel channels must be smaller than 4 or divisible by 4" % name)
+            raise LayerParsingError("Layer '%s': number of channels must be smaller than 4 or divisible by 4" % name)
         
         dic['padding'] = mcp.getint(name, 'padding')
         dic['stride'] = mcp.getint(name, 'stride')
