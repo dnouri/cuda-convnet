@@ -10,14 +10,14 @@ from options import *
 from gpumodel import *
 import sys
 import math as m
-from layer import LayerParser
+from layer import LayerParser, LayerParsingError
 from convdp import *   
 
 class GPUModel(IGPUModel):
-    def __init__(self, model_name, op, load_dic, dp_params=None):
+    def __init__(self, model_name, op, load_dic, dp_params={}):
         filename_options = []
-        if dp_params is None:
-            dp_params={'minibatch_size': op.get_value('minibatch_size')}
+        dp_params['multiview_test'] = op.get_value('multiview_test')
+        dp_params['crop_border'] = op.get_value('crop_border')
         IGPUModel.__init__(self, model_name, op, load_dic, filename_options, dp_params=dp_params)
         
     def init_model_lib(self):
@@ -29,6 +29,14 @@ class GPUModel(IGPUModel):
             ms['layers'] = LayerParser.parse_layers(self.layer_def, self.layer_params, self, ms['layers'])
         else:
             ms['layers'] = LayerParser.parse_layers(self.layer_def, self.layer_params, self)
+        logreg_name = self.op.get_value('logreg_name')
+        if logreg_name != "":
+            try:
+                self.logreg_idx = [l['name'] for l in ms['layers']].index(logreg_name)
+                if ms['layers'][self.logreg_idx]['type'] != 'cost.logreg':
+                    raise ModelStateException("Layer name '%s' given to --logreg-name argument not a logreg layer." % logreg_name)
+            except IndexError:
+                raise ModelStateException("Layer name '%s' given to --logreg-name parameter not defined." % logreg_name)
             
     def fill_excused_options(self):
         if self.op.get_value('save_path') is None:
@@ -45,6 +53,8 @@ class GPUModel(IGPUModel):
         data = batch_data[2]
         if self.check_grads:
             self.libmodel.checkGradients(data)
+        elif not train and self.multiview_test:
+            self.libmodel.startMultiviewTest(data, self.train_data_provider.num_views, self.logreg_idx)
         else:
             self.libmodel.startBatch(data, not train)
         
@@ -102,6 +112,9 @@ class GPUModel(IGPUModel):
         op.add_option("layer-def", "layer_def", StringOptionParser, "Layer definition file", set_once=True)
         op.add_option("layer-params", "layer_params", StringOptionParser, "Layer parameter file")
         op.add_option("check-grads", "check_grads", BooleanOptionParser, "Check gradients and quit?", default=0, excuses=['data_path','save_path','train_batch_range','test_batch_range'])
+        op.add_option("multiview-test", "multiview_test", BooleanOptionParser, "Cropped DP: test on multiple patches?", default=0)
+        op.add_option("crop-border", "crop_border", IntegerOptionParser, "Cropped DP: crop border size", default=4)
+        op.add_option("logreg-name", "logreg_name", StringOptionParser, "Cropped DP: logreg layer name", default="")
         
         op.delete_option('max_test_err')
         op.options["max_filesize_mb"].default = 0
@@ -117,7 +130,8 @@ if __name__ == "__main__":
     
     DataProvider.register_data_provider('cifar', 'CIFAR', CIFARDataProvider)
     DataProvider.register_data_provider('dummy-cn-n', 'Dummy ConvNet', DummyConvNetDataProvider)
-
+    DataProvider.register_data_provider('cifar-cropped', 'Cropped CIFAR data provider', CroppedCIFARDataProvider)
+    
     op, load_dic = IGPUModel.parse_options(op)
     model = GPUModel("ConvNet", op, load_dic)
     model.start()

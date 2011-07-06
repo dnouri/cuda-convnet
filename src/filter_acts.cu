@@ -19,8 +19,7 @@
  * images:      (numColors, imgPixels, numImages) with stride given
  * filters:     (numColors, filterPixels, numFilters)
  *
- * targets:     (numModules, numFilters, numImages) if mfi
- *              (numFilters, numModules, numImages) otherwise
+ * targets:     (numFilters, numModules, numImages)
  *
  * B_Y one of 4, 8, 16
  * B_X one of 16, 32
@@ -33,7 +32,7 @@
  * The imgSize here is the size of the actual image without the padding.
  *
  */
-template <int B_Y, int B_X, int imgsPerThread, int filtersPerThread, int numColors, bool mfi, bool scale, bool checkImgBounds>
+template <int B_Y, int B_X, int imgsPerThread, int filtersPerThread, int numColors, bool scale, bool checkImgBounds>
 __global__ void filterActs_YxX_color(float* images, float* filters, float* targets,
                                    const int numImages, const int numFilters,
                                    const int imgSize, const int filterSize, const int paddingStart,
@@ -60,15 +59,11 @@ __global__ void filterActs_YxX_color(float* images, float* filters, float* targe
     images += myImgIdx;
     filters += filtersPerThread * B_Y * blockFilterIdx
             + shFilterLoadY * numFilters + shFilterLoadX;
-    if (mfi) {
-        targets += moduleIdx * numImages * numFilters
-                + (blockFilterIdx * B_Y * filtersPerThread + threadIdx.y) * numImages
-                + myImgIdx;
-    } else {
-        targets += moduleIdx * numImages
-                + (blockFilterIdx * B_Y * filtersPerThread + threadIdx.y) * numImages * numModulesX * numModulesX
-                + myImgIdx;
-    }
+
+    targets += moduleIdx * numImages
+            + (blockFilterIdx * B_Y * filtersPerThread + threadIdx.y) * numImages * numModulesX * numModulesX
+            + myImgIdx;
+
 
     float prod[filtersPerThread][imgsPerThread];
     #pragma unroll
@@ -148,51 +143,26 @@ __global__ void filterActs_YxX_color(float* images, float* filters, float* targe
     }
     
     if (scale) {
-        if (mfi) {
-            #pragma unroll
-            for (int g = 0; g < imgsPerThread; g++) {
-                if (!checkImgBounds || myImgIdx + g * B_X < numImages) {
-                    #pragma unroll
-                    for (int f = 0; f < filtersPerThread; f++) {
-                        targets[g * B_X + f * B_Y * numImages] = scaleTargets * targets[g * B_X + f * B_Y * numImages] + scaleOutputs * prod[f][g];
-                    }
-                }
-            }
-        } else {
-            #pragma unroll
-            for (int g = 0; g < imgsPerThread; g++) {
-                if (!checkImgBounds || myImgIdx + g * B_X < numImages) {
-                    #pragma unroll
-                    for (int f = 0; f < filtersPerThread; f++) {
-                        targets[g * B_X + f * B_Y * numImages * numModulesX * numModulesX] = scaleTargets * targets[g * B_X + f * B_Y * numImages * numModulesX * numModulesX] + scaleOutputs * prod[f][g];
-                    }
+        #pragma unroll
+        for (int g = 0; g < imgsPerThread; g++) {
+            if (!checkImgBounds || myImgIdx + g * B_X < numImages) {
+                #pragma unroll
+                for (int f = 0; f < filtersPerThread; f++) {
+                    targets[g * B_X + f * B_Y * numImages * numModulesX * numModulesX] = scaleTargets * targets[g * B_X + f * B_Y * numImages * numModulesX * numModulesX] + scaleOutputs * prod[f][g];
                 }
             }
         }
     } else {
-        if (mfi) {
-            #pragma unroll
-            for (int g = 0; g < imgsPerThread; g++) {
-                if (!checkImgBounds || myImgIdx + g * B_X < numImages) {
-                    #pragma unroll
-                    for (int f = 0; f < filtersPerThread; f++) {
-                        targets[g * B_X + f * B_Y * numImages] = prod[f][g];
-                    }
-                }
-            }
-        } else {
-            #pragma unroll
-            for (int g = 0; g < imgsPerThread; g++) {
-                if (!checkImgBounds || myImgIdx + g * B_X < numImages) {
-                    #pragma unroll
-                    for (int f = 0; f < filtersPerThread; f++) {
-                        targets[g * B_X + f * B_Y * numImages * numModulesX * numModulesX] = prod[f][g];
-                    }
+        #pragma unroll
+        for (int g = 0; g < imgsPerThread; g++) {
+            if (!checkImgBounds || myImgIdx + g * B_X < numImages) {
+                #pragma unroll
+                for (int f = 0; f < filtersPerThread; f++) {
+                    targets[g * B_X + f * B_Y * numImages * numModulesX * numModulesX] = prod[f][g];
                 }
             }
         }
     }
-
 }
 
 
@@ -207,8 +177,7 @@ __global__ void filterActs_YxX_color(float* images, float* filters, float* targe
  * images:      (numColors, imgPixels, numImages) with stride given
  * filters:     (numColors, filterPixels, numFilters)
  *
- * targets:     (numModules, numFilters, numImages) if mfi
- *              (numFilters, numModules, numImages) otherwise
+ * targets:     (numFilters, numModules, numImages)
  *
  * B_Y one of 4, 8, 16
  * B_X one of 16, 32
@@ -223,7 +192,7 @@ __global__ void filterActs_YxX_color(float* images, float* filters, float* targe
  * The imgSize here is the size of the actual image without the padding.
  *
  */
-template <int B_Y, int B_X, int imgsPerThread, int filtersPerThread, int colorCache, bool mfi, bool scale, bool checkImgBounds>
+template <int B_Y, int B_X, int imgsPerThread, int filtersPerThread, int colorCache, bool scale, bool checkImgBounds>
 __global__ void filterActs_YxX_manycolor(float* images, float* filters, float* targets,
                                        const int numImages, const int numFilters,
                                        const int imgSize, const int filterSize, const int paddingStart,
@@ -252,15 +221,10 @@ __global__ void filterActs_YxX_manycolor(float* images, float* filters, float* t
     filters += filtersPerThread * B_Y * blockFilterIdx
             + shFilterLoadY * numFilters + shFilterLoadX;
 
-    if (mfi) {
-        targets += moduleIdx * numImages * numFilters
-                + (blockFilterIdx * B_Y * filtersPerThread + threadIdx.y) * numImages
-                + myImgIdx;
-    } else {
-        targets += moduleIdx * numImages
-                + (blockFilterIdx * B_Y * filtersPerThread + threadIdx.y) * numImages * numModulesX * numModulesX
-                + myImgIdx;
-    }
+    targets += moduleIdx * numImages
+            + (blockFilterIdx * B_Y * filtersPerThread + threadIdx.y) * numImages * numModulesX * numModulesX
+            + myImgIdx;
+    
 
     float prod[filtersPerThread][imgsPerThread];
     #pragma unroll
@@ -342,51 +306,26 @@ __global__ void filterActs_YxX_manycolor(float* images, float* filters, float* t
     }
 
     if (scale) {
-        if (mfi) {
-            #pragma unroll
-            for (int g = 0; g < imgsPerThread; g++) {
-                if (!checkImgBounds || myImgIdx + g * B_X < numImages) {
-                    #pragma unroll
-                    for (int f = 0; f < filtersPerThread; f++) {
-                        targets[g * B_X + f * B_Y * numImages] = scaleTargets * targets[g * B_X + f * B_Y * numImages] + scaleOutputs * prod[f][g];
-                    }
-                }
-            }
-        } else {
-            #pragma unroll
-            for (int g = 0; g < imgsPerThread; g++) {
-                if (!checkImgBounds || myImgIdx + g * B_X < numImages) {
-                    #pragma unroll
-                    for (int f = 0; f < filtersPerThread; f++) {
-                        targets[g * B_X + f * B_Y * numImages * numModulesX * numModulesX] = scaleTargets * targets[g * B_X + f * B_Y * numImages * numModulesX * numModulesX] + scaleOutputs * prod[f][g];
-                    }
+        #pragma unroll
+        for (int g = 0; g < imgsPerThread; g++) {
+            if (!checkImgBounds || myImgIdx + g * B_X < numImages) {
+                #pragma unroll
+                for (int f = 0; f < filtersPerThread; f++) {
+                    targets[g * B_X + f * B_Y * numImages * numModulesX * numModulesX] = scaleTargets * targets[g * B_X + f * B_Y * numImages * numModulesX * numModulesX] + scaleOutputs * prod[f][g];
                 }
             }
         }
     } else {
-        if (mfi) {
-            #pragma unroll
-            for (int g = 0; g < imgsPerThread; g++) {
-                if (!checkImgBounds || myImgIdx + g * B_X < numImages) {
-                    #pragma unroll
-                    for (int f = 0; f < filtersPerThread; f++) {
-                        targets[g * B_X + f * B_Y * numImages] = prod[f][g];
-                    }
-                }
-            }
-        } else {
-            #pragma unroll
-            for (int g = 0; g < imgsPerThread; g++) {
-                if (!checkImgBounds || myImgIdx + g * B_X < numImages) {
-                    #pragma unroll
-                    for (int f = 0; f < filtersPerThread; f++) {
-                        targets[g * B_X + f * B_Y * numImages * numModulesX * numModulesX] = prod[f][g];
-                    }
+        #pragma unroll
+        for (int g = 0; g < imgsPerThread; g++) {
+            if (!checkImgBounds || myImgIdx + g * B_X < numImages) {
+                #pragma unroll
+                for (int f = 0; f < filtersPerThread; f++) {
+                    targets[g * B_X + f * B_Y * numImages * numModulesX * numModulesX] = prod[f][g];
                 }
             }
         }
     }
-
 }
 
 /*
@@ -452,88 +391,88 @@ void convFilterActs(NVMatrix& images, NVMatrix& filters, NVMatrix& targets,
         if (numColors == 1) {
             if (checkImgBounds) {
                 if (numFilters % 32 == 0) {
-                    cudaFuncSetCacheConfig(filterActs_YxX_color< 4, 32, 4, 8, 1, false, false, true >, cudaFuncCachePreferShared);
-                    filterActs_YxX_color < 4, 32, 4, 8, 1, false, false, true > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
+                    cudaFuncSetCacheConfig(filterActs_YxX_color< 4, 32, 4, 8, 1, false, true >, cudaFuncCachePreferShared);
+                    filterActs_YxX_color < 4, 32, 4, 8, 1, false, true > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
                                 numImages, numFilters, imgSize, filterSize, paddingStart, moduleStride, numModulesX, imgStride, scaleTargets, scaleOutput);
                 } else {
-                    cudaFuncSetCacheConfig(filterActs_YxX_color< 4, 32, 4, 4, 1, false, false, true >, cudaFuncCachePreferShared);
-                    filterActs_YxX_color < 4, 32, 4, 4, 1, false, false, true > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
+                    cudaFuncSetCacheConfig(filterActs_YxX_color< 4, 32, 4, 4, 1, false, true >, cudaFuncCachePreferShared);
+                    filterActs_YxX_color < 4, 32, 4, 4, 1, false, true > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
                                 numImages, numFilters, imgSize, filterSize, paddingStart, moduleStride, numModulesX, imgStride, scaleTargets, scaleOutput);
                 }
             } else {
                 if (numFilters % 32 == 0) {
-                    cudaFuncSetCacheConfig(filterActs_YxX_color< 4, 32, 4, 8, 1, false, false, false >, cudaFuncCachePreferShared);
-                    filterActs_YxX_color < 4, 32, 4, 8, 1, false, false, false > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
+                    cudaFuncSetCacheConfig(filterActs_YxX_color< 4, 32, 4, 8, 1, false, false >, cudaFuncCachePreferShared);
+                    filterActs_YxX_color < 4, 32, 4, 8, 1, false, false > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
                                 numImages, numFilters, imgSize, filterSize, paddingStart, moduleStride, numModulesX, imgStride, scaleTargets, scaleOutput);
                 } else {
-                    cudaFuncSetCacheConfig(filterActs_YxX_color< 4, 32, 4, 4, 1, false, false, false >, cudaFuncCachePreferShared);
-                    filterActs_YxX_color < 4, 32, 4, 4, 1, false, false, false > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
+                    cudaFuncSetCacheConfig(filterActs_YxX_color< 4, 32, 4, 4, 1, false, false >, cudaFuncCachePreferShared);
+                    filterActs_YxX_color < 4, 32, 4, 4, 1, false, false > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
                                 numImages, numFilters, imgSize, filterSize, paddingStart, moduleStride, numModulesX, imgStride, scaleTargets, scaleOutput);
                 }
             }
         } else if (numColors == 2) {
             if (checkImgBounds) {
                 if (numFilters % 32 == 0) {
-                    cudaFuncSetCacheConfig(filterActs_YxX_color< 4, 32, 4, 8, 2, false, false, true >, cudaFuncCachePreferShared);
-                    filterActs_YxX_color < 4, 32, 4, 8, 2, false, false, true > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
+                    cudaFuncSetCacheConfig(filterActs_YxX_color< 4, 32, 4, 8, 2, false, true >, cudaFuncCachePreferShared);
+                    filterActs_YxX_color < 4, 32, 4, 8, 2, false, true > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
                                 numImages, numFilters, imgSize, filterSize, paddingStart, moduleStride, numModulesX, imgStride, scaleTargets, scaleOutput);
                 } else {
-                    cudaFuncSetCacheConfig(filterActs_YxX_color< 4, 32, 4, 4, 2, false, false, true >, cudaFuncCachePreferShared);
-                    filterActs_YxX_color < 4, 32, 4, 4, 2, false, false, true > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
+                    cudaFuncSetCacheConfig(filterActs_YxX_color< 4, 32, 4, 4, 2, false, true >, cudaFuncCachePreferShared);
+                    filterActs_YxX_color < 4, 32, 4, 4, 2, false, true > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
                                 numImages, numFilters, imgSize, filterSize, paddingStart, moduleStride, numModulesX, imgStride, scaleTargets, scaleOutput);
                 }
             } else {
                 if (numFilters % 32 == 0) {
-                    cudaFuncSetCacheConfig(filterActs_YxX_color< 4, 32, 4, 8, 2, false, false, false >, cudaFuncCachePreferShared);
-                    filterActs_YxX_color < 4, 32, 4, 8, 2, false, false, false > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
+                    cudaFuncSetCacheConfig(filterActs_YxX_color< 4, 32, 4, 8, 2, false, false >, cudaFuncCachePreferShared);
+                    filterActs_YxX_color < 4, 32, 4, 8, 2, false, false > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
                                 numImages, numFilters, imgSize, filterSize, paddingStart, moduleStride, numModulesX, imgStride, scaleTargets, scaleOutput);
                 } else {
-                    cudaFuncSetCacheConfig(filterActs_YxX_color< 4, 32, 4, 4, 2, false, false, false >, cudaFuncCachePreferShared);
-                    filterActs_YxX_color < 4, 32, 4, 4, 2, false, false, false > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
+                    cudaFuncSetCacheConfig(filterActs_YxX_color< 4, 32, 4, 4, 2, false, false >, cudaFuncCachePreferShared);
+                    filterActs_YxX_color < 4, 32, 4, 4, 2, false, false > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
                                 numImages, numFilters, imgSize, filterSize, paddingStart, moduleStride, numModulesX, imgStride, scaleTargets, scaleOutput);
                 }
             }
         }  else if (numColors == 3) {
             if (checkImgBounds) {
                  if (numFilters % 32 == 0) {
-                     cudaFuncSetCacheConfig(filterActs_YxX_color< 4, 32, 4, 8, 3, false, false, true >, cudaFuncCachePreferShared);
-                     filterActs_YxX_color < 4, 32, 4, 8, 3, false, false, true > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
+                     cudaFuncSetCacheConfig(filterActs_YxX_color< 4, 32, 4, 8, 3, false, true >, cudaFuncCachePreferShared);
+                     filterActs_YxX_color < 4, 32, 4, 8, 3, false, true > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
                                  numImages, numFilters, imgSize, filterSize, paddingStart, moduleStride, numModulesX, imgStride, scaleTargets, scaleOutput);
                  } else {
-                     cudaFuncSetCacheConfig(filterActs_YxX_color< 4, 32, 4, 4, 3, false, false, true >, cudaFuncCachePreferShared);
-                     filterActs_YxX_color < 4, 32, 4, 4, 3, false, false, true > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
+                     cudaFuncSetCacheConfig(filterActs_YxX_color< 4, 32, 4, 4, 3, false, true >, cudaFuncCachePreferShared);
+                     filterActs_YxX_color < 4, 32, 4, 4, 3, false, true > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
                                  numImages, numFilters, imgSize, filterSize, paddingStart, moduleStride, numModulesX, imgStride, scaleTargets, scaleOutput);
                  }
             } else {
                  if (numFilters % 32 == 0) {
-                     cudaFuncSetCacheConfig(filterActs_YxX_color< 4, 32, 4, 8, 3, false, false, false >, cudaFuncCachePreferShared);
-                     filterActs_YxX_color < 4, 32, 4, 8, 3, false, false, false > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
+                     cudaFuncSetCacheConfig(filterActs_YxX_color< 4, 32, 4, 8, 3, false, false >, cudaFuncCachePreferShared);
+                     filterActs_YxX_color < 4, 32, 4, 8, 3, false, false > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
                                  numImages, numFilters, imgSize, filterSize, paddingStart, moduleStride, numModulesX, imgStride, scaleTargets, scaleOutput);
                  } else {
-                     cudaFuncSetCacheConfig(filterActs_YxX_color< 4, 32, 4, 4, 3, false, false, false >, cudaFuncCachePreferShared);
-                     filterActs_YxX_color < 4, 32, 4, 4, 3, false, false, false > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
+                     cudaFuncSetCacheConfig(filterActs_YxX_color< 4, 32, 4, 4, 3, false, false >, cudaFuncCachePreferShared);
+                     filterActs_YxX_color < 4, 32, 4, 4, 3, false, false > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
                                  numImages, numFilters, imgSize, filterSize, paddingStart, moduleStride, numModulesX, imgStride, scaleTargets, scaleOutput);
                  }
             }
         } else if (numColors % 2 == 0) {
             if (checkImgBounds) {
                 if (numFilters % 32 == 0) {
-                    cudaFuncSetCacheConfig(filterActs_YxX_manycolor< 4, 32, 4, 8, 2, false, false, true >, cudaFuncCachePreferShared);
-                    filterActs_YxX_manycolor < 4, 32, 4, 8, 2, false, false, true > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
+                    cudaFuncSetCacheConfig(filterActs_YxX_manycolor< 4, 32, 4, 8, 2, false, true >, cudaFuncCachePreferShared);
+                    filterActs_YxX_manycolor < 4, 32, 4, 8, 2, false, true > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
                                 numImages, numFilters, imgSize, filterSize, paddingStart, moduleStride, numModulesX, imgStride, numColors, scaleTargets, scaleOutput);
                 } else {
-                    cudaFuncSetCacheConfig(filterActs_YxX_manycolor< 4, 32, 4, 4, 2, false, false, true >, cudaFuncCachePreferShared);
-                    filterActs_YxX_manycolor < 4, 32, 4, 4, 2, false, false, true > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
+                    cudaFuncSetCacheConfig(filterActs_YxX_manycolor< 4, 32, 4, 4, 2, false, true >, cudaFuncCachePreferShared);
+                    filterActs_YxX_manycolor < 4, 32, 4, 4, 2, false, true > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
                                 numImages, numFilters, imgSize, filterSize, paddingStart, moduleStride, numModulesX, imgStride, numColors, scaleTargets, scaleOutput);
                 }
             } else {
                 if (numFilters % 32 == 0) {
-                    cudaFuncSetCacheConfig(filterActs_YxX_manycolor< 4, 32, 4, 8, 2, false, false, false >, cudaFuncCachePreferShared);
-                    filterActs_YxX_manycolor < 4, 32, 4, 8, 2, false, false, false > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
+                    cudaFuncSetCacheConfig(filterActs_YxX_manycolor< 4, 32, 4, 8, 2, false, false >, cudaFuncCachePreferShared);
+                    filterActs_YxX_manycolor < 4, 32, 4, 8, 2, false, false > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
                                 numImages, numFilters, imgSize, filterSize, paddingStart, moduleStride, numModulesX, imgStride, numColors, scaleTargets, scaleOutput);
                 } else {
-                    cudaFuncSetCacheConfig(filterActs_YxX_manycolor< 4, 32, 4, 4, 2, false, false, false >, cudaFuncCachePreferShared);
-                    filterActs_YxX_manycolor < 4, 32, 4, 4, 2, false, false, false > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
+                    cudaFuncSetCacheConfig(filterActs_YxX_manycolor< 4, 32, 4, 4, 2, false, false >, cudaFuncCachePreferShared);
+                    filterActs_YxX_manycolor < 4, 32, 4, 4, 2, false, false > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
                                 numImages, numFilters, imgSize, filterSize, paddingStart, moduleStride, numModulesX, imgStride, numColors, scaleTargets, scaleOutput);
                 }
             }
@@ -544,88 +483,88 @@ void convFilterActs(NVMatrix& images, NVMatrix& filters, NVMatrix& targets,
         if (numColors == 1) {
             if (checkImgBounds) {
                 if (numFilters % 32 == 0) {
-                    cudaFuncSetCacheConfig(filterActs_YxX_color< 4, 32, 4, 8, 1, false, true, true >, cudaFuncCachePreferShared);
-                    filterActs_YxX_color < 4, 32, 4, 8, 1, false, true, true > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
+                    cudaFuncSetCacheConfig(filterActs_YxX_color< 4, 32, 4, 8, 1, true, true >, cudaFuncCachePreferShared);
+                    filterActs_YxX_color < 4, 32, 4, 8, 1, true, true > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
                                 numImages, numFilters, imgSize, filterSize, paddingStart, moduleStride, numModulesX, imgStride, scaleTargets, scaleOutput);
                 } else {
-                    cudaFuncSetCacheConfig(filterActs_YxX_color< 4, 32, 4, 4, 1, false, true, true >, cudaFuncCachePreferShared);
-                    filterActs_YxX_color < 4, 32, 4, 4, 1, false, true, true > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
+                    cudaFuncSetCacheConfig(filterActs_YxX_color< 4, 32, 4, 4, 1, true, true >, cudaFuncCachePreferShared);
+                    filterActs_YxX_color < 4, 32, 4, 4, 1, true, true > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
                                 numImages, numFilters, imgSize, filterSize, paddingStart, moduleStride, numModulesX, imgStride, scaleTargets, scaleOutput);
                 }
             } else {
                 if (numFilters % 32 == 0) {
-                    cudaFuncSetCacheConfig(filterActs_YxX_color< 4, 32, 4, 8, 1, false, true, false >, cudaFuncCachePreferShared);
-                    filterActs_YxX_color < 4, 32, 4, 8, 1, false, true, false > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
+                    cudaFuncSetCacheConfig(filterActs_YxX_color< 4, 32, 4, 8, 1, true, false >, cudaFuncCachePreferShared);
+                    filterActs_YxX_color < 4, 32, 4, 8, 1, true, false > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
                                 numImages, numFilters, imgSize, filterSize, paddingStart, moduleStride, numModulesX, imgStride, scaleTargets, scaleOutput);
                 } else {
-                    cudaFuncSetCacheConfig(filterActs_YxX_color< 4, 32, 4, 4, 1, false, true, false >, cudaFuncCachePreferShared);
-                    filterActs_YxX_color < 4, 32, 4, 4, 1, false, true, false > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
+                    cudaFuncSetCacheConfig(filterActs_YxX_color< 4, 32, 4, 4, 1, true, false >, cudaFuncCachePreferShared);
+                    filterActs_YxX_color < 4, 32, 4, 4, 1, true, false > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
                                 numImages, numFilters, imgSize, filterSize, paddingStart, moduleStride, numModulesX, imgStride, scaleTargets, scaleOutput);
                 }
             }
         } else if (numColors == 2) {
             if (checkImgBounds) {
                 if (numFilters % 32 == 0) {
-                    cudaFuncSetCacheConfig(filterActs_YxX_color< 4, 32, 4, 8, 2, false, true, true >, cudaFuncCachePreferShared);
-                    filterActs_YxX_color < 4, 32, 4, 8, 2, false, true, true > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
+                    cudaFuncSetCacheConfig(filterActs_YxX_color< 4, 32, 4, 8, 2, true, true >, cudaFuncCachePreferShared);
+                    filterActs_YxX_color < 4, 32, 4, 8, 2, true, true > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
                                 numImages, numFilters, imgSize, filterSize, paddingStart, moduleStride, numModulesX, imgStride, scaleTargets, scaleOutput);
                 } else {
-                    cudaFuncSetCacheConfig(filterActs_YxX_color< 4, 32, 4, 4, 2, false, true, true >, cudaFuncCachePreferShared);
-                    filterActs_YxX_color < 4, 32, 4, 4, 2, false, true, true > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
+                    cudaFuncSetCacheConfig(filterActs_YxX_color< 4, 32, 4, 4, 2, true, true >, cudaFuncCachePreferShared);
+                    filterActs_YxX_color < 4, 32, 4, 4, 2, true, true > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
                                 numImages, numFilters, imgSize, filterSize, paddingStart, moduleStride, numModulesX, imgStride, scaleTargets, scaleOutput);
                 }
             } else {
                 if (numFilters % 32 == 0) {
-                    cudaFuncSetCacheConfig(filterActs_YxX_color< 4, 32, 4, 8, 2, false, true, false >, cudaFuncCachePreferShared);
-                    filterActs_YxX_color < 4, 32, 4, 8, 2, false, true, false > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
+                    cudaFuncSetCacheConfig(filterActs_YxX_color< 4, 32, 4, 8, 2, true, false >, cudaFuncCachePreferShared);
+                    filterActs_YxX_color < 4, 32, 4, 8, 2, true, false > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
                                 numImages, numFilters, imgSize, filterSize, paddingStart, moduleStride, numModulesX, imgStride, scaleTargets, scaleOutput);
                 } else {
-                    cudaFuncSetCacheConfig(filterActs_YxX_color< 4, 32, 4, 4, 2, false, true, false >, cudaFuncCachePreferShared);
-                    filterActs_YxX_color < 4, 32, 4, 4, 2, false, true, false > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
+                    cudaFuncSetCacheConfig(filterActs_YxX_color< 4, 32, 4, 4, 2, true, false >, cudaFuncCachePreferShared);
+                    filterActs_YxX_color < 4, 32, 4, 4, 2, true, false > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
                                 numImages, numFilters, imgSize, filterSize, paddingStart, moduleStride, numModulesX, imgStride, scaleTargets, scaleOutput);
                 }
             }
         }  else if (numColors == 3) {
             if (checkImgBounds) {
                 if (numFilters % 32 == 0) {
-                    cudaFuncSetCacheConfig(filterActs_YxX_color< 4, 32, 4, 8, 3, false, true, true >, cudaFuncCachePreferShared);
-                    filterActs_YxX_color < 4, 32, 4, 8, 3, false, true, true > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
+                    cudaFuncSetCacheConfig(filterActs_YxX_color< 4, 32, 4, 8, 3, true, true >, cudaFuncCachePreferShared);
+                    filterActs_YxX_color < 4, 32, 4, 8, 3, true, true > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
                                 numImages, numFilters, imgSize, filterSize, paddingStart, moduleStride, numModulesX, imgStride, scaleTargets, scaleOutput);
                 } else {
-                    cudaFuncSetCacheConfig(filterActs_YxX_color< 4, 32, 4, 4, 3, false, true, true >, cudaFuncCachePreferShared);
-                    filterActs_YxX_color < 4, 32, 4, 4, 3, false, true, true > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
+                    cudaFuncSetCacheConfig(filterActs_YxX_color< 4, 32, 4, 4, 3, true, true >, cudaFuncCachePreferShared);
+                    filterActs_YxX_color < 4, 32, 4, 4, 3, true, true > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
                                 numImages, numFilters, imgSize, filterSize, paddingStart, moduleStride, numModulesX, imgStride, scaleTargets, scaleOutput);
                 }
             } else {
                 if (numFilters % 32 == 0) {
-                    cudaFuncSetCacheConfig(filterActs_YxX_color< 4, 32, 4, 8, 3, false, true, false >, cudaFuncCachePreferShared);
-                    filterActs_YxX_color < 4, 32, 4, 8, 3, false, true, false > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
+                    cudaFuncSetCacheConfig(filterActs_YxX_color< 4, 32, 4, 8, 3, true, false >, cudaFuncCachePreferShared);
+                    filterActs_YxX_color < 4, 32, 4, 8, 3, true, false > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
                                 numImages, numFilters, imgSize, filterSize, paddingStart, moduleStride, numModulesX, imgStride, scaleTargets, scaleOutput);
                 } else {
-                    cudaFuncSetCacheConfig(filterActs_YxX_color< 4, 32, 4, 4, 3, false, true, false >, cudaFuncCachePreferShared);
-                    filterActs_YxX_color < 4, 32, 4, 4, 3, false, true, false > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
+                    cudaFuncSetCacheConfig(filterActs_YxX_color< 4, 32, 4, 4, 3, true, false >, cudaFuncCachePreferShared);
+                    filterActs_YxX_color < 4, 32, 4, 4, 3, true, false > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
                                 numImages, numFilters, imgSize, filterSize, paddingStart, moduleStride, numModulesX, imgStride, scaleTargets, scaleOutput);
                 }
             }
         } else if (numColors % 2 == 0) {
             if (checkImgBounds) {
                 if (numFilters % 32 == 0) {
-                    cudaFuncSetCacheConfig(filterActs_YxX_manycolor< 4, 32, 4, 8, 2, false, true, true >, cudaFuncCachePreferShared);
-                    filterActs_YxX_manycolor < 4, 32, 4, 8, 2, false, true, true > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
+                    cudaFuncSetCacheConfig(filterActs_YxX_manycolor< 4, 32, 4, 8, 2, true, true >, cudaFuncCachePreferShared);
+                    filterActs_YxX_manycolor < 4, 32, 4, 8, 2, true, true > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
                                 numImages, numFilters, imgSize, filterSize, paddingStart, moduleStride, numModulesX, imgStride, numColors, scaleTargets, scaleOutput);
                 } else {
-                    cudaFuncSetCacheConfig(filterActs_YxX_manycolor< 4, 32, 4, 4, 2, false, true, true >, cudaFuncCachePreferShared);
-                    filterActs_YxX_manycolor < 4, 32, 4, 4, 2, false, true, true > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
+                    cudaFuncSetCacheConfig(filterActs_YxX_manycolor< 4, 32, 4, 4, 2, true, true >, cudaFuncCachePreferShared);
+                    filterActs_YxX_manycolor < 4, 32, 4, 4, 2, true, true > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
                                 numImages, numFilters, imgSize, filterSize, paddingStart, moduleStride, numModulesX, imgStride, numColors, scaleTargets, scaleOutput);
                 }
             } else {
                 if (numFilters % 32 == 0) {
-                    cudaFuncSetCacheConfig(filterActs_YxX_manycolor< 4, 32, 4, 8, 2, false, true, false >, cudaFuncCachePreferShared);
-                    filterActs_YxX_manycolor < 4, 32, 4, 8, 2, false, true, false > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
+                    cudaFuncSetCacheConfig(filterActs_YxX_manycolor< 4, 32, 4, 8, 2, true, false >, cudaFuncCachePreferShared);
+                    filterActs_YxX_manycolor < 4, 32, 4, 8, 2, true, false > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
                                 numImages, numFilters, imgSize, filterSize, paddingStart, moduleStride, numModulesX, imgStride, numColors, scaleTargets, scaleOutput);
                 } else {
-                    cudaFuncSetCacheConfig(filterActs_YxX_manycolor< 4, 32, 4, 4, 2, false, true, false >, cudaFuncCachePreferShared);
-                    filterActs_YxX_manycolor < 4, 32, 4, 4, 2, false, true, false > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
+                    cudaFuncSetCacheConfig(filterActs_YxX_manycolor< 4, 32, 4, 4, 2, true, false >, cudaFuncCachePreferShared);
+                    filterActs_YxX_manycolor < 4, 32, 4, 4, 2, true, false > <<<blocks, threads>>>(images.getDevData(), filters.getDevData(), targets.getDevData(),
                                 numImages, numFilters, imgSize, filterSize, paddingStart, moduleStride, numModulesX, imgStride, numColors, scaleTargets, scaleOutput);
                 }
             }

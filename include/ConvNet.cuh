@@ -70,6 +70,7 @@ public:
     void bprop();
     void fprop();
     void fprop(int miniIdx);
+    void fprop(GPUData& data);
 
     bool checkGradientsW(const std::string& name, float eps, Weights& weights); 
     void checkGradients();

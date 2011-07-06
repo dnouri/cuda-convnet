@@ -1,3 +1,4 @@
+#include <algorithm>
 #include "../include/data.cuh"
 /* 
  * Author: Alex Krizhevsky (akrizhevsky@gmail.com)
@@ -36,9 +37,14 @@ void DataProvider::setData(CPUData& hData) {
 }
 
 GPUData& DataProvider::getMinibatch(int idx) {
+    assert(idx >= 0 && idx < getNumMinibatches());
+    return getDataSlice(idx * _minibatchSize, (idx + 1) * _minibatchSize);
+}
+
+GPUData& DataProvider::getDataSlice(int startCase, int endCase) {
     assert(_hData != NULL);
     assert(_hData->getNumCases() > 0);
-    assert(idx >= 0 && idx < getNumMinibatches());
+    
     
     NVMatrixV& miniData = *new NVMatrixV();
     
@@ -46,16 +52,16 @@ GPUData& DataProvider::getMinibatch(int idx) {
         miniData.push_back(new NVMatrix());
         if (_dataSize < MAX_DATA_ON_GPU) {
             if (_data[i]->isTrans()) {
-                _data[i]->sliceRows(idx * _minibatchSize, MIN(_hData->getNumCases(), (idx + 1) * _minibatchSize), *miniData[i]);
+                _data[i]->sliceRows(startCase, min(_hData->getNumCases(), endCase), *miniData[i]);
             } else {
-                _data[i]->sliceCols(idx * _minibatchSize, MIN(_hData->getNumCases(), (idx + 1) * _minibatchSize), *miniData[i]);
+                _data[i]->sliceCols(startCase, min(_hData->getNumCases(), endCase), *miniData[i]);
             }
         } else {
             Matrix tmp;
             if ((*_hData)[i].isTrans()) {
-                (*_hData)[i].sliceRows(idx * _minibatchSize, MIN(_hData->getNumCases(), (idx + 1) * _minibatchSize), tmp);
+                (*_hData)[i].sliceRows(startCase, min(_hData->getNumCases(), endCase), tmp);
             } else {
-                (*_hData)[i].sliceCols(idx * _minibatchSize, MIN(_hData->getNumCases(), (idx + 1) * _minibatchSize), tmp);
+                (*_hData)[i].sliceCols(startCase, min(_hData->getNumCases(), endCase), tmp);
             }
             miniData.back()->copyFromHost(tmp, true);
         }

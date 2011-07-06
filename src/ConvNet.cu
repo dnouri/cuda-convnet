@@ -147,6 +147,14 @@ void ConvNet::fprop() {
     }
 }
 
+void ConvNet::fprop(GPUData& data) {
+    if (&data != _data) {
+        delete _data;
+    }
+    _data = &data;
+    fprop();
+}
+
 void ConvNet::fprop(int miniIdx) {
     delete _data;
     _data = &_dp->getMinibatch(miniIdx);

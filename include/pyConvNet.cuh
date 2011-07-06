@@ -21,6 +21,7 @@ PyObject* startBatch(PyObject *self, PyObject *args);
 PyObject* finishBatch(PyObject *self, PyObject *args);
 PyObject* checkGradients(PyObject *self, PyObject *args);
 PyObject* syncWithHost(PyObject *self, PyObject *args);
+PyObject* startMultiviewTest(PyObject *self, PyObject *args);
 #endif
 
 #endif	/* PYCONVNET3_CUH */

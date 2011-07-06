@@ -61,6 +61,14 @@ public:
     void run();
 };
 
+class MultiviewTestWorker : public Worker {
+protected:
+    CPUData* _data;
+    int _numViews, _logregIdx;
+public:
+    MultiviewTestWorker(ConvNet* convNet, CPUData& data, int numViews, int logregIdx);
+    void run();
+};
 
 #endif	/* WORKER_CUH */
 

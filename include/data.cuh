@@ -16,7 +16,6 @@ template <class T>
 class Data {
 protected:
     std::vector<T*>* _data;
-    int _numCases;
 public:
     typedef typename std::vector<T*>::iterator T_iter;
     
@@ -66,6 +65,7 @@ public:
     GPUData& operator[](int idx);
     void setData(CPUData&);
     GPUData& getMinibatch(int idx);
+    GPUData& getDataSlice(int startCase, int endCase);
     int getNumMinibatches();
     int getMinibatchSize();
     int getNumCases();

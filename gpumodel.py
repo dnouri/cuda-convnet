@@ -16,6 +16,9 @@ import sys
 import shutil
 import platform
 
+class ModelStateException:
+    pass
+
 # GPU Model interface
 class IGPUModel:
     def __init__(self, model_name, op, load_dic, filename_options=None, dp_params={}):
@@ -34,7 +37,6 @@ class IGPUModel:
             setattr(self, o.name, o.value)
 
         # these are things that the model must remember but they're not input parameters
-        
         if load_dic:
             self.model_state = load_dic["model_state"]
             self.save_file = self.options["load_file"].value
@@ -54,7 +56,11 @@ class IGPUModel:
             self.train_data_provider.advance_batch()
             
         # model state often requries knowledge of data provider, so it's initialized after
-        self.init_model_state()
+        try:
+            self.init_model_state()
+        except ModelStateException, e:
+            print e
+            sys.exit(1)
         for var, val in self.model_state.iteritems():
             setattr(self, var, val)
             

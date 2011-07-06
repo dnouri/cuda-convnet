@@ -47,6 +47,7 @@ static PyMethodDef _ConvNetMethods[] = {  { "initModel",          initModel,    
                                                 { "startBatch",         startBatch,         METH_VARARGS },
                                                 { "finishBatch",        finishBatch,        METH_VARARGS },
                                                 { "checkGradients",     checkGradients,     METH_VARARGS },
+                                                { "startMultiviewTest",     startMultiviewTest,     METH_VARARGS },
                                                 { "syncWithHost",       syncWithHost,       METH_VARARGS },
                                                 { NULL, NULL } /* Sentinel - marks the end of this structure */
 };
@@ -92,12 +93,29 @@ PyObject* startBatch(PyObject *self, PyObject *args) {
         &test)) {
         return NULL;
     }
-    MatrixV& mvec = *new MatrixV();
-    for (int i = 0; i < PyList_GET_SIZE(data); i++) {
-        mvec.push_back(new Matrix((PyArrayObject*)PyList_GET_ITEM(data, i)));
-    }
+    MatrixV& mvec = *getMatrixVec(data);
     
     TrainingWorker* wr = new TrainingWorker(model, *new CPUData(mvec), test);
+    model->getWorkerQueue().enqueue(wr);
+    return Py_BuildValue("i", 0);
+}
+
+/*
+ * Starts testing on the given batch (asynchronous -- returns immediately).
+ */
+PyObject* startMultiviewTest(PyObject *self, PyObject *args) {
+    assert(model != NULL);
+    PyListObject* data;
+    int numViews, logregIdx;
+    if (!PyArg_ParseTuple(args, "O!ii",
+        &PyList_Type, &data,
+        &numViews,
+        &logregIdx)) {
+        return NULL;
+    }
+    MatrixV& mvec = *getMatrixVec(data);
+    
+    MultiviewTestWorker* wr = new MultiviewTestWorker(model, *new CPUData(mvec), numViews, logregIdx);
     model->getWorkerQueue().enqueue(wr);
     return Py_BuildValue("i", 0);
 }
@@ -133,10 +151,7 @@ PyObject* checkGradients(PyObject *self, PyObject *args) {
         &PyList_Type, &data)) {
         return NULL;
     }
-    MatrixV& mvec = *new MatrixV();
-    for (int i = 0; i < PyList_GET_SIZE(data); i++) {
-        mvec.push_back(new Matrix((PyArrayObject*)PyList_GET_ITEM(data, i)));
-    }
+    MatrixV& mvec = *getMatrixVec(data);
     
     GradCheckWorker* wr = new GradCheckWorker(model, *new CPUData(mvec));
     model->getWorkerQueue().enqueue(wr);
