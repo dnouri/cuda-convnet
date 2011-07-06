@@ -14,15 +14,8 @@ GPUData& DataProvider::operator[](int idx) {
     return getMinibatch(idx);
 }
 
-
 void DataProvider::setData(CPUData& hData) {
     assert(&hData != NULL);
-    assert(hData.getSize() > 0);
-    assert(hData[0].getLeadingDim() % _minibatchSize == 0);
-    assert(hData.getNumCases() <= hData[0].getLeadingDim());
-    for (int i = 1; i < hData.getSize(); i++) {
-        assert(hData[i-1].getLeadingDim() == hData[i].getLeadingDim());
-    }
 
     delete _hData; // Delete old CPU matrices
 
@@ -53,27 +46,27 @@ GPUData& DataProvider::getMinibatch(int idx) {
         miniData.push_back(new NVMatrix());
         if (_dataSize < MAX_DATA_ON_GPU) {
             if (_data[i]->isTrans()) {
-                _data[i]->sliceRows(idx * _minibatchSize, (idx + 1) * _minibatchSize, *miniData[i]);
+                _data[i]->sliceRows(idx * _minibatchSize, MIN(_hData->getNumCases(), (idx + 1) * _minibatchSize), *miniData[i]);
             } else {
-                _data[i]->sliceCols(idx * _minibatchSize, (idx + 1) * _minibatchSize, *miniData[i]);
+                _data[i]->sliceCols(idx * _minibatchSize, MIN(_hData->getNumCases(), (idx + 1) * _minibatchSize), *miniData[i]);
             }
         } else {
             Matrix tmp;
             if ((*_hData)[i].isTrans()) {
-                (*_hData)[i].sliceRows(idx * _minibatchSize, (idx + 1) * _minibatchSize, tmp);
+                (*_hData)[i].sliceRows(idx * _minibatchSize, MIN(_hData->getNumCases(), (idx + 1) * _minibatchSize), tmp);
             } else {
-                (*_hData)[i].sliceCols(idx * _minibatchSize, (idx + 1) * _minibatchSize, tmp);
+                (*_hData)[i].sliceCols(idx * _minibatchSize, MIN(_hData->getNumCases(), (idx + 1) * _minibatchSize), tmp);
             }
             miniData.back()->copyFromHost(tmp, true);
         }
     }
 
-    return *new GPUData(miniData, getNumCasesInMinibatch(idx));
+    return *new GPUData(miniData);
 }
 
 int DataProvider::getNumMinibatches() {
     assert(_hData->getNumCases() > 0);
-    return (*_hData)[0].getLeadingDim() / _minibatchSize;
+    return DIVUP(_hData->getNumCases(), _minibatchSize);
 }
 
 int DataProvider::getMinibatchSize() {

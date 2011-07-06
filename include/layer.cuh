@@ -54,7 +54,7 @@ public:
     
     static void setSaveBwdActs(bool saveBwdActs);
     
-    virtual void updateWeights() {
+    virtual void updateWeights(int numCases) {
         // do nothing if this layer has no weights
     }
     
@@ -101,7 +101,7 @@ protected:
 public:
     FCLayer(PyObject* paramsDict, ConvNet* convNet);
  
-    void updateWeights();  
+    void updateWeights(int numCases);  
     void copyToCPU();
     void copyToGPU();
     void checkGradients();
@@ -144,7 +144,7 @@ protected:
 public:
     ConvLayer(PyObject* paramsDict, ConvNet* convNet);
 
-    void updateWeights();  
+    void updateWeights(int numCases);  
     void copyToCPU();
     void copyToGPU();
     void checkGradients();

@@ -27,15 +27,16 @@
  * numFilters must be divisible by B_Y*filtersPerThread
  */
 
-template<int B_Y, int B_X, int imgsPerThread, int filtersPerThread, bool add>
+template<int B_Y, int B_X, int imgsPerThread, int filtersPerThread, bool add, bool checkCaseBounds>
 __global__ void kLocalMaxUndo(float* imgs, float* maxGrads, float* maxActs, float* target, const int imgSize, const int numFilters,
                               const int numImages, const int subsX, const int startX, const int strideX, const int outputsX,
                               const float scaleTargets, const float scaleOutputs) {
     __shared__ float shImgs[B_Y*filtersPerThread][B_X*imgsPerThread];
-    const int blockPxX = blockIdx.x / (numImages/(B_X*imgsPerThread));
+    const int numImgBlocks = DIVUP(numImages,B_X*imgsPerThread);
+    const int blockPxX = blockIdx.x / numImgBlocks;
     const int blockPxY = blockIdx.y / (numFilters/(B_Y*filtersPerThread));
     
-    const int blockImgIdx = (blockIdx.x % (numImages/(B_X*imgsPerThread))) * B_X * imgsPerThread;
+    const int blockImgIdx = (blockIdx.x % numImgBlocks) * B_X * imgsPerThread;
     const int blockFilterIdx = (blockIdx.y % (numFilters/(B_Y*filtersPerThread))) * B_Y * filtersPerThread;
     
     const int blockPx = blockPxY * imgSize + blockPxX;
@@ -47,13 +48,15 @@ __global__ void kLocalMaxUndo(float* imgs, float* maxGrads, float* maxActs, floa
     const int startOutputX = blockPxX - startX < subsX ? 0 : 1 + (blockPxX - startX - subsX) / strideX;
     const int endOutputX = MIN(outputsX, 1 + (blockPxX - startX) / strideX);
     
-    imgs += ((blockFilterIdx + threadIdx.y) * imgPixels + blockPx) * numImages + blockImgIdx + threadIdx.x;
-    maxGrads += ((blockFilterIdx + threadIdx.y) * numOutputs) * numImages 
-            + blockImgIdx + threadIdx.x;
-    maxActs += ((blockFilterIdx + threadIdx.y) * numOutputs) * numImages 
-            + blockImgIdx + threadIdx.x;
+    const int imgIdx = blockImgIdx + threadIdx.x;
     
-    target += ((blockFilterIdx + threadIdx.y) * imgPixels + blockPx) * numImages + blockImgIdx + threadIdx.x;
+    imgs += ((blockFilterIdx + threadIdx.y) * imgPixels + blockPx) * numImages + imgIdx;
+    maxGrads += ((blockFilterIdx + threadIdx.y) * numOutputs) * numImages 
+            + imgIdx;
+    maxActs += ((blockFilterIdx + threadIdx.y) * numOutputs) * numImages 
+            + imgIdx;
+    
+    target += ((blockFilterIdx + threadIdx.y) * imgPixels + blockPx) * numImages + imgIdx;
     
     float prod[filtersPerThread][imgsPerThread];
     #pragma unroll
@@ -67,25 +70,28 @@ __global__ void kLocalMaxUndo(float* imgs, float* maxGrads, float* maxActs, floa
     if  (blockPxX >= startX && blockPxX < startX + strideX * (outputsX-1) + subsX 
          && blockPxY >= startX && blockPxY < startX + strideX * (outputsX-1) + subsX) {
         #pragma unroll
-        for (int f = 0; f < filtersPerThread; f++) {
-            #pragma unroll
-            for (int i = 0; i < imgsPerThread; i++) {
-                shImgs[threadIdx.y + B_Y * f][threadIdx.x + B_X * i] = imgs[f * B_Y * imgPixels * numImages + i * B_X];
+        for (int i = 0; i < imgsPerThread; i++) {
+            if (!checkCaseBounds || imgIdx + i * B_X < numImages) {
+                #pragma unroll
+                for (int f = 0; f < filtersPerThread; f++) {
+                    shImgs[threadIdx.y + B_Y * f][threadIdx.x + B_X * i] = imgs[f * B_Y * imgPixels * numImages + i * B_X];
+                }
             }
         }
         for (int my = startOutputY; my < endOutputY; my++) {
             for (int mx = startOutputX; mx < endOutputX; mx++) {
                 const int outputIdx = my * outputsX + mx;
-                
                 #pragma unroll
-                for (int f = 0; f < filtersPerThread; f++) {
-                    #pragma unroll
-                    for (int i = 0; i < imgsPerThread; i++) {
-                        const float ma = maxActs[(f * B_Y * numOutputs + outputIdx) * numImages + i * B_X]; 
-                        const float mg = maxGrads[(f * B_Y * numOutputs + outputIdx) * numImages + i * B_X];
-                        const float img = shImgs[threadIdx.y + B_Y * f][threadIdx.x + B_X * i];
-                        
-                        prod[f][i] += mg * (img == ma);
+                for (int i = 0; i < imgsPerThread; i++) {
+                    if (!checkCaseBounds || imgIdx + i * B_X < numImages) {
+                        #pragma unroll
+                        for (int f = 0; f < filtersPerThread; f++) {
+                            const float ma = maxActs[(f * B_Y * numOutputs + outputIdx) * numImages + i * B_X]; 
+                            const float mg = maxGrads[(f * B_Y * numOutputs + outputIdx) * numImages + i * B_X];
+                            const float img = shImgs[threadIdx.y + B_Y * f][threadIdx.x + B_X * i];
+
+                            prod[f][i] += mg * (img == ma);
+                        }
                     }
                 }
             }
@@ -93,18 +99,22 @@ __global__ void kLocalMaxUndo(float* imgs, float* maxGrads, float* maxActs, floa
     }
     if (!add) {
         #pragma unroll
-        for (int f = 0; f < filtersPerThread; f++) {
-            #pragma unroll
-            for (int i = 0; i < imgsPerThread; i++) {
-                target[f * B_Y * imgPixels * numImages + i * B_X] = prod[f][i];
+        for (int i = 0; i < imgsPerThread; i++) {
+            if (!checkCaseBounds || imgIdx + i * B_X < numImages) {
+                #pragma unroll
+                for (int f = 0; f < filtersPerThread; f++) {
+                    target[f * B_Y * imgPixels * numImages + i * B_X] = prod[f][i];
+                }
             }
         }
     } else {
         #pragma unroll
-        for (int f = 0; f < filtersPerThread; f++) {
-            #pragma unroll
-            for (int i = 0; i < imgsPerThread; i++) {
-                target[f * B_Y * imgPixels * numImages + i * B_X] = scaleTargets * target[f * B_Y * imgPixels * numImages + i * B_X] + scaleOutputs * prod[f][i];
+        for (int i = 0; i < imgsPerThread; i++) {
+            if (!checkCaseBounds || imgIdx + i * B_X < numImages) {
+                #pragma unroll
+                for (int f = 0; f < filtersPerThread; f++) {
+                    target[f * B_Y * imgPixels * numImages + i * B_X] = scaleTargets * target[f * B_Y * imgPixels * numImages + i * B_X] + scaleOutputs * prod[f][i];
+                }
             }
         }
     }
@@ -129,14 +139,15 @@ __global__ void kLocalMaxUndo(float* imgs, float* maxGrads, float* maxActs, floa
  * numFilters must be divisible by B_Y*filtersPerThread
  */
 
-template<int B_Y, int B_X, int imgsPerThread, int filtersPerThread, bool add>
+template<int B_Y, int B_X, int imgsPerThread, int filtersPerThread, bool add, bool checkCaseBounds>
 __global__ void kLocalAvgUndo(float* avgGrads, float* target, const int imgSize, const int numFilters,
                               const int numImages, const int subsX, const int startX, const int strideX, const int outputsX,
                               const float scaleTargets, const float scaleOutputs) {
-    const int blockPxX = blockIdx.x / (numImages/(B_X*imgsPerThread));
+    const int numImgBlocks = DIVUP(numImages,B_X*imgsPerThread);
+    const int blockPxX = blockIdx.x / numImgBlocks;
     const int blockPxY = blockIdx.y / (numFilters/(B_Y*filtersPerThread));
     
-    const int blockImgIdx = (blockIdx.x % (numImages/(B_X*imgsPerThread))) * B_X * imgsPerThread;
+    const int blockImgIdx = (blockIdx.x % numImgBlocks) * B_X * imgsPerThread;
     const int blockFilterIdx = (blockIdx.y % (numFilters/(B_Y*filtersPerThread))) * B_Y * filtersPerThread;
     
     const int blockPx = blockPxY * imgSize + blockPxX;
@@ -148,9 +159,10 @@ __global__ void kLocalAvgUndo(float* avgGrads, float* target, const int imgSize,
     const int startOutputX = blockPxX - startX < subsX ? 0 : 1 + (blockPxX - startX - subsX) / strideX;
     const int endOutputX = MIN(outputsX, 1 + (blockPxX - startX) / strideX);
     
-    avgGrads += ((blockFilterIdx + threadIdx.y) * numOutputs) * numImages 
-            + blockImgIdx + threadIdx.x;
-    target += ((blockFilterIdx + threadIdx.y) * imgPixels + blockPx) * numImages + blockImgIdx + threadIdx.x;
+    const int imgIdx = blockImgIdx + threadIdx.x;
+    
+    avgGrads += ((blockFilterIdx + threadIdx.y) * numOutputs) * numImages + imgIdx;
+    target += ((blockFilterIdx + threadIdx.y) * imgPixels + blockPx) * numImages + imgIdx;
     
     float prod[filtersPerThread][imgsPerThread];
     #pragma unroll
@@ -161,16 +173,19 @@ __global__ void kLocalAvgUndo(float* avgGrads, float* target, const int imgSize,
         }
     }
     
-    if  (blockPxX >= startX && blockPxX < startX + strideX * (outputsX-1) + subsX && blockPxY >= startX && blockPxY < startX + strideX * (outputsX-1) + subsX) {
+    if  (blockPxX >= startX && blockPxX < startX + strideX * (outputsX-1) + subsX 
+            && blockPxY >= startX && blockPxY < startX + strideX * (outputsX-1) + subsX) {
+        
         for (int my = startOutputY; my < endOutputY; my++) {
             for (int mx = startOutputX; mx < endOutputX; mx++) {
                 const int outputIdx = my * outputsX + mx;
-                
                 #pragma unroll
-                for (int f = 0; f < filtersPerThread; f++) {
-                    #pragma unroll
-                    for (int i = 0; i < imgsPerThread; i++) {
-                        prod[f][i] += avgGrads[(f * B_Y * numOutputs + outputIdx) * numImages + i * B_X];
+                for (int i = 0; i < imgsPerThread; i++) {
+                    if (!checkCaseBounds || imgIdx + i * B_X < numImages) {
+                        #pragma unroll
+                        for (int f = 0; f < filtersPerThread; f++) {
+                            prod[f][i] += avgGrads[(f * B_Y * numOutputs + outputIdx) * numImages + i * B_X];
+                        }
                     }
                 }
             }
@@ -179,18 +194,22 @@ __global__ void kLocalAvgUndo(float* avgGrads, float* target, const int imgSize,
         
     if (!add) {
         #pragma unroll
-        for (int f = 0; f < filtersPerThread; f++) {
-            #pragma unroll
-            for (int i = 0; i < imgsPerThread; i++) {
-                target[f * B_Y * imgPixels * numImages + i * B_X] = prod[f][i] / (subsX * subsX);
+        for (int i = 0; i < imgsPerThread; i++) {
+            if (!checkCaseBounds || imgIdx + i * B_X < numImages) {
+                #pragma unroll
+                for (int f = 0; f < filtersPerThread; f++) {
+                    target[f * B_Y * imgPixels * numImages + i * B_X] = prod[f][i] / (subsX * subsX);
+                }
             }
         }
     } else {
         #pragma unroll
-        for (int f = 0; f < filtersPerThread; f++) {
-            #pragma unroll
-            for (int i = 0; i < imgsPerThread; i++) {
-                target[f * B_Y * imgPixels * numImages + i * B_X] = scaleTargets * target[f * B_Y * imgPixels * numImages + i * B_X] + scaleOutputs * prod[f][i] / (subsX * subsX);
+        for (int i = 0; i < imgsPerThread; i++) {
+            if (!checkCaseBounds || imgIdx + i * B_X < numImages) {
+                #pragma unroll
+                for (int f = 0; f < filtersPerThread; f++) {
+                    target[f * B_Y * imgPixels * numImages + i * B_X] = scaleTargets * target[f * B_Y * imgPixels * numImages + i * B_X] + scaleOutputs * prod[f][i] / (subsX * subsX);
+                }
             }
         }
     }
@@ -228,22 +247,34 @@ void convLocalMaxUndo(NVMatrix& images, NVMatrix& maxGrads, NVMatrix& maxActs, N
     assert(maxActs.isContiguous());
     assert(maxGrads.isSameDims(maxActs));
     assert(numFilters % 16 == 0);
-    assert(numImages % 128 == 0);
+//    assert(numImages % 128 == 0);
     
     assert(strideX <= subsX);
     
     target.resize(images);
     
+    int checkCaseBounds = numImages % 128 != 0;
     dim3 threads(32, 4);
-    dim3 blocks((numImages/(32*4)) * imgSize, (numFilters / (4 * 2)) * imgSize);
+    dim3 blocks(DIVUP(numImages,32*4) * imgSize, (numFilters / (4 * 2)) * imgSize);
     
-    if (scaleTargets == 0 && scaleOutput == 1) {
-        kLocalMaxUndo<4, 32, 4, 2, false><<<blocks, threads>>>(images.getDevData(), maxGrads.getDevData(), maxActs.getDevData(), target.getDevData(),
-                                                        imgSize, numFilters, numImages, subsX, startX, strideX, outputsX, scaleTargets, scaleOutput);
+    if  (checkCaseBounds) {
+        if (scaleTargets == 0 && scaleOutput == 1) {
+            kLocalMaxUndo<4, 32, 4, 2, false, true><<<blocks, threads>>>(images.getDevData(), maxGrads.getDevData(), maxActs.getDevData(), target.getDevData(),
+                                                            imgSize, numFilters, numImages, subsX, startX, strideX, outputsX, scaleTargets, scaleOutput);
+        } else {
+            kLocalMaxUndo<4, 32, 4, 2, true, true><<<blocks, threads>>>(images.getDevData(), maxGrads.getDevData(), maxActs.getDevData(), target.getDevData(),
+                                                            imgSize, numFilters, numImages, subsX, startX, strideX, outputsX, scaleTargets, scaleOutput);
+        }
     } else {
-        kLocalMaxUndo<4, 32, 4, 2, true><<<blocks, threads>>>(images.getDevData(), maxGrads.getDevData(), maxActs.getDevData(), target.getDevData(),
-                                                        imgSize, numFilters, numImages, subsX, startX, strideX, outputsX, scaleTargets, scaleOutput);
+        if (scaleTargets == 0 && scaleOutput == 1) {
+            kLocalMaxUndo<4, 32, 4, 2, false, false><<<blocks, threads>>>(images.getDevData(), maxGrads.getDevData(), maxActs.getDevData(), target.getDevData(),
+                                                            imgSize, numFilters, numImages, subsX, startX, strideX, outputsX, scaleTargets, scaleOutput);
+        } else {
+            kLocalMaxUndo<4, 32, 4, 2, true, false><<<blocks, threads>>>(images.getDevData(), maxGrads.getDevData(), maxActs.getDevData(), target.getDevData(),
+                                                            imgSize, numFilters, numImages, subsX, startX, strideX, outputsX, scaleTargets, scaleOutput);
+        }
     }
+
     cutilCheckMsg("convLocalMaxUndo: kernel execution failed");
 }
 
@@ -269,23 +300,37 @@ void convLocalAvgUndo(NVMatrix& avgGrads, NVMatrix& target,
     assert(!avgGrads.isTrans());
     assert(avgGrads.isContiguous());
     assert(numFilters % 16 == 0);
-    assert(numImages % 128 == 0);
+//    assert(numImages % 128 == 0);
     
     assert(strideX <= subsX);
     
     target.resize(numFilters * imgPixels, numImages);
     
     dim3 threads(32, 4);
-    dim3 blocks((numImages/(32*4)) * imgSize, (numFilters / (4 * 4)) * imgSize);
+    dim3 blocks(DIVUP(numImages,32*4) * imgSize, (numFilters / (4 * 4)) * imgSize);
+    int checkCaseBounds = numImages % 128 != 0;
     
-    if (scaleTargets == 0 && scaleOutput == 1) {
-        kLocalAvgUndo<4, 32, 4, 4, false><<<blocks, threads>>>(avgGrads.getDevData(), target.getDevData(),
-                                                               imgSize, numFilters, numImages, subsX, startX, strideX,
-                                                               outputsX, scaleTargets, scaleOutput);
+    if (checkCaseBounds) {
+        if (scaleTargets == 0 && scaleOutput == 1) {
+            kLocalAvgUndo<4, 32, 4, 4, false, true><<<blocks, threads>>>(avgGrads.getDevData(), target.getDevData(),
+                                                                   imgSize, numFilters, numImages, subsX, startX, strideX,
+                                                                   outputsX, scaleTargets, scaleOutput);
+        } else {
+            kLocalAvgUndo<4, 32, 4, 4, true, true><<<blocks, threads>>>(avgGrads.getDevData(), target.getDevData(),
+                                                                  imgSize, numFilters, numImages, subsX, startX, strideX,
+                                                                  outputsX, scaleTargets, scaleOutput);
+        }
     } else {
-        kLocalAvgUndo<4, 32, 4, 4, true><<<blocks, threads>>>(avgGrads.getDevData(), target.getDevData(),
-                                                              imgSize, numFilters, numImages, subsX, startX, strideX,
-                                                              outputsX, scaleTargets, scaleOutput);
+        if (scaleTargets == 0 && scaleOutput == 1) {
+            kLocalAvgUndo<4, 32, 4, 4, false, false><<<blocks, threads>>>(avgGrads.getDevData(), target.getDevData(),
+                                                                   imgSize, numFilters, numImages, subsX, startX, strideX,
+                                                                   outputsX, scaleTargets, scaleOutput);
+        } else {
+            kLocalAvgUndo<4, 32, 4, 4, true, false><<<blocks, threads>>>(avgGrads.getDevData(), target.getDevData(),
+                                                                  imgSize, numFilters, numImages, subsX, startX, strideX,
+                                                                  outputsX, scaleTargets, scaleOutput);
+        }
     }
+
     cutilCheckMsg("convLocalAvgUndo: kernel execution failed");
 }

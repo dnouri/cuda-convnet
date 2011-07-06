@@ -42,12 +42,11 @@ class GPUModel(IGPUModel):
         return batch_data
 
     def start_batch(self, batch_data, train=True):
-        num_real_cases = batch_data[2]
-        data = batch_data[3]
+        data = batch_data[2]
         if self.check_grads:
-            self.libmodel.checkGradients(data, num_real_cases)
+            self.libmodel.checkGradients(data)
         else:
-            self.libmodel.startBatch(data, num_real_cases, not train)
+            self.libmodel.startBatch(data, not train)
         
     def print_iteration(self):
         print "%d.%d..." % (self.epoch, self.batchnum),

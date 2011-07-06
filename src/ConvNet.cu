@@ -77,9 +77,9 @@ void* ConvNet::run() {
     initCuda();
 
     while (true) {
-        Worker& worker = *_workerQueue.dequeue();
-        worker.run();
-        delete &worker;
+        Worker* worker = _workerQueue.dequeue();
+        worker->run();
+        delete worker;
     }
     return NULL;
 }
@@ -118,7 +118,7 @@ void ConvNet::copyToGPU() {
 
 void ConvNet::updateWeights() {
     for (int i = 0; i < _layers.size(); i++) {
-        _layers[i]->updateWeights();
+        _layers[i]->updateWeights(_data->getNumCases());
     }
 }
 
@@ -132,13 +132,6 @@ int ConvNet::getNumLayers() {
     return _layers.size();
 }
 
-/*
- * Number of cases in current minibatch.
- */
-int ConvNet::getNumCases() {
-    return _data->getNumCases();
-}
-
 void ConvNet::bprop() {
     for (int i = 0; i < _costs.size(); i++) {
         _costs[i]->bprop();
@@ -149,7 +142,7 @@ void ConvNet::bprop() {
 void ConvNet::fprop() {
     assert(_data != NULL);
     reset();
-    for (int i = 0; i < _data->getData().size(); i++) {
+    for (int i = 0; i < _data->getSize(); i++) {
         _dataLayers[i]->fprop(_data->getData());
     }
 }
@@ -216,13 +209,13 @@ bool ConvNet::checkGradientsW(const string& name, float eps, Weights& weights) {
             weightsCPU(i,j) = v;
             fprop();
             double err = getCostFunctionValue();
-            numGrads(i,j) = (err - _baseErr) / (getNumCases() * eps);
+            numGrads(i,j) = (err - _baseErr) / (_data->getNumCases() * eps);
             weights.getW().copyFromHost(weightsCPU);
         }
     }
 
     Matrix gradsCPU;
-    weights.getGrads().scale(-1.0 / getNumCases());
+    weights.getGrads().scale(-1.0 / _data->getNumCases());
     weights.getGrads().copyToHost(gradsCPU, true);
     float analNorm = gradsCPU.norm();
     float numNorm = numGrads.norm();

@@ -213,7 +213,7 @@ void FCLayer::_bprop(NVMatrix& v) {
         }
         NVMatrix& prevActs_T = _prev[i]->getActs().getTranspose();
         _weights[i].getInc().addProduct(prevActs_T, v,  (!_convNet->isCheckingGrads()) * _weights[i].getMom(),
-                                       _convNet->isCheckingGrads() ? 1 : _weights[i].getEps() / _convNet->getNumCases());
+                                       _convNet->isCheckingGrads() ? 1 : _weights[i].getEps() / v.getNumCols());
         delete &prevActs_T;
         
         _prev[i]->bprop();
@@ -221,9 +221,9 @@ void FCLayer::_bprop(NVMatrix& v) {
     truncActGrads();
 }
 
-void FCLayer::updateWeights() {
-    _weights.update(_convNet->getNumCases());
-    _biases.update(_convNet->getNumCases());
+void FCLayer::updateWeights(int numCases) {
+    _weights.update(numCases);
+    _biases.update(numCases);
 }
 
 void FCLayer::copyToCPU() {
@@ -283,7 +283,7 @@ ConvLayer::ConvLayer(PyObject* paramsDict, ConvNet* convNet) : Layer(paramsDict,
 }
 
 void ConvLayer::_fprop(NVMatrixV& v) {
-    convFilterActs(*v[0], *_weights, _acts, _modulesX, _padding, _stride, _channels, FILTER_MODULE_IMAGE);
+    convFilterActs(*v[0], *_weights, _acts, _modulesX, _padding, _stride, _channels);
     if (_sharedBiases) {
         _acts.reshape(_numFilters, _acts.getNumElements() / _numFilters);
         _acts.addVector(*_biases);
@@ -307,19 +307,19 @@ void ConvLayer::_bprop(NVMatrix& v) {
 
     if (_prev[0]->isGradConsumer()) {
         if (_prev[0]->getRcvdBInputs() == 0) {
-            convImgActs(v, *_weights, _prev[0]->getActGrads(), _imgSize, _padding, _stride, _channels, FILTER_MODULE_IMAGE);
+            convImgActs(v, *_weights, _prev[0]->getActGrads(), _imgSize, _padding, _stride, _channels);
         } else {
-            convImgActs(v, *_weights, _prev[0]->getActGrads(), _imgSize, _padding, _stride, _channels, 1, 1, FILTER_MODULE_IMAGE);
+            convImgActs(v, *_weights, _prev[0]->getActGrads(), _imgSize, _padding, _stride, _channels, 1, 1);
         }
     }
     if (_partialSum > 0 && _partialSum < _modules) {
         NVMatrix tmp;
-        convWeightActs(_prev[0]->getActs(), v, tmp, _modulesX, _filterSize, _padding, _stride, _channels, 0, 1, FILTER_MODULE_IMAGE, _partialSum);
+        convWeightActs(_prev[0]->getActs(), v, tmp, _modulesX, _filterSize, _padding, _stride, _channels, 0, 1, _partialSum);
         tmp.reshape(_modules / _partialSum, _channels * _filterPixels * _numFilters);
         tmp.sum(0, _weights.getGrads());
         _weights.getGrads().reshape(_channels * _filterPixels, _numFilters);
     } else {
-        convWeightActs(_prev[0]->getActs(), v, _weights.getGrads(), _modulesX, _filterSize, _padding, _stride, _channels, FILTER_MODULE_IMAGE);
+        convWeightActs(_prev[0]->getActs(), v, _weights.getGrads(), _modulesX, _filterSize, _padding, _stride, _channels);
     }
     
     truncActGrads();
@@ -327,9 +327,9 @@ void ConvLayer::_bprop(NVMatrix& v) {
     _prev[0]->bprop();
 }
 
-void ConvLayer::updateWeights() {
-    _weights.update(_convNet->getNumCases());
-    _biases.update(_convNet->getNumCases());
+void ConvLayer::updateWeights(int numCases) {
+    _weights.update(numCases);
+    _biases.update(numCases);
 }
 
 void ConvLayer::copyToCPU() {
@@ -529,22 +529,22 @@ void LogregCost::_fprop(NVMatrixV& v) {
     NVMatrix& probs = *v[1];
     NVMatrix& maxProbs = probs.max(0);
     
-    int caseStride = probs.getLeadingDim(); // num cases incl. padding
+    int numCases = probs.getLeadingDim(); 
     int numOut = probs.getFollowingDim(); 
-    NVMatrix trueLabelLogProbs(1, _convNet->getNumCases());
-    NVMatrix correctProbs(1, _convNet->getNumCases());
-    assert(labels.getNumElements() == caseStride);
+    NVMatrix trueLabelLogProbs(1, numCases);
+    NVMatrix correctProbs(1, numCases);
+    assert(labels.getNumElements() == numCases);
     assert(labels.isContiguous());
     assert(probs.isContiguous());
     dim3 threads(LOGREG_ERR_THREADS_X, 1);
-    dim3 blocks(DIVUP(_convNet->getNumCases(), LOGREG_ERR_THREADS_X), 1);
+    dim3 blocks(DIVUP(numCases, LOGREG_ERR_THREADS_X), 1);
     cudaFuncSetCacheConfig(kLogregCost, cudaFuncCachePreferL1);
     kLogregCost<<<blocks, threads>>>(probs.getDevData(), labels.getDevData(), maxProbs.getDevData(),
                                      trueLabelLogProbs.getDevData(), correctProbs.getDevData(),
-                                     _convNet->getNumCases(), caseStride, numOut);
+                                     numCases, numOut);
     cutilCheckMsg("kLogregCost: Kernel execution failed");
     _err.push_back(-trueLabelLogProbs.sum());
-    _err.push_back(_convNet->getNumCases() - correctProbs.sum());
+    _err.push_back(numCases - correctProbs.sum());
     
     delete &maxProbs;
 }
@@ -554,21 +554,21 @@ void LogregCost::bprop() {
         NVMatrix& labels = _prev[0]->getActs();
         NVMatrix& probs = _prev[1]->getActs();
         NVMatrix& target = _prev[1]->getActGrads();
-        int caseStride = probs.getLeadingDim(); // num cases incl. padding
+        int numCases = probs.getLeadingDim();
         int numOut = probs.getFollowingDim();
-        assert(labels.getNumElements() == caseStride);
+        assert(labels.getNumElements() == numCases);
         assert(probs.isContiguous());
         assert(target.isContiguous());
         assert(labels.isContiguous());
         dim3 threads(LOGREG_GRADS_THREADS_X, LOGREG_GRADS_THREADS_Y);
-        dim3 blocks(DIVUP(caseStride, LOGREG_GRADS_THREADS_X), DIVUP(numOut, LOGREG_GRADS_THREADS_Y));
+        dim3 blocks(DIVUP(numCases, LOGREG_GRADS_THREADS_X), DIVUP(numOut, LOGREG_GRADS_THREADS_Y));
         if (_prev[1]->getRcvdBInputs() == 0) {
             target.resize(probs);
             kLogregCostGrads<false><<<blocks, threads>>>(probs.getDevData(), labels.getDevData(), target.getDevData(),
-                                                         _convNet->getNumCases(), numOut, caseStride, _coeff);
+                                                         numCases, numOut, _coeff);
         } else {
             kLogregCostGrads<true><<<blocks, threads>>>(probs.getDevData(), labels.getDevData(), target.getDevData(),
-                                                        _convNet->getNumCases(), numOut, caseStride, _coeff);
+                                                        numCases, numOut, _coeff);
         }
         cutilCheckMsg("kLogregCostGrads: Kernel execution failed");
         _prev[1]->bprop();

@@ -22,14 +22,14 @@
  * Each block reconstructs one 4x4 pixels from 16*imgsPerThread cases.
  *
  * Number of filters must be divisible by 16.
- * Number of images must be divisible by 16*imgsPerThread.
+ * Number of images must be divisible by 16*imgsPerThread  if checkCaseBounds is false.
  * 16 * imgsPerThread must be divisible by 32.
  *
  * This version loads 32 cases at a time, so it gets full coalescing on that load.
  * It only loads 16 weights at a time, so those aren't fully coalesced.
  * This version conserves shared memory by loading 16 filters at a time rather than 32.
  */
-template <int imgsPerThread, int numColors, bool mfi, bool scale>
+template <int imgsPerThread, int numColors, bool mfi, bool scale, bool checkCaseBounds>
 __global__ void img_acts_16x16_load32_batched_color_kernel(const float* hidActs, const float* filters, float* targets,
                                    const int numModulesX, const int numImages, const int numFilters,
                                    const int filterSize, const int imgSize, const int paddingStart, const int moduleStride,
@@ -37,7 +37,7 @@ __global__ void img_acts_16x16_load32_batched_color_kernel(const float* hidActs,
     __shared__ float shFilters[numColors*16][16 + 1];
     __shared__ float shHidActs[16][16*imgsPerThread];
 
-    const int caseIdx = blockIdx.x * 16*imgsPerThread + threadIdx.x;
+    const int blockCaseIdx = blockIdx.x * 16*imgsPerThread;
     const int numRegionsX = DIVUP(imgSize, 4);
     const int blockRegionIdx = blockIdx.y;
     const int blockRegionIdxX = blockRegionIdx % numRegionsX;
@@ -55,12 +55,12 @@ __global__ void img_acts_16x16_load32_batched_color_kernel(const float* hidActs,
     const int tidx = threadIdx.y * 16 + threadIdx.x;
     const int loadY = tidx / 32, loadX = tidx % 32;
     if (mfi) {
-        hidActs += blockIdx.x * 16*imgsPerThread + loadY * numImages + loadX;
+        hidActs += blockCaseIdx + loadY * numImages + loadX;
     } else {
-        hidActs += blockIdx.x * 16*imgsPerThread + loadY * numImages * numModulesX * numModulesX + loadX;
+        hidActs += blockCaseIdx + loadY * numImages * numModulesX * numModulesX + loadX;
     }
     filters += threadIdx.x;
-    targets += pxIdx * numImages + caseIdx;
+    targets += pxIdx * numImages + blockCaseIdx + threadIdx.x;
 //    targets += blockRegionTop * numImages * imgSize + blockRegionLeft * numImages + (loadY / 4) *  numImages * imgSize
 //             + loadY % 4 * numImages + loadX;
 
@@ -99,18 +99,32 @@ __global__ void img_acts_16x16_load32_batched_color_kernel(const float* hidActs,
 
                 if (mfi) {
                     #pragma unroll
-                    for (int j = 0; j < 16; j += 8) { // load 16 rows of imgsPerThread*16 cols, 8 * 32 elements at a time.
-                        #pragma unroll
-                        for (int i = 0; i < imgsPerThread * 16; i += 32) {
-                            shHidActLoad[j * 16 * imgsPerThread + i] = hidActs[(moduleIdx * numFilters + f + j) * numImages + i];
+                    for (int i = 0; i < imgsPerThread * 16; i += 32) {
+                        if (!checkCaseBounds || blockCaseIdx + i + loadX < numImages) {
+                            #pragma unroll
+                            for (int j = 0; j < 16; j += 8) { // load 16 rows of imgsPerThread*16 cols, 8 * 32 elements at a time.
+                                shHidActLoad[j * 16 * imgsPerThread + i] = hidActs[(moduleIdx * numFilters + f + j) * numImages + i];
+                            }
+                        } else {
+                            #pragma unroll
+                            for (int j = 0; j < 16; j += 8) { // load 16 rows of imgsPerThread*16 cols, 8 * 32 elements at a time.
+                                shHidActLoad[j * 16 * imgsPerThread + i] = 0;
+                            }
                         }
                     }
                 } else {
                     #pragma unroll
-                    for (int j = 0; j < 16; j += 8) { // load 16 rows of imgsPerThread*16 cols, 8 * 32 elements at a time.
-                        #pragma unroll
-                        for (int i = 0; i < imgsPerThread * 16; i += 32) {
-                            shHidActLoad[j * 16 * imgsPerThread + i] = hidActs[(moduleIdx + (f + j) * numModulesX * numModulesX) * numImages + i];
+                    for (int i = 0; i < imgsPerThread * 16; i += 32) {
+                        if (!checkCaseBounds || blockCaseIdx + i + loadX < numImages) {
+                            #pragma unroll
+                            for (int j = 0; j < 16; j += 8) { // load 16 rows of imgsPerThread*16 cols, 8 * 32 elements at a time.
+                                shHidActLoad[j * 16 * imgsPerThread + i] = hidActs[(moduleIdx + (f + j) * numModulesX * numModulesX) * numImages + i];
+                            }
+                        } else {
+                            #pragma unroll
+                            for (int j = 0; j < 16; j += 8) { // load 16 rows of imgsPerThread*16 cols, 8 * 32 elements at a time.
+                                shHidActLoad[j * 16 * imgsPerThread + i] = 0;
+                            }
                         }
                     }
                 }
@@ -148,18 +162,22 @@ __global__ void img_acts_16x16_load32_batched_color_kernel(const float* hidActs,
     if (isPxInImg) {
         if (scale) {
             #pragma unroll
-            for (int c = 0; c < numColors; c++) {
-                #pragma unroll
-                for (int i = 0; i < imgsPerThread; i++) {
-                    targets[c * imgPixels * numImages + i * 16] = scaleTargets * targets[c * imgPixels * numImages + i * 16] + scaleOutputs * prod[c][i];
+            for (int i = 0; i < imgsPerThread; i++) {
+                if (!checkCaseBounds || blockCaseIdx + threadIdx.x + i * 16 < numImages) {
+                    #pragma unroll
+                    for (int c = 0; c < numColors; c++) {
+                        targets[c * imgPixels * numImages + i * 16] = scaleTargets * targets[c * imgPixels * numImages + i * 16] + scaleOutputs * prod[c][i];
+                    }
                 }
             }
         } else {
             #pragma unroll
-            for (int c = 0; c < numColors; c++) {
-                #pragma unroll
-                for (int i = 0; i < imgsPerThread; i++) {
-                    targets[c * imgPixels * numImages + i * 16] = prod[c][i];
+            for (int i = 0; i < imgsPerThread; i++) {
+                if (!checkCaseBounds || blockCaseIdx + threadIdx.x + i * 16 < numImages) {
+                    #pragma unroll
+                    for (int c = 0; c < numColors; c++) {
+                        targets[c * imgPixels * numImages + i * 16] = prod[c][i];
+                    }
                 }
             }
         }
@@ -183,7 +201,7 @@ __global__ void img_acts_16x16_load32_batched_color_kernel(const float* hidActs,
  *
  * Each block reconstructs one 4x4 pixels from 16*imgsPerThread cases.
  *
- * Number of images must be divisible by 16*imgsPerThread.
+ * Number of images must be divisible by 16*imgsPerThread if checkCaseBounds is false.
  * 16 * imgsPerThread must be divisible by 32.
  * numColors must be divisible by colorsPerThread.
  *
@@ -193,7 +211,7 @@ __global__ void img_acts_16x16_load32_batched_color_kernel(const float* hidActs,
  * 
  * To be used when there are 4-32 color channels.
  */
-template <int imgsPerThread, int colorsPerThread, bool mfi, bool scale>
+template <int imgsPerThread, int colorsPerThread, bool mfi, bool scale, bool checkCaseBounds>
 __global__ void img_acts_16x16_load32_batched_mediumcolor_kernel(const float* hidActs, const float* filters, float* targets,
                                    const int numModulesX, const int numImages, const int numFilters,
                                    const int filterSize, const int imgSize, const int paddingStart, const int moduleStride,
@@ -201,8 +219,8 @@ __global__ void img_acts_16x16_load32_batched_mediumcolor_kernel(const float* hi
     __shared__ float shFilters[colorsPerThread*16][16 + 1];
     __shared__ float shHidActs[16][16*imgsPerThread];
 
-    const int blockCaseIdx = (blockIdx.x % (numImages/(16*imgsPerThread))) * 16*imgsPerThread;
-    const int blockColorIdx = (blockIdx.x / (numImages/(16*imgsPerThread))) * colorsPerThread;
+    const int blockCaseIdx = (blockIdx.x % DIVUP(numImages,16*imgsPerThread)) * 16*imgsPerThread;
+    const int blockColorIdx = (blockIdx.x / DIVUP(numImages,16*imgsPerThread)) * colorsPerThread;
     const int numRegionsX = DIVUP(imgSize, 4);
     const int blockRegionIdx = blockIdx.y;
     const int blockRegionIdxX = blockRegionIdx % numRegionsX;
@@ -262,18 +280,32 @@ __global__ void img_acts_16x16_load32_batched_mediumcolor_kernel(const float* hi
 
                 if (mfi) { // shame this if statement has to be so early...
                     #pragma unroll
-                    for (int j = 0; j < 16; j += 8) { // load 16 rows of imgsPerThread*16 cols, 8 * 32 elements at a time.
-                        #pragma unroll
-                        for (int i = 0; i < imgsPerThread * 16; i += 32) {
-                            shHidActLoad[j * 16 * imgsPerThread + i] = hidActs[(moduleIdx * numFilters + f + j) * numImages + i];
+                    for (int i = 0; i < imgsPerThread * 16; i += 32) {
+                        if (!checkCaseBounds || blockCaseIdx + loadX + i < numImages) {
+                            #pragma unroll
+                            for (int j = 0; j < 16; j += 8) { // load 16 rows of imgsPerThread*16 cols, 8 * 32 elements at a time.
+                                shHidActLoad[j * 16 * imgsPerThread + i] = hidActs[(moduleIdx * numFilters + f + j) * numImages + i];
+                            }
+                        } else {
+                            #pragma unroll
+                            for (int j = 0; j < 16; j += 8) { // load 16 rows of imgsPerThread*16 cols, 8 * 32 elements at a time.
+                                shHidActLoad[j * 16 * imgsPerThread + i] = 0;
+                            }
                         }
                     }
                 } else {
                     #pragma unroll
-                    for (int j = 0; j < 16; j += 8) { // load 16 rows of imgsPerThread*16 cols, 8 * 32 elements at a time.
-                        #pragma unroll
-                        for (int i = 0; i < imgsPerThread * 16; i += 32) {
-                            shHidActLoad[j * 16 * imgsPerThread + i] = hidActs[(moduleIdx + (f + j) * numModulesX * numModulesX) * numImages + i];
+                    for (int i = 0; i < imgsPerThread * 16; i += 32) {
+                        if (!checkCaseBounds || blockCaseIdx + loadX + i < numImages) {
+                            #pragma unroll
+                            for (int j = 0; j < 16; j += 8) { // load 16 rows of imgsPerThread*16 cols, 8 * 32 elements at a time.
+                                shHidActLoad[j * 16 * imgsPerThread + i] = hidActs[(moduleIdx + (f + j) * numModulesX * numModulesX) * numImages + i];
+                            }
+                        } else {
+                            #pragma unroll
+                            for (int j = 0; j < 16; j += 8) { // load 16 rows of imgsPerThread*16 cols, 8 * 32 elements at a time.
+                                shHidActLoad[j * 16 * imgsPerThread + i] = 0;
+                            }
                         }
                     }
                 }
@@ -311,18 +343,22 @@ __global__ void img_acts_16x16_load32_batched_mediumcolor_kernel(const float* hi
     if (isPxInImg) {
         if (scale) {
             #pragma unroll
-            for (int c = 0; c < colorsPerThread; c++) {
-                #pragma unroll
-                for (int i = 0; i < imgsPerThread; i++) {
-                    targets[c * imgPixels * numImages + i * 16] = scaleTargets * targets[c * imgPixels * numImages + i * 16] + scaleOutputs * prod[c][i];
+            for (int i = 0; i < imgsPerThread; i++) {
+                if (!checkCaseBounds || blockCaseIdx + threadIdx.x + i * 16 < numImages) {
+                    #pragma unroll
+                    for (int c = 0; c < colorsPerThread; c++) {
+                        targets[c * imgPixels * numImages + i * 16] = scaleTargets * targets[c * imgPixels * numImages + i * 16] + scaleOutputs * prod[c][i];
+                    }
                 }
             }
         } else {
             #pragma unroll
-            for (int c = 0; c < colorsPerThread; c++) {
-                #pragma unroll
-                for (int i = 0; i < imgsPerThread; i++) {
-                    targets[c * imgPixels * numImages + i * 16] = prod[c][i];
+            for (int i = 0; i < imgsPerThread; i++) {
+                if (!checkCaseBounds || blockCaseIdx + threadIdx.x + i * 16 < numImages) {
+                    #pragma unroll
+                    for (int c = 0; c < colorsPerThread; c++) {
+                        targets[c * imgPixels * numImages + i * 16] = prod[c][i];
+                    }
                 }
             }
         }
@@ -346,7 +382,7 @@ __global__ void img_acts_16x16_load32_batched_mediumcolor_kernel(const float* hi
  *
  * Each block reconstructs one B_Y*colorsPerThread colors from 1 pixel from B_X*imgsPerThread cases.
  *
- * Number of images must be divisible by B_X*imgsPerThread.
+ * Number of images must be divisible by B_X*imgsPerThread if checkCaseBounds is false.
  * B_X * imgsPerThread must be divisible by 32.
  * numColors must be divisible by colorsPerThread.
  * B_X*B_Y must be divisible by 32.
@@ -357,7 +393,7 @@ __global__ void img_acts_16x16_load32_batched_mediumcolor_kernel(const float* hi
  * 
  * To be used when there are >= 32 color channels.
  */
-template <int B_Y, int B_X, int imgsPerThread, int colorsPerThread, bool mfi, bool scale>
+template <int B_Y, int B_X, int imgsPerThread, int colorsPerThread, bool mfi, bool scale, bool checkCaseBounds>
 __global__ void img_acts_manycolor_kernel(const float* hidActs, const float* filters, float* targets,
                                    const int numModulesX, const int numImages, const int numFilters,
                                    const int filterSize, const int imgSize, const int paddingStart, const int moduleStride,
@@ -365,8 +401,8 @@ __global__ void img_acts_manycolor_kernel(const float* hidActs, const float* fil
     __shared__ float shFilters[colorsPerThread*B_Y][16 + 1]; // TODO: perhaps reconsider this 16
     __shared__ float shHidActs[16][B_X*imgsPerThread];
 
-    const int blockCaseIdx = (blockIdx.x % (numImages/(B_X*imgsPerThread))) * B_X*imgsPerThread;
-    const int blockColorIdx = (blockIdx.x / (numImages/(B_X*imgsPerThread))) * B_Y*colorsPerThread;
+    const int blockCaseIdx = (blockIdx.x % DIVUP(numImages,B_X*imgsPerThread)) * B_X*imgsPerThread;
+    const int blockColorIdx = (blockIdx.x / DIVUP(numImages,B_X*imgsPerThread)) * B_Y*colorsPerThread;
 
     const int blockPixelIdx = blockIdx.y;
     const int blockPixelIdxX = blockPixelIdx % imgSize;
@@ -419,19 +455,32 @@ __global__ void img_acts_manycolor_kernel(const float* hidActs, const float* fil
             for (int f = 0; f < numFilters; f += 16) { // multiply with 16 filters at a time
                 if (mfi) { // shame this if statement has to be so early...
                     #pragma unroll
-                    for (int j = 0; j < 16; j += B_X*B_Y/32) { // load 16 rows of imgsPerThread*B_X cols, 8 * 32 elements at a time.
-                        #pragma unroll
-                        for (int i = 0; i < imgsPerThread * B_X; i += 32) {
-                            shHidActLoad[j * B_X * imgsPerThread + i] = hidActs[(moduleIdx * numFilters + f + j) * numImages + i];
+                    for (int i = 0; i < imgsPerThread * B_X; i += 32) {
+                        if (!checkCaseBounds || blockCaseIdx + hidActLoadX + i < numImages) {
+                            #pragma unroll
+                            for (int j = 0; j < 16; j += B_X*B_Y/32) { // load 16 rows of imgsPerThread*B_X cols, 8 * 32 elements at a time.
+                                shHidActLoad[j * B_X * imgsPerThread + i] = hidActs[(moduleIdx * numFilters + f + j) * numImages + i];
+                            }
+                        } else {
+                           #pragma unroll
+                            for (int j = 0; j < 16; j += B_X*B_Y/32) { // load 16 rows of imgsPerThread*B_X cols, 8 * 32 elements at a time.
+                                shHidActLoad[j * B_X * imgsPerThread + i] = 0;
+                            }
                         }
                     }
                 } else {
                     #pragma unroll
-                    for (int j = 0; j < 16; j += B_X*B_Y/32) { // load 16 rows of imgsPerThread*16 cols, 8 * 32 elements at a time.
-                        #pragma unroll
-                        for (int i = 0; i < imgsPerThread * B_X; i += 32) {
-                            // (numFilters, numModules, numImages)
-                            shHidActLoad[j * B_X * imgsPerThread + i] = hidActs[(moduleIdx + (f + j) * numModules) * numImages + i];
+                    for (int i = 0; i < imgsPerThread * B_X; i += 32) {
+                        if (!checkCaseBounds || blockCaseIdx + hidActLoadX + i < numImages) {
+                            #pragma unroll
+                            for (int j = 0; j < 16; j += B_X*B_Y/32) { // load 16 rows of imgsPerThread*16 cols, 8 * 32 elements at a time.
+                                shHidActLoad[j * B_X * imgsPerThread + i] = hidActs[(moduleIdx + (f + j) * numModules) * numImages + i];
+                            }
+                        } else {
+                            #pragma unroll
+                            for (int j = 0; j < 16; j += B_X*B_Y/32) { // load 16 rows of imgsPerThread*16 cols, 8 * 32 elements at a time.
+                                shHidActLoad[j * B_X * imgsPerThread + i] = 0;
+                            }
                         }
                     }
                 }
@@ -461,26 +510,29 @@ __global__ void img_acts_manycolor_kernel(const float* hidActs, const float* fil
     }
     if (scale) {
         #pragma unroll
-        for (int c = 0; c < colorsPerThread; c++) {
-            #pragma unroll
-            for (int i = 0; i < imgsPerThread; i++) {
-                targets[c * B_Y * imgPixels * numImages + i * B_X] = scaleTargets * targets[c * B_Y * imgPixels * numImages + i * B_X] + scaleOutputs * prod[c][i];
+        for (int i = 0; i < imgsPerThread; i++) {
+            if (!checkCaseBounds || blockCaseIdx + threadIdx.x + i * B_X < numImages) {
+                #pragma unroll
+                for (int c = 0; c < colorsPerThread; c++) {
+                    targets[c * B_Y * imgPixels * numImages + i * B_X] = scaleTargets * targets[c * B_Y * imgPixels * numImages + i * B_X] + scaleOutputs * prod[c][i];
+                }
             }
         }
     } else {
         #pragma unroll
-        for (int c = 0; c < colorsPerThread; c++) {
-            #pragma unroll
-            for (int i = 0; i < imgsPerThread; i++) {
-                targets[c * B_Y * imgPixels * numImages + i * B_X] = prod[c][i];
+        for (int i = 0; i < imgsPerThread; i++) {
+            if (!checkCaseBounds || blockCaseIdx + threadIdx.x + i * B_X < numImages) {
+                #pragma unroll
+                for (int c = 0; c < colorsPerThread; c++) {
+                    targets[c * B_Y * imgPixels * numImages + i * B_X] = prod[c][i];
+                }
             }
         }
     }
 }
 
 /*
- * hidActs:     (numModules, numFilters, numImages) if hidActsOrder == MODULE_FILTER_IMAGE
- *              (numFilters, numModules, numImages) otherwise
+ * hidActs:     (numFilters, numModules, numImages)
  * filters:     (numColors, filterPixels, numFilters)
  * targets:     (numColors, imgPixels, numImages)
  *
@@ -495,13 +547,13 @@ __global__ void img_acts_manycolor_kernel(const float* hidActs, const float* fil
  * hidActsOrder: how the hidActs matrix is laid out (see hidActs comment above).
  */
 void convImgActs(NVMatrix& hidActs, NVMatrix& filters, NVMatrix& targets,
-                    int imgSize, int paddingStart, int moduleStride, int numColors, FILTER_OUTPUT_ORDER hidActsOrder) {
-    convImgActs(hidActs, filters, targets, imgSize, paddingStart, moduleStride, numColors, 0, 1, hidActsOrder);
+                    int imgSize, int paddingStart, int moduleStride, int numColors) {
+    convImgActs(hidActs, filters, targets, imgSize, paddingStart, moduleStride, numColors, 0, 1);
 }
 
 void convImgActs(NVMatrix& hidActs, NVMatrix& filters, NVMatrix& targets,
                     int imgSize, int paddingStart, int moduleStride, int numColors,
-                    float scaleTargets, float scaleOutput, FILTER_OUTPUT_ORDER hidActsOrder) {
+                    float scaleTargets, float scaleOutput) {
     assert(numColors > 0 && (numColors <= 3 || numColors % 2 == 0));
 
     int numImages = hidActs.getNumCols();
@@ -522,7 +574,7 @@ void convImgActs(NVMatrix& hidActs, NVMatrix& filters, NVMatrix& targets,
     assert(!hidActs.isTrans());
     assert(!filters.isTrans());
     assert(!targets.isTrans());
-    assert(numImages % 128 == 0);
+//    assert(numImages % 128 == 0);
     assert(numFilters % 16 == 0);
     
     // These routines don't handle the case when only part of the image is visited in the convolution
@@ -535,170 +587,175 @@ void convImgActs(NVMatrix& hidActs, NVMatrix& filters, NVMatrix& targets,
     dim3 blocks;
     dim3 threads(16,16);
     int colorsPerThread;
+    bool checkCaseBounds;
     if (numColors >= 16) {
         threads = dim3(32, 4);
         colorsPerThread = numColors % 4 == 0 ? 4 : 2;
         int imgsPerThread = 4;
         assert(numColors % (threads.y * colorsPerThread) == 0);
-        assert(numImages % (threads.x * imgsPerThread) == 0);
-        blocks = dim3((numImages/(threads.x*imgsPerThread)) * (numColors/(threads.y*colorsPerThread)), imgPixels);
+        checkCaseBounds = numImages % (threads.x * imgsPerThread) != 0;
+        blocks = dim3(DIVUP(numImages, threads.x*imgsPerThread) * (numColors/(threads.y*colorsPerThread)), imgPixels);
     } else if (numColors > 3) {
         colorsPerThread = numColors % 4 == 0 ? 4 : 2;
-        blocks = dim3((numColors / colorsPerThread) * numImages/(16*8), DIVUP(imgSize,4) * DIVUP(imgSize,4));
+        blocks = dim3((numColors / colorsPerThread) * DIVUP(numImages,16*8), DIVUP(imgSize,4) * DIVUP(imgSize,4));
+        checkCaseBounds = numImages % (16*8) != 0;
     } else {
-        blocks = dim3(numImages/(16*8), DIVUP(imgSize,4) * DIVUP(imgSize,4));
+        blocks = dim3(DIVUP(numImages,16*8), DIVUP(imgSize,4) * DIVUP(imgSize,4));
+        checkCaseBounds = numImages % (16*8) != 0;
     }
     
     if (scaleTargets == 0 && scaleOutput == 1) { // do not scale or use targets matrix
         targets.resize(numColors*imgPixels, numImages);
-        if (hidActsOrder == MODULE_FILTER_IMAGE) {
-            if (numColors >= 16) {
+      
+        if (numColors >= 16) {
+            if (checkCaseBounds) {
                 if (colorsPerThread == 4) {
-                    cudaFuncSetCacheConfig(img_acts_manycolor_kernel<4, 32, 4, 4, true, false>, cudaFuncCachePreferShared);
-                    img_acts_manycolor_kernel<4, 32, 4, 4, true, false><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
+                    cudaFuncSetCacheConfig(img_acts_manycolor_kernel<4, 32, 4, 4, false, false, true>, cudaFuncCachePreferShared);
+                    img_acts_manycolor_kernel<4, 32, 4, 4, false, false, true><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
                                                         numModulesX, numImages, numFilters, filterSize, imgSize, paddingStart, moduleStride, scaleTargets, scaleOutput);
                 } else {
-                    cudaFuncSetCacheConfig(img_acts_manycolor_kernel<4, 32, 4, 2, true, false>, cudaFuncCachePreferShared);
-                    img_acts_manycolor_kernel<4, 32, 4, 2, true, false><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
-                                                        numModulesX, numImages, numFilters, filterSize, imgSize, paddingStart, moduleStride, scaleTargets, scaleOutput);
-                }
-            } else if (numColors > 3) {
-                if (colorsPerThread == 4) {
-                    cudaFuncSetCacheConfig(img_acts_16x16_load32_batched_mediumcolor_kernel<8, 4, true, false>, cudaFuncCachePreferShared);
-                    img_acts_16x16_load32_batched_mediumcolor_kernel<8, 4, true, false><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
-                                                        numModulesX, numImages, numFilters, filterSize, imgSize, paddingStart, moduleStride, scaleTargets, scaleOutput);
-                } else {
-                    cudaFuncSetCacheConfig(img_acts_16x16_load32_batched_mediumcolor_kernel<8, 2, true, false>, cudaFuncCachePreferShared);
-                    img_acts_16x16_load32_batched_mediumcolor_kernel<8, 2, true, false><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
+                    cudaFuncSetCacheConfig(img_acts_manycolor_kernel<4, 32, 4, 2, false, false, true>, cudaFuncCachePreferShared);
+                    img_acts_manycolor_kernel<4, 32, 4, 2, false, false, true><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
                                                         numModulesX, numImages, numFilters, filterSize, imgSize, paddingStart, moduleStride, scaleTargets, scaleOutput);
                 }
             } else {
-                if (numColors == 1) {
-                    cudaFuncSetCacheConfig(img_acts_16x16_load32_batched_color_kernel<8, 1, true, false>, cudaFuncCachePreferShared);
-                    img_acts_16x16_load32_batched_color_kernel<8, 1, true, false><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
+                if (colorsPerThread == 4) {
+                    cudaFuncSetCacheConfig(img_acts_manycolor_kernel<4, 32, 4, 4, false, false, false>, cudaFuncCachePreferShared);
+                    img_acts_manycolor_kernel<4, 32, 4, 4, false, false, false><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
                                                         numModulesX, numImages, numFilters, filterSize, imgSize, paddingStart, moduleStride, scaleTargets, scaleOutput);
-                    
-                } else if (numColors == 2) {
-                    cudaFuncSetCacheConfig(img_acts_16x16_load32_batched_color_kernel<8, 2, true, false>, cudaFuncCachePreferShared);
-                    img_acts_16x16_load32_batched_color_kernel<8, 2, true, false><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
+                } else {
+                    cudaFuncSetCacheConfig(img_acts_manycolor_kernel<4, 32, 4, 2, false, false, false>, cudaFuncCachePreferShared);
+                    img_acts_manycolor_kernel<4, 32, 4, 2, false, false, false><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
                                                         numModulesX, numImages, numFilters, filterSize, imgSize, paddingStart, moduleStride, scaleTargets, scaleOutput);
-                    
-                } else if (numColors == 3) {
-                    cudaFuncSetCacheConfig(img_acts_16x16_load32_batched_color_kernel<8, 3, true, false>, cudaFuncCachePreferShared);
-                    img_acts_16x16_load32_batched_color_kernel<8, 3, true, false><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
+                }
+            }
+        } else if (numColors > 3) {
+            if (checkCaseBounds) {
+                if (colorsPerThread == 4) {
+                    cudaFuncSetCacheConfig(img_acts_16x16_load32_batched_mediumcolor_kernel<8, 4, false, false, true>, cudaFuncCachePreferShared);
+                    img_acts_16x16_load32_batched_mediumcolor_kernel<8, 4, false, false, true><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
+                                                        numModulesX, numImages, numFilters, filterSize, imgSize, paddingStart, moduleStride, scaleTargets, scaleOutput);
+                } else {
+                    cudaFuncSetCacheConfig(img_acts_16x16_load32_batched_mediumcolor_kernel<8, 2, false, false, true>, cudaFuncCachePreferShared);
+                    img_acts_16x16_load32_batched_mediumcolor_kernel<8, 2, false, false, true><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
+                                                        numModulesX, numImages, numFilters, filterSize, imgSize, paddingStart, moduleStride, scaleTargets, scaleOutput);
+                }
+            } else {
+                if (colorsPerThread == 4) {
+                    cudaFuncSetCacheConfig(img_acts_16x16_load32_batched_mediumcolor_kernel<8, 4, false, false, false>, cudaFuncCachePreferShared);
+                    img_acts_16x16_load32_batched_mediumcolor_kernel<8, 4, false, false, false><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
+                                                        numModulesX, numImages, numFilters, filterSize, imgSize, paddingStart, moduleStride, scaleTargets, scaleOutput);
+                } else {
+                    cudaFuncSetCacheConfig(img_acts_16x16_load32_batched_mediumcolor_kernel<8, 2, false, false, false>, cudaFuncCachePreferShared);
+                    img_acts_16x16_load32_batched_mediumcolor_kernel<8, 2, false, false, false><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
                                                         numModulesX, numImages, numFilters, filterSize, imgSize, paddingStart, moduleStride, scaleTargets, scaleOutput);
                 }
             }
         } else {
-            if (numColors >= 16) {
-                if (colorsPerThread == 4) {
-                    cudaFuncSetCacheConfig(img_acts_manycolor_kernel<4, 32, 4, 4, false, false>, cudaFuncCachePreferShared);
-                    img_acts_manycolor_kernel<4, 32, 4, 4, false, false><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
+            if (checkCaseBounds) {
+                if (numColors == 1) {
+                    cudaFuncSetCacheConfig(img_acts_16x16_load32_batched_color_kernel<8, 1, false, false, true>, cudaFuncCachePreferShared);
+                    img_acts_16x16_load32_batched_color_kernel<8, 1, false, false, true><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
                                                         numModulesX, numImages, numFilters, filterSize, imgSize, paddingStart, moduleStride, scaleTargets, scaleOutput);
-                } else {
-                    cudaFuncSetCacheConfig(img_acts_manycolor_kernel<4, 32, 4, 2, false, false>, cudaFuncCachePreferShared);
-                    img_acts_manycolor_kernel<4, 32, 4, 2, false, false><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
+                } else if (numColors == 2) {
+                    cudaFuncSetCacheConfig(img_acts_16x16_load32_batched_color_kernel<8, 2, false, false, true>, cudaFuncCachePreferShared);
+                    img_acts_16x16_load32_batched_color_kernel<8, 2, false, false, true><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
                                                         numModulesX, numImages, numFilters, filterSize, imgSize, paddingStart, moduleStride, scaleTargets, scaleOutput);
-                }
-            } else if (numColors > 3) {
-                if (colorsPerThread == 4) {
-                    cudaFuncSetCacheConfig(img_acts_16x16_load32_batched_mediumcolor_kernel<8, 4, false, false>, cudaFuncCachePreferShared);
-                    img_acts_16x16_load32_batched_mediumcolor_kernel<8, 4, false, false><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
-                                                        numModulesX, numImages, numFilters, filterSize, imgSize, paddingStart, moduleStride, scaleTargets, scaleOutput);
-                } else {
-                    cudaFuncSetCacheConfig(img_acts_16x16_load32_batched_mediumcolor_kernel<8, 2, false, false>, cudaFuncCachePreferShared);
-                    img_acts_16x16_load32_batched_mediumcolor_kernel<8, 2, false, false><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
+                } else if (numColors == 3) {
+                    cudaFuncSetCacheConfig(img_acts_16x16_load32_batched_color_kernel<8, 3, false, false, true>, cudaFuncCachePreferShared);
+                    img_acts_16x16_load32_batched_color_kernel<8, 3, false, false, true><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
                                                         numModulesX, numImages, numFilters, filterSize, imgSize, paddingStart, moduleStride, scaleTargets, scaleOutput);
                 }
             } else {
                 if (numColors == 1) {
-                    cudaFuncSetCacheConfig(img_acts_16x16_load32_batched_color_kernel<8, 1, false, false>, cudaFuncCachePreferShared);
-                    img_acts_16x16_load32_batched_color_kernel<8, 1, false, false><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
+                    cudaFuncSetCacheConfig(img_acts_16x16_load32_batched_color_kernel<8, 1, false, false, false>, cudaFuncCachePreferShared);
+                    img_acts_16x16_load32_batched_color_kernel<8, 1, false, false, false><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
                                                         numModulesX, numImages, numFilters, filterSize, imgSize, paddingStart, moduleStride, scaleTargets, scaleOutput);
                 } else if (numColors == 2) {
-                    cudaFuncSetCacheConfig(img_acts_16x16_load32_batched_color_kernel<8, 2, false, false>, cudaFuncCachePreferShared);
-                    img_acts_16x16_load32_batched_color_kernel<8, 2, false, false><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
+                    cudaFuncSetCacheConfig(img_acts_16x16_load32_batched_color_kernel<8, 2, false, false, false>, cudaFuncCachePreferShared);
+                    img_acts_16x16_load32_batched_color_kernel<8, 2, false, false, false><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
                                                         numModulesX, numImages, numFilters, filterSize, imgSize, paddingStart, moduleStride, scaleTargets, scaleOutput);
                 } else if (numColors == 3) {
-                    cudaFuncSetCacheConfig(img_acts_16x16_load32_batched_color_kernel<8, 3, false, false>, cudaFuncCachePreferShared);
-                    img_acts_16x16_load32_batched_color_kernel<8, 3, false, false><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
+                    cudaFuncSetCacheConfig(img_acts_16x16_load32_batched_color_kernel<8, 3, false, false, false>, cudaFuncCachePreferShared);
+                    img_acts_16x16_load32_batched_color_kernel<8, 3, false, false, false><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
                                                         numModulesX, numImages, numFilters, filterSize, imgSize, paddingStart, moduleStride, scaleTargets, scaleOutput);
-                    
                 }
             }
         }
     } else { // do scale
         assert(targets.getNumRows() == numColors * imgPixels);
         assert(targets.getNumCols() == numImages);
-        if (hidActsOrder == MODULE_FILTER_IMAGE) {
-            if (numColors >= 16) {
+        if (numColors >= 16) {
+            if (checkCaseBounds) {
                 if (colorsPerThread == 4) {
-                    cudaFuncSetCacheConfig(img_acts_manycolor_kernel<4, 32, 4, 4, true, true>, cudaFuncCachePreferShared);
-                    img_acts_manycolor_kernel<4, 32, 4, 4, true, true><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
+                    cudaFuncSetCacheConfig(img_acts_manycolor_kernel<4, 32, 4, 4, false, true, true>, cudaFuncCachePreferShared);
+                    img_acts_manycolor_kernel<4, 32, 4, 4, false, true, true><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
                                                         numModulesX, numImages, numFilters, filterSize, imgSize, paddingStart, moduleStride, scaleTargets, scaleOutput);
                 } else {
-                    cudaFuncSetCacheConfig(img_acts_manycolor_kernel<4, 32, 4, 2, true, true>, cudaFuncCachePreferShared);
-                    img_acts_manycolor_kernel<4, 32, 4, 2, true, true><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
-                                                        numModulesX, numImages, numFilters, filterSize, imgSize, paddingStart, moduleStride, scaleTargets, scaleOutput);
-                }
-            } else if (numColors > 3) {
-                if (colorsPerThread == 4) {
-                    cudaFuncSetCacheConfig(img_acts_16x16_load32_batched_mediumcolor_kernel<8, 4, true, true>, cudaFuncCachePreferShared);
-                    img_acts_16x16_load32_batched_mediumcolor_kernel<8, 4, true, true><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
-                                                        numModulesX, numImages, numFilters, filterSize, imgSize, paddingStart, moduleStride, scaleTargets, scaleOutput);
-                } else {
-                    cudaFuncSetCacheConfig(img_acts_16x16_load32_batched_mediumcolor_kernel<8, 2, true, true>, cudaFuncCachePreferShared);
-                    img_acts_16x16_load32_batched_mediumcolor_kernel<8, 2, true, true><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
+                    cudaFuncSetCacheConfig(img_acts_manycolor_kernel<4, 32, 4, 2, false, true, true>, cudaFuncCachePreferShared);
+                    img_acts_manycolor_kernel<4, 32, 4, 2, false, true, true><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
                                                         numModulesX, numImages, numFilters, filterSize, imgSize, paddingStart, moduleStride, scaleTargets, scaleOutput);
                 }
             } else {
-                if (numColors == 1) {
-                    cudaFuncSetCacheConfig(img_acts_16x16_load32_batched_color_kernel<8, 1, true, true>, cudaFuncCachePreferShared);
-                    img_acts_16x16_load32_batched_color_kernel<8, 1, true, true><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
+                if (colorsPerThread == 4) {
+                    cudaFuncSetCacheConfig(img_acts_manycolor_kernel<4, 32, 4, 4, false, true, false>, cudaFuncCachePreferShared);
+                    img_acts_manycolor_kernel<4, 32, 4, 4, false, true, false><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
                                                         numModulesX, numImages, numFilters, filterSize, imgSize, paddingStart, moduleStride, scaleTargets, scaleOutput);
-                } else if (numColors == 2) {
-                    cudaFuncSetCacheConfig(img_acts_16x16_load32_batched_color_kernel<8, 2, true, true>, cudaFuncCachePreferShared);
-                    img_acts_16x16_load32_batched_color_kernel<8, 2, true, true><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
+                } else {
+                    cudaFuncSetCacheConfig(img_acts_manycolor_kernel<4, 32, 4, 2, false, true, false>, cudaFuncCachePreferShared);
+                    img_acts_manycolor_kernel<4, 32, 4, 2, false, true, false><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
                                                         numModulesX, numImages, numFilters, filterSize, imgSize, paddingStart, moduleStride, scaleTargets, scaleOutput);
-                } else if (numColors == 3) {
-                    cudaFuncSetCacheConfig(img_acts_16x16_load32_batched_color_kernel<8, 3, true, true>, cudaFuncCachePreferShared);
-                    img_acts_16x16_load32_batched_color_kernel<8, 3, true, true><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
+                }
+            }
+        } else if (numColors > 3) {
+            if  (checkCaseBounds) {
+                if (colorsPerThread == 4) {
+                    cudaFuncSetCacheConfig(img_acts_16x16_load32_batched_mediumcolor_kernel<8, 4, false, true, true>, cudaFuncCachePreferShared);
+                    img_acts_16x16_load32_batched_mediumcolor_kernel<8, 4, false, true, true><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
+                                                        numModulesX, numImages, numFilters, filterSize, imgSize, paddingStart, moduleStride, scaleTargets, scaleOutput);
+                } else {
+                    cudaFuncSetCacheConfig(img_acts_16x16_load32_batched_mediumcolor_kernel<8, 2, false, true, true>, cudaFuncCachePreferShared);
+                    img_acts_16x16_load32_batched_mediumcolor_kernel<8, 2, false, true, true><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
+                                                        numModulesX, numImages, numFilters, filterSize, imgSize, paddingStart, moduleStride, scaleTargets, scaleOutput);
+                }
+            } else {
+                if (colorsPerThread == 4) {
+                    cudaFuncSetCacheConfig(img_acts_16x16_load32_batched_mediumcolor_kernel<8, 4, false, true, false>, cudaFuncCachePreferShared);
+                    img_acts_16x16_load32_batched_mediumcolor_kernel<8, 4, false, true, false><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
+                                                        numModulesX, numImages, numFilters, filterSize, imgSize, paddingStart, moduleStride, scaleTargets, scaleOutput);
+                } else {
+                    cudaFuncSetCacheConfig(img_acts_16x16_load32_batched_mediumcolor_kernel<8, 2, false, true, false>, cudaFuncCachePreferShared);
+                    img_acts_16x16_load32_batched_mediumcolor_kernel<8, 2, false, true, false><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
                                                         numModulesX, numImages, numFilters, filterSize, imgSize, paddingStart, moduleStride, scaleTargets, scaleOutput);
                 }
             }
         } else {
-            if (numColors >= 16) {
-                if (colorsPerThread == 4) {
-                    cudaFuncSetCacheConfig(img_acts_manycolor_kernel<4, 32, 4, 4, false, true>, cudaFuncCachePreferShared);
-                    img_acts_manycolor_kernel<4, 32, 4, 4, false, true><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
+            if (checkCaseBounds) {
+                if (numColors == 1) {
+                    cudaFuncSetCacheConfig(img_acts_16x16_load32_batched_color_kernel<8, 1, false, true, true>, cudaFuncCachePreferShared);
+                    img_acts_16x16_load32_batched_color_kernel<8, 1, false, true, true><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
                                                         numModulesX, numImages, numFilters, filterSize, imgSize, paddingStart, moduleStride, scaleTargets, scaleOutput);
-                } else {
-                    cudaFuncSetCacheConfig(img_acts_manycolor_kernel<4, 32, 4, 2, false, true>, cudaFuncCachePreferShared);
-                    img_acts_manycolor_kernel<4, 32, 4, 2, false, true><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
+                } else if (numColors == 2) {
+                    cudaFuncSetCacheConfig(img_acts_16x16_load32_batched_color_kernel<8, 2, false, true, true>, cudaFuncCachePreferShared);
+                    img_acts_16x16_load32_batched_color_kernel<8, 2, false, true, true><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
                                                         numModulesX, numImages, numFilters, filterSize, imgSize, paddingStart, moduleStride, scaleTargets, scaleOutput);
-                }
-            } else if (numColors > 3) {
-                if (colorsPerThread == 4) {
-                    cudaFuncSetCacheConfig(img_acts_16x16_load32_batched_mediumcolor_kernel<8, 4, false, true>, cudaFuncCachePreferShared);
-                    img_acts_16x16_load32_batched_mediumcolor_kernel<8, 4, false, true><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
-                                                        numModulesX, numImages, numFilters, filterSize, imgSize, paddingStart, moduleStride, scaleTargets, scaleOutput);
-                } else {
-                    cudaFuncSetCacheConfig(img_acts_16x16_load32_batched_mediumcolor_kernel<8, 2, false, true>, cudaFuncCachePreferShared);
-                    img_acts_16x16_load32_batched_mediumcolor_kernel<8, 2, false, true><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
+                } else if (numColors == 3) {
+                    cudaFuncSetCacheConfig(img_acts_16x16_load32_batched_color_kernel<8, 3, false, true, true>, cudaFuncCachePreferShared);
+                    img_acts_16x16_load32_batched_color_kernel<8, 3, false, true, true><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
                                                         numModulesX, numImages, numFilters, filterSize, imgSize, paddingStart, moduleStride, scaleTargets, scaleOutput);
                 }
             } else {
                 if (numColors == 1) {
-                    cudaFuncSetCacheConfig(img_acts_16x16_load32_batched_color_kernel<8, 1, false, true>, cudaFuncCachePreferShared);
-                    img_acts_16x16_load32_batched_color_kernel<8, 1, false, true><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
+                    cudaFuncSetCacheConfig(img_acts_16x16_load32_batched_color_kernel<8, 1, false, true, false>, cudaFuncCachePreferShared);
+                    img_acts_16x16_load32_batched_color_kernel<8, 1, false, true, false><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
                                                         numModulesX, numImages, numFilters, filterSize, imgSize, paddingStart, moduleStride, scaleTargets, scaleOutput);
                 } else if (numColors == 2) {
-                    cudaFuncSetCacheConfig(img_acts_16x16_load32_batched_color_kernel<8, 2, false, true>, cudaFuncCachePreferShared);
-                    img_acts_16x16_load32_batched_color_kernel<8, 2, false, true><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
+                    cudaFuncSetCacheConfig(img_acts_16x16_load32_batched_color_kernel<8, 2, false, true, false>, cudaFuncCachePreferShared);
+                    img_acts_16x16_load32_batched_color_kernel<8, 2, false, true, false><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
                                                         numModulesX, numImages, numFilters, filterSize, imgSize, paddingStart, moduleStride, scaleTargets, scaleOutput);
                 } else if (numColors == 3) {
-                    cudaFuncSetCacheConfig(img_acts_16x16_load32_batched_color_kernel<8, 3, false, true>, cudaFuncCachePreferShared);
-                    img_acts_16x16_load32_batched_color_kernel<8, 3, false, true><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
+                    cudaFuncSetCacheConfig(img_acts_16x16_load32_batched_color_kernel<8, 3, false, true, false>, cudaFuncCachePreferShared);
+                    img_acts_16x16_load32_batched_color_kernel<8, 3, false, true, false><<<blocks, threads>>>(hidActs.getDevData(), filters.getDevData(), targets.getDevData(),
                                                         numModulesX, numImages, numFilters, filterSize, imgSize, paddingStart, moduleStride, scaleTargets, scaleOutput);
                 }
             }

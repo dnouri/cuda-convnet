@@ -1,3 +1,10 @@
+/* 
+ * File:   worker.cuh
+ * Author: Alex Krizhevsky (akrizhevsky@gmail.com)
+ *
+ * Created on July 4, 2011
+ */
+
 #include "../include/worker.cuh"
 
 /* 
@@ -12,9 +19,7 @@ WorkResult::WorkResult(WorkResult::RESULTS resultType) : _resultType(resultType)
 }
 
 WorkResult::~WorkResult() {
-    if (_results != NULL) {
-        delete _results; // delete NULL is ok
-    }
+    delete _results; // delete NULL is ok
 }
 
 ErrorResult& WorkResult::getResults() const {

@@ -1,6 +1,6 @@
 /* 
  * File:   worker.cuh
- * Author: Alex Krizhevsky
+ * Author: Alex Krizhevsky (akrizhevsky@gmail.com)
  *
  * Created on July 4, 2011, 5:24 PM
  */

@@ -58,7 +58,6 @@ public:
     
     // DP wrappers
     void setData(CPUData& data);
-    int getNumCases();
     
     Layer& operator[](const int idx);
     Layer& getLayer(const int idx);

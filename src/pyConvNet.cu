@@ -86,11 +86,9 @@ PyObject* initModel(PyObject *self, PyObject *args) {
 PyObject* startBatch(PyObject *self, PyObject *args) {
     assert(model != NULL);
     PyListObject* data;
-    int numCases = 0;
     int test = 0;
-    if (!PyArg_ParseTuple(args, "O!i|i",
+    if (!PyArg_ParseTuple(args, "O!|i",
         &PyList_Type, &data,
-        &numCases,
         &test)) {
         return NULL;
     }
@@ -99,7 +97,7 @@ PyObject* startBatch(PyObject *self, PyObject *args) {
         mvec.push_back(new Matrix((PyArrayObject*)PyList_GET_ITEM(data, i)));
     }
     
-    TrainingWorker* wr = new TrainingWorker(model, *new CPUData(mvec, numCases), test);
+    TrainingWorker* wr = new TrainingWorker(model, *new CPUData(mvec), test);
     model->getWorkerQueue().enqueue(wr);
     return Py_BuildValue("i", 0);
 }
@@ -131,10 +129,8 @@ PyObject* finishBatch(PyObject *self, PyObject *args) {
 PyObject* checkGradients(PyObject *self, PyObject *args) {
     assert(model != NULL);
     PyListObject* data;
-    int numCases;
-    if (!PyArg_ParseTuple(args, "O!i",
-        &PyList_Type, &data,
-        &numCases)) {
+    if (!PyArg_ParseTuple(args, "O!",
+        &PyList_Type, &data)) {
         return NULL;
     }
     MatrixV& mvec = *new MatrixV();
@@ -142,7 +138,7 @@ PyObject* checkGradients(PyObject *self, PyObject *args) {
         mvec.push_back(new Matrix((PyArrayObject*)PyList_GET_ITEM(data, i)));
     }
     
-    GradCheckWorker* wr = new GradCheckWorker(model, *new CPUData(mvec, numCases));
+    GradCheckWorker* wr = new GradCheckWorker(model, *new CPUData(mvec));
     model->getWorkerQueue().enqueue(wr);
     WorkResult* res = model->getResultQueue().dequeue();
     assert(res != NULL);

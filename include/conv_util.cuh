@@ -48,17 +48,18 @@ public:
  * imgs:        (numFilters, imgPixels, numImages)
  * target:      (numFilters, numOutputs, numImages)
  * 
- * numImages must be divisible by B_X*imgsPerThread
+ * numImages must be divisible by B_X*imgsPerThread if checkCaseBounds is false
  * numFilters must be divisible by B_Y*filtersPerThread
  */
 
-template<class Agg, int B_Y, int B_X, int imgsPerThread, int filtersPerThread>
+template<class Agg, int B_Y, int B_X, int imgsPerThread, int filtersPerThread, bool checkCaseBounds>
 __global__ void kLocalPool(float* imgs, float* target, const int imgSize, const int numFilters,
                            const int numImages, const int subsX, const int startX, const int strideX,
                            const int outputsX, Agg agg) {
-    const int outputIdxX = blockIdx.x / (numImages/(B_X*imgsPerThread));
+    const int numImgBlocks = DIVUP(numImages,B_X*imgsPerThread);
+    const int outputIdxX = blockIdx.x / numImgBlocks;
     const int outputIdxY = blockIdx.y / (numFilters/(B_Y*filtersPerThread));
-    const int blockImgIdx = (blockIdx.x % (numImages/(B_X*imgsPerThread))) * B_X * imgsPerThread;
+    const int blockImgIdx = (blockIdx.x % numImgBlocks) * B_X * imgsPerThread;
     const int blockFilterIdx = (blockIdx.y % (numFilters/(B_Y*filtersPerThread))) * B_Y * filtersPerThread;
     
     const int outputIdx = outputIdxY * outputsX + outputIdxX;
@@ -67,10 +68,11 @@ __global__ void kLocalPool(float* imgs, float* target, const int imgSize, const 
     
     const int startImgPxX = startX + outputIdxX * strideX;
     const int startImgPxY = startX + outputIdxY * strideX;
+    const int imgIdx = blockImgIdx + threadIdx.x;
     
-    imgs += (blockFilterIdx + threadIdx.y) * imgPixels * numImages + blockImgIdx + threadIdx.x;
+    imgs += (blockFilterIdx + threadIdx.y) * imgPixels * numImages + imgIdx;
     target += ((blockFilterIdx + threadIdx.y) * numOutputs + outputIdx) * numImages 
-            + blockImgIdx + threadIdx.x;
+            + imgIdx;
     
     float prod[filtersPerThread][imgsPerThread];
     #pragma unroll
@@ -89,10 +91,12 @@ __global__ void kLocalPool(float* imgs, float* target, const int imgSize, const 
             if (imgPxY >= 0 && imgPxY < imgSize && imgPxX >= 0 && imgPxX < imgSize) {
                 const int imgPx = imgPxY * imgSize + imgPxX;
                 #pragma unroll
-                for (int f = 0; f < filtersPerThread; f++) {
-                    #pragma unroll
-                    for (int i = 0; i < imgsPerThread; i++) {
-                        prod[f][i] = agg(prod[f][i], imgs[f * B_Y * imgPixels * numImages + imgPx * numImages + i * B_X]);
+                for (int i = 0; i < imgsPerThread; i++) {
+                    if (!checkCaseBounds || imgIdx + i * B_X < numImages) {
+                        #pragma unroll
+                        for (int f = 0; f < filtersPerThread; f++) {
+                            prod[f][i] = agg(prod[f][i], imgs[f * B_Y * imgPixels * numImages + imgPx * numImages + i * B_X]);
+                        }
                     }
                 }
             }
@@ -100,10 +104,12 @@ __global__ void kLocalPool(float* imgs, float* target, const int imgSize, const 
     }
     
     #pragma unroll
-    for (int f = 0; f < filtersPerThread; f++) {
-        #pragma unroll
-        for (int i = 0; i < imgsPerThread; i++) {
-            target[f * B_Y * numOutputs * numImages + i * B_X] = prod[f][i]; 
+    for (int i = 0; i < imgsPerThread; i++) {
+        if (!checkCaseBounds || imgIdx + i * B_X < numImages) {
+            #pragma unroll
+            for (int f = 0; f < filtersPerThread; f++) {
+                target[f * B_Y * numOutputs * numImages + i * B_X] = prod[f][i]; 
+            }
         }
     }
 }
@@ -128,17 +134,22 @@ void convLocalPool(NVMatrix& images, NVMatrix& target, int numFilters,
     assert(!target.isTrans());
     assert(images.isContiguous());
     assert(numFilters % 8 == 0);
-    assert(numImages % 128 == 0);
-    
+//    assert(numImages % 128 == 0);
+    bool checkCaseBounds = numImages % 128 != 0;
     int outputs = outputsX * outputsX;
     target.resize(numFilters*outputs, numImages);
     
     dim3 threads(32, 4);
-    dim3 blocks((numImages/(32*4)) * outputsX, (numFilters / (4 * 2)) * outputsX);
-    cudaFuncSetCacheConfig(kLocalPool<Agg, 4, 32, 4, 2>, cudaFuncCachePreferL1);
-    kLocalPool<Agg, 4, 32, 4, 2><<<blocks, threads>>>(images.getDevData(), target.getDevData(),
-                                                      imgSize, numFilters, numImages, subsX, startX, strideX, outputsX,
-                                                      agg);
+    dim3 blocks(DIVUP(numImages,32*4) * outputsX, (numFilters / (4 * 2)) * outputsX);
+    if (checkCaseBounds) {
+        cudaFuncSetCacheConfig(kLocalPool<Agg, 4, 32, 4, 2, true>, cudaFuncCachePreferL1);
+        kLocalPool<Agg, 4, 32, 4, 2, true><<<blocks, threads>>>(images.getDevData(), target.getDevData(),
+                                                          imgSize, numFilters, numImages, subsX, startX, strideX, outputsX, agg);
+    } else {
+        cudaFuncSetCacheConfig(kLocalPool<Agg, 4, 32, 4, 2, false>, cudaFuncCachePreferL1);
+        kLocalPool<Agg, 4, 32, 4, 2, false><<<blocks, threads>>>(images.getDevData(), target.getDevData(),
+                                                          imgSize, numFilters, numImages, subsX, startX, strideX, outputsX, agg);
+    }
 
     cutilCheckMsg("convLocalPool: kernel execution failed");
 }

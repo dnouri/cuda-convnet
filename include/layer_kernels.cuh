@@ -53,24 +53,24 @@ __global__ void kSoftmaxGrads(float* dE_dy_l, float* y_l, float* dE_dx_l, const 
  */
 template <bool add>
 __global__ void kLogregCostGrads(float* y_l, float* labels, float* dE_dy_l, const int numCases,
-                                 const int numOut, const int caseStride, const float gradCoeff) {
+                                 const int numOut, const float gradCoeff) {
     const int tx = blockIdx.x * LOGREG_GRADS_THREADS_X + threadIdx.x;
     const int ty = blockIdx.y * LOGREG_GRADS_THREADS_Y + threadIdx.y;
 //    const int tidx = ty * numCases + tx;
     
-    if (ty < numOut && tx < caseStride) {
+    if (ty < numOut && tx < numCases) {
         const int label = int(labels[tx]);
-        const float v = (tx < numCases) ? gradCoeff * (1.0f / y_l[ty * caseStride + tx]) * (label == ty) : 0;
+        const float v = gradCoeff * (1.0f / y_l[ty * numCases + tx]) * (label == ty);
         if (add) {
-            dE_dy_l[ty * caseStride + tx] += v;
+            dE_dy_l[ty * numCases + tx] += v;
         } else {
-            dE_dy_l[ty * caseStride + tx] = v;
+            dE_dy_l[ty * numCases + tx] = v;
         }
     }
 }
 
 __global__ void kLogregCost(float* probs, float* labels, float* maxProbs, float* labelLogProbs, float* correctProbs,
-                            const int numCases, const int caseStride, const int numOut);
+                            const int numCases, const int numOut);
 
 #endif	/* LAYER_KERNELS_CUH */
 

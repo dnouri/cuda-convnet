@@ -16,15 +16,10 @@ class CIFARDataProvider(LabeledMemoryDataProvider):
         if 'processed' not in datadic:
             datadic['data'] = n.require((datadic['data'].astype(n.single) - data_mean), dtype=n.single, requirements='C')# / 255
             datadic['labels'] = datadic['labels'].reshape((1, datadic['data'].shape[1]))
-            datadic['num_real_cases'] = datadic['data'].shape[1]
-            # Pad data to size of minibatch
-            if datadic['data'].shape[1] % self.minibatch_size != 0:
-                datadic['data'] = n.require(n.c_[datadic['data'], n.zeros((datadic['data'].shape[0], self.minibatch_size - datadic['data'].shape[1] % self.minibatch_size), dtype=n.single)], requirements='C', dtype=n.single)
-                datadic['labels'] = n.require(n.c_[datadic['labels'], -1*n.ones((1, self.minibatch_size - datadic['labels'].shape[1] % self.minibatch_size), dtype=n.single)], requirements='C', dtype=n.single)
                 
             datadic['processed'] = True
 
-        return epoch, batchnum, datadic['num_real_cases'], [datadic['data'], datadic['labels']]
+        return epoch, batchnum, [datadic['data'], datadic['labels']]
 
     def get_data_dims(self, idx=0):
         return 3072 if idx == 0 else 1
@@ -38,9 +33,8 @@ class DummyConvNetDataProvider(LabeledDummyDataProvider):
         
         dic['data'] = n.require(dic['data'].T, requirements='C')
         dic['labels'] = n.require(dic['labels'].T, requirements='C')
-        dic['num_real_cases'] = dic['data'].shape[1]
         
-        return epoch, batchnum, dic['num_real_cases'], [dic['data'], dic['labels']]
+        return epoch, batchnum, [dic['data'], dic['labels']]
 
     def get_data_dims(self, idx=0):
         return self.batch_meta['num_vis'] if idx == 0 else 1

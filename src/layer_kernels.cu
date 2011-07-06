@@ -6,9 +6,9 @@
 
 /*
  * E = -log(y_t)
- * probs:           (numOut, caseStride)
- * labels:          (1, caseStride)
- * maxProbs:        (1, caseStride)
+ * probs:           (numOut, numCases)
+ * labels:          (1, numCases)
+ * maxProbs:        (1, numCases)
  * labelLogProbs:   (1, numCases)   (*out)
  * correctProbs:    (1, numCases)   (*out)
  * 
@@ -18,13 +18,13 @@
  * caseStride is the number of cases including padding cases
  */
 __global__ void kLogregCost(float* probs, float* labels, float* maxProbs, float* labelLogProbs, float* correctProbs,
-                            const int numCases, const int caseStride, const int numOut) {
+                            const int numCases, const int numOut) {
     const int tx = blockIdx.x * LOGREG_ERR_THREADS_X + threadIdx.x;
 
     if (tx < numCases) {
         const int label = int(labels[tx]);
         const float maxp = maxProbs[tx];
-        const float labelp = probs[label * caseStride + tx];
+        const float labelp = probs[label * numCases + tx];
         
         labelLogProbs[tx] = __logf(labelp);
         
@@ -45,7 +45,7 @@ __global__ void kLogregCost(float* probs, float* labels, float* maxProbs, float*
         } else {
             int numMax = 0;
             for (int i = 0; i < numOut; i++) {
-                numMax += probs[i * caseStride + tx] == maxp;
+                numMax += probs[i * numCases + tx] == maxp;
             }
             correctProbs[tx] = 1.0f / float(numMax);
         }

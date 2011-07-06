@@ -26,10 +26,14 @@ protected:
 public:
     typedef typename std::vector<T*>::iterator T_iter;
     
-    Data(std::vector<T*>& data, int numCases) : _data(&data), _numCases(numCases) {
+    Data(std::vector<T*>& data) : _data(&data) {
+        assert(_data->size() > 0);
+        for (int i = 1; i < data.size(); i++) {
+            assert(data[i-1]->getLeadingDim() == data[i]->getLeadingDim());
+        }
+        assert(data[0]->getLeadingDim() > 0);
     }
 
-//    template<class T>
     ~Data() {
         for(T_iter it = _data->begin(); it != _data->end(); ++it) {
             delete *it;
@@ -50,7 +54,7 @@ public:
     }
 
     int getNumCases() {
-        return _numCases;
+        return _data->at(0)->getLeadingDim();
     }
 };
 
