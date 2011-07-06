@@ -20,6 +20,11 @@
 // For gradient checking
 #define GC_SUPPRESS_PASSES     true
 #define GC_REL_ERR_THRESH      0.02
+/*
+ * Store entire data matrix on GPU if its size does not exceed this many MB.
+ * Otherwise store only one minibatch at a time.
+ */ 
+#define MAX_DATA_ON_GPU             200 
 
 typedef std::vector<Matrix*> MatrixV;
 typedef std::vector<NVMatrix*> NVMatrixV;

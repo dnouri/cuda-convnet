@@ -12,12 +12,6 @@
 #include <algorithm>
 #include "util.cuh"
 
-/*
- * Store entire data matrix on GPU if its size does not exceed this many MB.
- * Otherwise store only one minibatch at a time.
- */ 
-#define MAX_DATA_ON_GPU             200 
-
 template <class T>
 class Data {
 protected:
