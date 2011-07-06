@@ -213,7 +213,7 @@ void FCLayer::_bprop(NVMatrix& v) {
         }
         NVMatrix& prevActs_T = _prev[i]->getActs().getTranspose();
         _weights[i].getInc().addProduct(prevActs_T, v,  (!_convNet->isCheckingGrads()) * _weights[i].getMom(),
-                                       _convNet->isCheckingGrads() ? 1 : _weights[i].getEps() / v.getNumCols());
+                                        _convNet->isCheckingGrads() ? 1 : _weights[i].getEps() / v.getNumRows());
         delete &prevActs_T;
         
         _prev[i]->bprop();
@@ -570,6 +570,7 @@ void LogregCost::bprop() {
             kLogregCostGrads<true><<<blocks, threads>>>(probs.getDevData(), labels.getDevData(), target.getDevData(),
                                                         numCases, numOut, _coeff);
         }
+
         cutilCheckMsg("kLogregCostGrads: Kernel execution failed");
         _prev[1]->bprop();
     }

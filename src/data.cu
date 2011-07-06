@@ -45,7 +45,6 @@ GPUData& DataProvider::getDataSlice(int startCase, int endCase) {
     assert(_hData != NULL);
     assert(_hData->getNumCases() > 0);
     
-    
     NVMatrixV& miniData = *new NVMatrixV();
     
     for (int i = 0; i < _hData->getData().size(); i++) {
