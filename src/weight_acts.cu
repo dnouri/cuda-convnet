@@ -462,7 +462,6 @@ void convWeightActs(NVMatrix& images, NVMatrix& hidActs, NVMatrix& targets,
                     }
                 } else {
                     if (numFilters % 32 == 0) {
-                        printf("poo\n");
                         cudaFuncSetCacheConfig(weight_acts_kernel2_manycolor<4,32,2,4,32, false, false>, cudaFuncCachePreferShared);
                         weight_acts_kernel2_manycolor<4,32,2,4,32,false, false><<<blocks, threads>>>(images.getDevData(), hidActs.getDevData(), targets.getDevData(),
                                                                                        numImages, numFilters, numModulesX, imgSize, filterSize,
