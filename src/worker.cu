@@ -58,7 +58,7 @@ void TrainingWorker::run() {
         _convNet->fprop(i);
         ErrorResult& miniErr = _convNet->getError();
         batchErr += miniErr;
-//        printf("%.6f\n", miniErr.getErrorMap()["logprob"]->at(0));
+        
         if (!_test) {
             _convNet->bprop();
             _convNet->updateWeights();
@@ -67,7 +67,7 @@ void TrainingWorker::run() {
         delete &miniErr;
     }
     cudaThreadSynchronize();
-//    exit(0);
+
     batchErr /= _convNet->getDataProvider().getNumCases();
     _convNet->getResultQueue().enqueue(new WorkResult(WorkResult::BATCH_DONE, batchErr));
 }
