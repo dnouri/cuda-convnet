@@ -42,6 +42,16 @@ void Layer::fpropNext() {
     }
 }
 
+void Layer::bpropPrev() {
+    if (_gradProducer) {
+        for (int i = 0; i < _prev.size(); i++) {
+            if (_prev[i]->isGradConsumer()) {
+                _prev[i]->bprop();
+            }
+        }
+    }
+}
+
 void Layer::truncActGrads() {
     if (!saveBwdActs) { 
         _actGrads.truncate();
@@ -102,6 +112,8 @@ void Layer::bprop(NVMatrix& v) {
     }
     _acts.transpose(_trans);
     _bprop(v);
+    truncActGrads();
+    bpropPrev();
 }
 
 void Layer::reset() {
@@ -215,10 +227,8 @@ void FCLayer::_bprop(NVMatrix& v) {
         _weights[i].getInc().addProduct(prevActs_T, v,  (!_convNet->isCheckingGrads()) * _weights[i].getMom(),
                                         _convNet->isCheckingGrads() ? 1 : _weights[i].getEps() / v.getNumRows());
         delete &prevActs_T;
-        
-        _prev[i]->bprop();
     }
-    truncActGrads();
+    
 }
 
 void FCLayer::updateWeights(int numCases) {
@@ -321,10 +331,6 @@ void ConvLayer::_bprop(NVMatrix& v) {
     } else {
         convWeightActs(_prev[0]->getActs(), v, _weights.getGrads(), _modulesX, _filterSize, _padding, _stride, _channels);
     }
-    
-    truncActGrads();
-    
-    _prev[0]->bprop();
 }
 
 void ConvLayer::updateWeights(int numCases) {
@@ -378,10 +384,6 @@ void SoftmaxLayer::_bprop(NVMatrix& v) {
         }
 
         cutilCheckMsg("kSoftmaxGrads: Kernel execution failed");
-
-        truncActGrads();
-        
-        _prev[0]->bprop();
     }
 }
 
@@ -425,10 +427,6 @@ void DataLayer::_fprop(NVMatrixV& data) {
 void DataLayer::fprop(NVMatrixV& data) {
     _fprop(data);
     fpropNext();
-}
-
-void DataLayer::bprop() {
-
 }
 
 void DataLayer::_bprop(NVMatrix& v) {
@@ -480,9 +478,6 @@ void PoolLayer::_bprop(NVMatrix& v) {
                 convLocalAvgUndo(v, _prev[0]->getActGrads(), _subsX, _start, _stride, _outputsX, _imgSize, 1, 1);
             }
         }
-
-        truncActGrads();
-        _prev[0]->bprop();
     }
 }
 
@@ -503,6 +498,19 @@ double Cost::getCoeff() {
 
 void Cost::_bprop(NVMatrix& v) {
     throw string("Cost does not support _bprop(NVMatrix&)");
+}
+
+void Cost::bprop() {
+    if (_coeff != 0) {
+        for (int i = 0; i < _prev.size(); i++) {
+            _prev[i]->getActs().transpose(_trans);
+            _prev[i]->getActGrads().transpose(_trans);
+        }
+        _acts.transpose(_trans);
+        _bprop();
+        truncActGrads();
+        bpropPrev();
+    }
 }
 
 doublev& Cost::getError() {
@@ -549,29 +557,26 @@ void LogregCost::_fprop(NVMatrixV& v) {
     delete &maxProbs;
 }
 
-void LogregCost::bprop() {
-    if (_coeff != 0) {
-        NVMatrix& labels = _prev[0]->getActs();
-        NVMatrix& probs = _prev[1]->getActs();
-        NVMatrix& target = _prev[1]->getActGrads();
-        int numCases = probs.getLeadingDim();
-        int numOut = probs.getFollowingDim();
-        assert(labels.getNumElements() == numCases);
-        assert(probs.isContiguous());
-        assert(target.isContiguous());
-        assert(labels.isContiguous());
-        dim3 threads(LOGREG_GRADS_THREADS_X, LOGREG_GRADS_THREADS_Y);
-        dim3 blocks(DIVUP(numCases, LOGREG_GRADS_THREADS_X), DIVUP(numOut, LOGREG_GRADS_THREADS_Y));
-        if (_prev[1]->getRcvdBInputs() == 0) {
-            target.resize(probs);
-            kLogregCostGrads<false><<<blocks, threads>>>(probs.getDevData(), labels.getDevData(), target.getDevData(),
-                                                         numCases, numOut, _coeff);
-        } else {
-            kLogregCostGrads<true><<<blocks, threads>>>(probs.getDevData(), labels.getDevData(), target.getDevData(),
-                                                        numCases, numOut, _coeff);
-        }
-
-        cutilCheckMsg("kLogregCostGrads: Kernel execution failed");
-        _prev[1]->bprop();
+void LogregCost::_bprop() {
+    NVMatrix& labels = _prev[0]->getActs();
+    NVMatrix& probs = _prev[1]->getActs();
+    NVMatrix& target = _prev[1]->getActGrads();
+    int numCases = probs.getLeadingDim();
+    int numOut = probs.getFollowingDim();
+    assert(labels.getNumElements() == numCases);
+    assert(probs.isContiguous());
+    assert(target.isContiguous());
+    assert(labels.isContiguous());
+    dim3 threads(LOGREG_GRADS_THREADS_X, LOGREG_GRADS_THREADS_Y);
+    dim3 blocks(DIVUP(numCases, LOGREG_GRADS_THREADS_X), DIVUP(numOut, LOGREG_GRADS_THREADS_Y));
+    if (_prev[1]->getRcvdBInputs() == 0) {
+        target.resize(probs);
+        kLogregCostGrads<false><<<blocks, threads>>>(probs.getDevData(), labels.getDevData(), target.getDevData(),
+                                                     numCases, numOut, _coeff);
+    } else {
+        kLogregCostGrads<true><<<blocks, threads>>>(probs.getDevData(), labels.getDevData(), target.getDevData(),
+                                                    numCases, numOut, _coeff);
     }
+
+    cutilCheckMsg("kLogregCostGrads: Kernel execution failed");
 }

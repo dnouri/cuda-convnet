@@ -16,7 +16,7 @@ import sys
 import shutil
 import platform
 
-class ModelStateException:
+class ModelStateException(Exception):
     pass
 
 # GPU Model interface

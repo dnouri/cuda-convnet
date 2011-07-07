@@ -44,6 +44,7 @@ protected:
     int _numGradProducersNext;
     char* _name;
     void fpropNext();
+    void bpropPrev();
     void truncActGrads(); 
     virtual void _fprop(NVMatrixV& v) = 0;
     virtual void _bprop(NVMatrix& v) = 0;
@@ -126,7 +127,6 @@ public:
     
     void fprop();
     void fprop(NVMatrixV& data);
-    void bprop();
 };
 
 class ConvLayer : public Layer {
@@ -167,10 +167,12 @@ protected:
     double _coeff;
     doublev _err;
 protected:
-    void _bprop(NVMatrix& v);
+    virtual void _bprop() = 0;
+    void _bprop(NVMatrix& v); // Not supported in Cost
 public:
     Cost(PyObject* paramsDict, ConvNet* layerList, bool propagateGrad, bool gradProducer, bool trans);
 
+    void bprop(); // This is what's called by other layers
     virtual doublev& getError();
     double getCoeff();
 };
@@ -182,10 +184,9 @@ public:
 class LogregCost : public Cost {
 protected:
     void _fprop(NVMatrixV& v);
+    void _bprop();
 public:
     LogregCost(PyObject* paramsDict, ConvNet* convNet);
-    
-    void bprop();
 };
 
 #endif	/* LAYER_CUH */

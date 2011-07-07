@@ -36,6 +36,7 @@ protected:
 public:
     Worker(ConvNet* convNet);
     virtual void run() = 0;
+    static void incError(ErrorResult& src, ErrorResult& tgt);
 };
 
 class TrainingWorker : public Worker {

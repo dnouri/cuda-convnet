@@ -29,13 +29,14 @@ class GPUModel(IGPUModel):
             ms['layers'] = LayerParser.parse_layers(self.layer_def, self.layer_params, self, ms['layers'])
         else:
             ms['layers'] = LayerParser.parse_layers(self.layer_def, self.layer_params, self)
-        logreg_name = self.op.get_value('logreg_name')
-        if logreg_name != "":
+        
+        if self.op.get_value('multiview_test'):
+            logreg_name = self.op.get_value('logreg_name')
             try:
                 self.logreg_idx = [l['name'] for l in ms['layers']].index(logreg_name)
                 if ms['layers'][self.logreg_idx]['type'] != 'cost.logreg':
                     raise ModelStateException("Layer name '%s' given to --logreg-name argument not a logreg layer." % logreg_name)
-            except IndexError:
+            except ValueError:
                 raise ModelStateException("Layer name '%s' given to --logreg-name parameter not defined." % logreg_name)
             
     def fill_excused_options(self):

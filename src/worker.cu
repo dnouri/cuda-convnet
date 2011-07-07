@@ -40,6 +40,11 @@ WorkResult::RESULTS WorkResult::getResultType() {
 Worker::Worker(ConvNet* convNet) : _convNet(convNet) {
 }
 
+void Worker::incError(ErrorResult& src, ErrorResult& tgt) {
+    tgt += src;
+    delete &src;
+}
+
 /* 
  * ====================
  * TrainingWorker
@@ -56,15 +61,12 @@ void TrainingWorker::run() {
     ErrorResult& batchErr = *new ErrorResult();
     for (int i = 0; i < _convNet->getDataProvider().getNumMinibatches(); i++) {
         _convNet->fprop(i);
-        ErrorResult& miniErr = _convNet->getError();
-        batchErr += miniErr;
+        Worker::incError(_convNet->getError(), batchErr);
         
         if (!_test) {
             _convNet->bprop();
             _convNet->updateWeights();
         }
-
-        delete &miniErr;
     }
     cudaThreadSynchronize();
 
@@ -114,9 +116,9 @@ void MultiviewTestWorker::run() {
     _convNet->setData(*_data);
     DataProvider& dp = _convNet->getDataProvider();
     ErrorResult& batchErr = *new ErrorResult();
+    
     int numCasesReal = dp.getNumCases() / _numViews;
     int numMiniReal = DIVUP(numCasesReal, dp.getMinibatchSize());
-    
     for (int i = 0; i < numMiniReal; i++) {
         NVMatrix softmaxActs;
         for (int v = 0; v < _numViews; v++) {
@@ -135,9 +137,8 @@ void MultiviewTestWorker::run() {
         logregInput.push_back(&softmaxActs);
         
         _convNet->getLayer(_logregIdx).fprop(logregInput);
-        ErrorResult& miniErr = _convNet->getError();
-        batchErr += miniErr;
-        delete &miniErr;
+        
+        Worker::incError(_convNet->getError(), batchErr);
     }
     cudaThreadSynchronize();
 
