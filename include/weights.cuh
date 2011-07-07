@@ -31,14 +31,13 @@ private:
  
 public:
     NVMatrix& operator*() {
-        return _weights;
+        return getW();
     }
     
     Weights(Matrix& hWeights, Matrix& hWeightsInc, float epsW, float wc, float mom, bool useGrads) {
         _initialized = false;
         initialize(hWeights, hWeightsInc, epsW, wc, mom, useGrads);
     }
-    
     
     Weights() : _initialized(false), _onGPU(false), _useGrads(true) {
     }
@@ -64,7 +63,7 @@ public:
     }
         
     static void setAutoCopyToGPU(bool autoCopyToGPU) {
-        _autoCopyToGPU = _autoCopyToGPU;
+        _autoCopyToGPU = autoCopyToGPU;
     }
     
     NVMatrix& getW() {
@@ -141,12 +140,6 @@ public:
     bool isUseGrads() {
         return _useGrads;
     }
-    
-    float setEps(float newEps) {
-        float old = _epsW;
-        _epsW = newEps;
-        return old;
-    }
 };
 
 class WeightList {
@@ -211,16 +204,6 @@ public:
         for (int i = 0; i < _weightList.size(); i++) {
             _weightList.at(i)->update(numCases);
         }
-    }
-    
-    Weights& getLast() {
-        assert(_initialized);
-        return *_weightList.back();
-    }
-    
-    Weights& getFirst() {
-        assert(_initialized);
-        return *_weightList.front();
     }
 };
 

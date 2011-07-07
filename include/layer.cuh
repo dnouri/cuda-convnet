@@ -151,7 +151,7 @@ public:
 }; 
 
 class PoolLayer : public Layer {
-protected:
+private:
     int _channels, _subsX, _start, _stride, _outputsX;
     int _imgSize;
     string _pool;

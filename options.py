@@ -216,10 +216,7 @@ class OptionsParser:
     
     @classmethod
     def __longest_value(cls, values, key=lambda x:x):
-        def mylen(x):
-            if x is None:
-                return 0
-            return len(x)
+        mylen = lambda x: 0 if x is None else len(x)
         return mylen(key(max(values, key=lambda x:mylen(key(x)))))
 
     @staticmethod

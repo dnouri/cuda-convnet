@@ -72,7 +72,6 @@ class CroppedCIFARDataProvider(LabeledMemoryDataProvider):
                 target[:,:] = pic.reshape((self.get_data_dims(), x.shape[1]))
         else:
             for c in xrange(x.shape[1]): # loop over cases
-                # translate with 50% chance
                 startY, startX = nr.randint(0,self.border_size*2 + 1), nr.randint(0,self.border_size*2 + 1)
                 endY, endX = startY + self.inner_size, startX + self.inner_size
                 pic = y[:,startY:endY,startX:endX, c]

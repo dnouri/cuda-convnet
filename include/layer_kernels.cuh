@@ -9,6 +9,7 @@
 #define	LAYER_KERNELS_CUH
 
 #include <cutil_inline.h>
+#include <nvmatrix.cuh>
 
 #define LOGREG_GRADS_THREADS_X      32
 #define LOGREG_GRADS_THREADS_Y      4
@@ -16,6 +17,8 @@
 #define LOGREG_ERR_THREADS_X        128
 #define LOGREG_ERR_THREADS_Y        1
 
+void computeLogregCost(NVMatrix& labels, NVMatrix& probs, NVMatrix& labelLogProbs_out, NVMatrix& correctProbs_out);
+void computeLogregGrads(NVMatrix& labels, NVMatrix& probs, NVMatrix& target, bool add, float coeff);
 
 /*
  * dE_dy_l: (numOut, numCases)

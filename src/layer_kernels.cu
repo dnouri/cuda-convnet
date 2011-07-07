@@ -2,6 +2,8 @@
  * Author: Alex Krizhevsky (akrizhevsky@gmail.com)
  * June 2011
  */
+#include <assert.h>
+
 #include "../include/layer_kernels.cuh"
 
 /*
@@ -52,3 +54,61 @@ __global__ void kLogregCost(float* probs, float* labels, float* maxProbs, float*
     }
 }
 
+/*
+ * E = -log(y_t)
+ * probs:           (numOut, numCases)
+ * labels:          (1, numCases)
+ * maxProbs:        (1, numCases)
+ * labelLogProbs:   (1, numCases)   (*out)
+ * correctProbs:    (1, numCases)   (*out)
+ * 
+ * target:          (1, numCases) == log(y_l[labels,:]
+ */
+void computeLogregCost(NVMatrix& labels, NVMatrix& probs, NVMatrix& labelLogProbs_out, NVMatrix& correctProbs_out) {
+    NVMatrix& maxProbs = probs.max(0);
+    
+    int numCases = probs.getNumCols(); 
+    int numOut = probs.getNumRows(); 
+
+    assert(labels.getNumElements() == numCases);
+    assert(!labels.isTrans());
+    assert(!probs.isTrans());
+    assert(labels.isContiguous());
+    assert(probs.isContiguous());
+    
+    labelLogProbs_out.resize(1, numCases);
+    correctProbs_out.resize(1, numCases);
+    dim3 threads(LOGREG_ERR_THREADS_X, 1);
+    dim3 blocks(DIVUP(numCases, LOGREG_ERR_THREADS_X), 1);
+    cudaFuncSetCacheConfig(kLogregCost, cudaFuncCachePreferL1);
+    kLogregCost<<<blocks, threads>>>(probs.getDevData(), labels.getDevData(), maxProbs.getDevData(),
+                                     labelLogProbs_out.getDevData(), correctProbs_out.getDevData(),
+                                     numCases, numOut);
+    cutilCheckMsg("kLogregCost: Kernel execution failed");
+    
+    delete &maxProbs;
+}
+
+void computeLogregGrads(NVMatrix& labels, NVMatrix& probs, NVMatrix& target, bool add, float coeff) {
+    int numCases = probs.getNumCols(); 
+    int numOut = probs.getNumRows(); 
+    assert(labels.getNumElements() == numCases);
+    assert(probs.isContiguous());
+    assert(target.isContiguous());
+    assert(labels.isContiguous());
+    assert(!labels.isTrans());
+    assert(!probs.isTrans());
+    
+    dim3 threads(LOGREG_GRADS_THREADS_X, LOGREG_GRADS_THREADS_Y);
+    dim3 blocks(DIVUP(numCases, LOGREG_GRADS_THREADS_X), DIVUP(numOut, LOGREG_GRADS_THREADS_Y));
+    if (!add) {
+        target.resize(probs);
+        kLogregCostGrads<false><<<blocks, threads>>>(probs.getDevData(), labels.getDevData(), target.getDevData(),
+                                                     numCases, numOut, coeff);
+    } else {
+        kLogregCostGrads<true><<<blocks, threads>>>(probs.getDevData(), labels.getDevData(), target.getDevData(),
+                                                    numCases, numOut, coeff);
+    }
+
+    cutilCheckMsg("kLogregCostGrads: Kernel execution failed");
+}

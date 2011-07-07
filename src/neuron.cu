@@ -80,9 +80,12 @@ void ReluNeuron::_computeInputGrads(NVMatrix& actGrads) {
  * =======================
  * AbsNeuron
  * =======================
+ * 
+ * Mainly here to demonstrate how to write a neuron that requires memory
+ * of the input to compute its gradient.
  */
 void AbsNeuron::_activate(NVMatrix& input) {
-    input.copy(this->_input);
+    input.copy(_input);
     input.apply(NVMatrix::ABS);
 }
 
