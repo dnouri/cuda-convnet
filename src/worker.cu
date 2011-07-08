@@ -115,6 +115,7 @@ MultiviewTestWorker::MultiviewTestWorker(ConvNet* convNet, CPUData& data, int nu
 void MultiviewTestWorker::run() {
     _convNet->setData(*_data);
     DataProvider& dp = _convNet->getDataProvider();
+    Layer& logregLayer = _convNet->getLayer(_logregIdx);
     ErrorResult& batchErr = *new ErrorResult();
     
     int numCasesReal = dp.getNumCases() / _numViews;
@@ -126,17 +127,17 @@ void MultiviewTestWorker::run() {
                                             min((v + 1) * numCasesReal, v * numCasesReal + (i + 1) * dp.getMinibatchSize()));
             _convNet->fprop(mini);
             if (v == 0) {
-                _convNet->getLayer(_logregIdx).getPrev()[1]->getActs().copy(softmaxActs);
+                logregLayer.getPrev()[1]->getActs().copy(softmaxActs);
             } else {
-                softmaxActs.add(_convNet->getLayer(_logregIdx).getPrev()[1]->getActs());
+                softmaxActs.add(logregLayer.getPrev()[1]->getActs());
             }
         }
         softmaxActs.scale(1 / float(_numViews));
         NVMatrixV logregInput;
-        logregInput.push_back(&_convNet->getLayer(_logregIdx).getPrev()[0]->getActs());
+        logregInput.push_back(&logregLayer.getPrev()[0]->getActs());
         logregInput.push_back(&softmaxActs);
         
-        _convNet->getLayer(_logregIdx).fprop(logregInput);
+        logregLayer.fprop(logregInput);
         
         Worker::incError(_convNet->getError(), batchErr);
     }

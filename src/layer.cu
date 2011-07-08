@@ -228,7 +228,6 @@ void FCLayer::_bprop(NVMatrix& v) {
                                         _convNet->isCheckingGrads() ? 1 : _weights[i].getEps() / v.getNumRows());
         delete &prevActs_T;
     }
-    
 }
 
 void FCLayer::updateWeights(int numCases) {
@@ -365,7 +364,6 @@ SoftmaxLayer::SoftmaxLayer(PyObject* paramsDict, ConvNet* convNet)
 
 void SoftmaxLayer::_bprop(NVMatrix& v) {
     if (_prev[0]->isGradConsumer()) {
-        
         assert(_prev.size() == 1);
         NVMatrix& target = _prev[0]->getActGrads();
 
@@ -457,9 +455,9 @@ PoolLayer::PoolLayer(PyObject* paramsDict, ConvNet* convNet)
 void PoolLayer::_fprop(NVMatrixV& v) {
     NVMatrix& images = *v[0];
     if (_pool == string("max")) {
-        convLocalPool(images, _acts, _channels, _subsX, _start, _stride, _outputsX, MaxAggregator());
+        convLocalPool(images, _acts, _channels, _subsX, _start, _stride, _outputsX, MaxPooler());
     } else if (_pool == string("avg")) {
-        convLocalPool(images, _acts, _channels, _subsX, _start, _stride, _outputsX, AvgAggregator(_subsX*_subsX));
+        convLocalPool(images, _acts, _channels, _subsX, _start, _stride, _outputsX, AvgPooler(_subsX*_subsX));
     }
 }
 

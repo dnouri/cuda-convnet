@@ -65,8 +65,6 @@ __global__ void kLogregCost(float* probs, float* labels, float* maxProbs, float*
  * target:          (1, numCases) == log(y_l[labels,:]
  */
 void computeLogregCost(NVMatrix& labels, NVMatrix& probs, NVMatrix& labelLogProbs_out, NVMatrix& correctProbs_out) {
-    NVMatrix& maxProbs = probs.max(0);
-    
     int numCases = probs.getNumCols(); 
     int numOut = probs.getNumRows(); 
 
@@ -75,6 +73,8 @@ void computeLogregCost(NVMatrix& labels, NVMatrix& probs, NVMatrix& labelLogProb
     assert(!probs.isTrans());
     assert(labels.isContiguous());
     assert(probs.isContiguous());
+    
+    NVMatrix& maxProbs = probs.max(0);
     
     labelLogProbs_out.resize(1, numCases);
     correctProbs_out.resize(1, numCases);
@@ -85,7 +85,7 @@ void computeLogregCost(NVMatrix& labels, NVMatrix& probs, NVMatrix& labelLogProb
                                      labelLogProbs_out.getDevData(), correctProbs_out.getDevData(),
                                      numCases, numOut);
     cutilCheckMsg("kLogregCost: Kernel execution failed");
-    
+//    cudaThreadSynchronize();
     delete &maxProbs;
 }
 

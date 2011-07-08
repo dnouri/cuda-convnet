@@ -48,7 +48,7 @@ __global__ void img_acts_16x16_load32_batched_color_kernel(const float* hidActs,
     const int pxX = blockRegionLeft + pxXInRegion;
     const int pxIdx = pxY * imgSize + pxX;
     const bool isPxInImg = pxY < imgSize && pxX < imgSize;
-//    const uint numModules = numModulesX * numModulesX;
+    const uint numModules = numModulesX * numModulesX;
     const int filterPixels = filterSize * filterSize;
     const int imgPixels = imgSize * imgSize;
     const int tidx = threadIdx.y * 16 + threadIdx.x;
@@ -97,7 +97,7 @@ __global__ void img_acts_16x16_load32_batched_color_kernel(const float* hidActs,
                     if (!checkCaseBounds || blockCaseIdx + i + loadX < numImages) {
                         #pragma unroll
                         for (int j = 0; j < 16; j += 8) { // load 16 rows of imgsPerThread*16 cols, 8 * 32 elements at a time.
-                            shHidActLoad[j * 16 * imgsPerThread + i] = hidActs[(moduleIdx + (f + j) * numModulesX * numModulesX) * numImages + i];
+                            shHidActLoad[j * 16 * imgsPerThread + i] = hidActs[(moduleIdx + (f + j) * numModules) * numImages + i];
                         }
                     } else {
                         #pragma unroll

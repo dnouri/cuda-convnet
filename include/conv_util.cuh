@@ -21,17 +21,33 @@ void convLocalAvgUndo(NVMatrix& avgGrads, NVMatrix& target,
 void convLocalMaxUndo(NVMatrix& images, NVMatrix& maxGrads, NVMatrix& maxActs, NVMatrix& target,
                       int subsX, int startX, int strideX, int outputsX, float scaleTargets, float scaleOutput);
 
-class AvgAggregator {
+class AvgPooler {
 private:
     float _num;
 public:
-    AvgAggregator(float num) : _num(num) {
+    AvgPooler(float num) : _num(num) {
     }
     __device__ inline float operator()(float a, float b) const {
-        return a + b / _num;
+        return a + b;
     }
-    __device__ inline float getBaseValue() {
+    __device__ inline float getBaseValue() const {
         return 0;
+    }
+    __device__ inline float output(float a) const {
+        return a / _num;
+    }
+};
+
+class MaxPooler {
+public:
+    __device__ inline float operator()(float a, float b) const {
+        return a > b ? a : b;
+    }
+    __device__ inline float getBaseValue() const {
+        return -2e38;
+    }
+    __device__ inline float output(float a) const {
+        return a;
     }
 };
 
@@ -108,14 +124,11 @@ __global__ void kLocalPool(float* imgs, float* target, const int imgSize, const 
         if (!checkCaseBounds || imgIdx + i * B_X < numImages) {
             #pragma unroll
             for (int f = 0; f < filtersPerThread; f++) {
-                target[f * B_Y * numOutputs * numImages + i * B_X] = prod[f][i]; 
+                target[f * B_Y * numOutputs * numImages + i * B_X] = agg.output(prod[f][i]); 
             }
         }
     }
 }
-
-
-
 
 /*
  * imgs:        (numFilters, imgPixels, numImages)
