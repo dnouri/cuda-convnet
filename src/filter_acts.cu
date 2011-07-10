@@ -98,10 +98,10 @@ __global__ void filterActs_YxX_color(float* images, float* filters, float* targe
         /*
          * Load B_Y pixels from B_X*imgsPerThread images
          */
-        int pixIdx = p + threadIdx.y;
+        const int pixIdx = p + threadIdx.y;
         if (pixIdx < filterPixels) {
-            int x = paddingStart + imgLoadModPosX + pixIdx % filterSize;
-            int y = paddingStart + imgLoadModPosY + pixIdx / filterSize;
+            const int x = paddingStart + imgLoadModPosX + pixIdx % filterSize;
+            const int y = paddingStart + imgLoadModPosY + pixIdx / filterSize;
             if (y >= 0 && y< imgSize && x >= 0 && x < imgSize) {
                 #pragma unroll
                 for (int i = 0; i < imgsPerThread; i++) {
@@ -164,7 +164,6 @@ __global__ void filterActs_YxX_color(float* images, float* filters, float* targe
         }
     }
 }
-
 
 /*
  * Block size B_YxB_X. Each block applies B_Y * filtersPerThread filters to B_X * imgsPerThread images.

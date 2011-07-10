@@ -306,6 +306,33 @@ class PoolLayerParser(LayerWithInputParser):
         print "Initialized %s-pooling layer '%s', producing %dx%d %d-channel output" % (dic['pool'], name, dic['outputsX'], dic['outputsX'], dic['channels'])
         return dic
     
+class ContrastNormLayerParser(LayerWithInputParser):
+    @classmethod
+    def parse(cls, name, mcp, prev_layers, model):
+
+        dic = LayerWithInputParser.parse(name, mcp, prev_layers, model)
+        if len(dic['numInputs']) != 1:
+            raise LayerParsingError("Layer '%s': number of inputs must be 1", name) 
+        dic['channels'] = mcp.getint(name, 'channels')
+        dic['sizeX'] = mcp.getint(name, 'sizeX')
+        dic['scale'] = mcp.getfloat(name, 'scale')
+        
+        dic['imgPixels'] = dic['numInputs'][0] / dic['channels']
+        dic['imgSize'] = int(n.sqrt(dic['imgPixels']))
+        
+        LayerParser.verify_int_range(dic['sizeX'], name, 'sizeX', 1, dic['imgSize'])
+        LayerParser.verify_int_range(dic['channels'], name, 'channels', 1, None)
+        
+        if dic['channels'] > 3 and dic['channels'] % 4 != 0:
+            raise LayerParsingError("Layer '%s': number of channels must be smaller than 4 or divisible by 4" % name)
+        
+        if dic['numInputs'][0] % dic['imgPixels'] != 0 or dic['imgSize'] * dic['imgSize'] != dic['imgPixels']:
+            raise LayerParsingError("Layer '%s': has %-d dimensional input, not interpretable as %d-channel images" % (name, dic['numInputs'][0], dic['channels']))
+        dic['numOutputs'] = dic['imgPixels'] * dic['channels']
+        print "Initialized contrast-normalization layer '%s', producing %dx%d %d-channel output" % (name, dic['imgSize'], dic['imgSize'], dic['channels'])
+        return dic
+    
+    
 class CostParser(LayerWithInputParser):
     @classmethod
     def requires_params(cls):
@@ -333,4 +360,5 @@ layer_parsers = {'data': DataLayerParser,
                  'conv': ConvLayerParser,
                  'softmax': SoftmaxLayerParser,
                  'pool': PoolLayerParser,
+                 'cnorm': ContrastNormLayerParser,
                  'cost.logreg': LogregCostParser}

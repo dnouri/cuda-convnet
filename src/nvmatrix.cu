@@ -80,7 +80,7 @@ NVMatrix::NVMatrix(const NVMatrix& like) {
  * does not copy any data.
  */
 NVMatrix::NVMatrix(const Matrix& like) {
-    _init(like.getNumRows(), like.getNumCols(), -1, true);
+    _init(like.getNumRows(), like.getNumCols(), -1, false);
 }
 
 NVMatrix::NVMatrix(float* devData, int numRows, int numCols, int stride, bool isTrans) :

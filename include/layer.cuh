@@ -162,6 +162,18 @@ public:
     PoolLayer(PyObject* paramsDict, ConvNet* convNet);
 }; 
 
+class ContrastNormLayer : public Layer {
+private:
+    int _channels, _sizeX;
+    float _scale;
+    NVMatrix _denoms;
+protected:
+    void _fprop(NVMatrixV& v);
+    void _bprop(NVMatrix& v);
+public:
+    ContrastNormLayer(PyObject* paramsDict, ConvNet* convNet);
+}; 
+
 class Cost : public Layer {
 protected:
     double _coeff;

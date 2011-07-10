@@ -386,7 +386,7 @@ void convWeightActs(NVMatrix& images, NVMatrix& hidActs, NVMatrix& targets,
     assert(moduleStride <= filterSize);
     
     assert(numModules * numFilters == hidActs.getNumRows());
-    assert(numModulesX * numModulesX == numModules);
+
     assert(!images.isTrans());
     assert(!hidActs.isTrans());
     assert(hidActs.isContiguous());

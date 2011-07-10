@@ -30,6 +30,8 @@ ConvNet::ConvNet(PyListObject* layerParams, int minibatchSize, int deviceID)
                 _layers.push_back(dynamic_cast<Layer*>(new ConvLayer(paramsDict, this)));
             } else if (string(layerType) == string("pool")) {
                 _layers.push_back(dynamic_cast<Layer*>(new PoolLayer(paramsDict, this)));
+            } else if (string(layerType) == string("cnorm")) {
+                _layers.push_back(dynamic_cast<Layer*>(new ContrastNormLayer(paramsDict, this)));
             } else if (string(layerType) == string("data")) {
                 DataLayer *d = new DataLayer(paramsDict, this);
                 _layers.push_back(dynamic_cast<Layer*>(d));

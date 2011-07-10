@@ -463,19 +463,38 @@ void PoolLayer::_fprop(NVMatrixV& v) {
 
 void PoolLayer::_bprop(NVMatrix& v) {
     if (_prev[0]->isGradConsumer()) {
+        float scaleTargets = _prev[0]->getRcvdBInputs() == 0 ? 0 : 1;
         if (_pool == string("max")) {
-            if (_prev[0]->getRcvdBInputs() == 0) {
-                convLocalMaxUndo(_prev[0]->getActs(), v, _acts, _prev[0]->getActGrads(), _subsX, _start, _stride, _outputsX);
-            } else {
-                convLocalMaxUndo(_prev[0]->getActs(), v, _acts, _prev[0]->getActGrads(), _subsX, _start, _stride, _outputsX, 1, 1);
-            }
+            convLocalMaxUndo(_prev[0]->getActs(), v, _acts, _prev[0]->getActGrads(), _subsX, _start, _stride, _outputsX, scaleTargets, 1);
         } else if (_pool == string("avg")) {
-            if (_prev[0]->getRcvdBInputs() == 0) {
-                convLocalAvgUndo(v, _prev[0]->getActGrads(), _subsX, _start, _stride, _outputsX, _imgSize);
-            } else {
-                convLocalAvgUndo(v, _prev[0]->getActGrads(), _subsX, _start, _stride, _outputsX, _imgSize, 1, 1);
-            }
+            convLocalAvgUndo(v, _prev[0]->getActGrads(), _subsX, _start, _stride, _outputsX, _imgSize, scaleTargets, 1);
         }
+    }
+}
+
+/* 
+ * =====================
+ * ContrastNormLayer
+ * =====================
+ */
+
+ContrastNormLayer::ContrastNormLayer(PyObject* paramsDict, ConvNet* convNet) 
+    : Layer(paramsDict, convNet, true, true, false) {
+    _channels = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "channels"));
+    _sizeX = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "sizeX"));
+
+    _scale = PyFloat_AS_DOUBLE((PyStringObject*)PyDict_GetItemString(paramsDict, "scale"));
+}
+
+void ContrastNormLayer::_fprop(NVMatrixV& v) {
+    NVMatrix& images = *v[0];
+    convContrastNorm(images, _denoms, _acts, _channels, _sizeX, _scale);
+}
+
+void ContrastNormLayer::_bprop(NVMatrix& v) {
+    if (_prev[0]->isGradConsumer()) {
+        float scaleTargets = _prev[0]->getRcvdBInputs() == 0 ? 0 : 1;
+        convContrastNormUndo(v, _denoms, _prev[0]->getActs(), _prev[0]->getActGrads(), _channels, _sizeX, _scale, scaleTargets, 1);
     }
 }
 

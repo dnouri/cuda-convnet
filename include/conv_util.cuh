@@ -8,7 +8,7 @@
 #ifndef CONV_UTIL_CUH
 #define	CONV_UTIL_CUH
 
-#include "nvmatrix.cuh"
+#include <nvmatrix.cuh>
 
 void convLocalMaxUndo(NVMatrix& images, NVMatrix& maxGrads, NVMatrix& maxActs, NVMatrix& target,
                       int subsX, int startX, int strideX, int outputsX);
@@ -20,6 +20,17 @@ void convLocalAvgUndo(NVMatrix& avgGrads, NVMatrix& target,
                       float scaleTargets, float scaleOutput);
 void convLocalMaxUndo(NVMatrix& images, NVMatrix& maxGrads, NVMatrix& maxActs, NVMatrix& target,
                       int subsX, int startX, int strideX, int outputsX, float scaleTargets, float scaleOutput);
+
+void convContrastNorm(NVMatrix& images, NVMatrix& denoms, NVMatrix& target, int numFilters, int sizeX, float scale);
+void convContrastNormUndo(NVMatrix& outGrads, NVMatrix& denoms, NVMatrix& inputs, NVMatrix& target, int numFilters,
+                         int sizeX, float cNormScale, float scaleTargets, float scaleOutput);
+
+class CNormUndoOp {
+public:
+    __device__ inline float operator()(float a, float b) const {
+        return __fdividef(a, b*b);
+    }
+};
 
 class AvgPooler {
 private:
@@ -44,7 +55,7 @@ public:
         return a > b ? a : b;
     }
     __device__ inline float getBaseValue() const {
-        return -2e38;
+        return -2e38; 
     }
     __device__ inline float output(float a) const {
         return a;
@@ -87,8 +98,7 @@ __global__ void kLocalPool(float* imgs, float* target, const int imgSize, const 
     const int imgIdx = blockImgIdx + threadIdx.x;
     
     imgs += (blockFilterIdx + threadIdx.y) * imgPixels * numImages + imgIdx;
-    target += ((blockFilterIdx + threadIdx.y) * numOutputs + outputIdx) * numImages 
-            + imgIdx;
+    target += ((blockFilterIdx + threadIdx.y) * numOutputs + outputIdx) * numImages + imgIdx;
     
     float prod[filtersPerThread][imgsPerThread];
     #pragma unroll
@@ -111,7 +121,7 @@ __global__ void kLocalPool(float* imgs, float* target, const int imgSize, const 
                     if (!checkCaseBounds || imgIdx + i * B_X < numImages) {
                         #pragma unroll
                         for (int f = 0; f < filtersPerThread; f++) {
-                            prod[f][i] = agg(prod[f][i], imgs[f * B_Y * imgPixels * numImages + imgPx * numImages + i * B_X]);
+                            prod[f][i] = agg(prod[f][i], imgs[(f * B_Y * imgPixels + imgPx) * numImages + i * B_X]);
                         }
                     }
                 }
@@ -134,9 +144,9 @@ __global__ void kLocalPool(float* imgs, float* target, const int imgSize, const 
  * imgs:        (numFilters, imgPixels, numImages)
  * target:      (numFilters, outputs, numImages)
  */
-template<class Agg>
+template<class Pooler>
 void convLocalPool(NVMatrix& images, NVMatrix& target, int numFilters,
-                   int subsX, int startX, int strideX, int outputsX, Agg agg) {
+                   int subsX, int startX, int strideX, int outputsX, Pooler pooler) {
     int numImages = images.getNumCols();
     int imgPixels = images.getNumRows() / numFilters;
     assert(images.getNumRows() == numFilters * imgPixels);
@@ -155,13 +165,13 @@ void convLocalPool(NVMatrix& images, NVMatrix& target, int numFilters,
     dim3 threads(32, 4);
     dim3 blocks(DIVUP(numImages,32*4) * outputsX, (numFilters / (4 * 2)) * outputsX);
     if (checkCaseBounds) {
-        cudaFuncSetCacheConfig(kLocalPool<Agg, 4, 32, 4, 2, true>, cudaFuncCachePreferL1);
-        kLocalPool<Agg, 4, 32, 4, 2, true><<<blocks, threads>>>(images.getDevData(), target.getDevData(),
-                                                          imgSize, numFilters, numImages, subsX, startX, strideX, outputsX, agg);
+        cudaFuncSetCacheConfig(kLocalPool<Pooler, 4, 32, 4, 2, true>, cudaFuncCachePreferL1);
+        kLocalPool<Pooler, 4, 32, 4, 2, true><<<blocks, threads>>>(images.getDevData(), target.getDevData(),
+                                                          imgSize, numFilters, numImages, subsX, startX, strideX, outputsX, pooler);
     } else {
-        cudaFuncSetCacheConfig(kLocalPool<Agg, 4, 32, 4, 2, false>, cudaFuncCachePreferL1);
-        kLocalPool<Agg, 4, 32, 4, 2, false><<<blocks, threads>>>(images.getDevData(), target.getDevData(),
-                                                          imgSize, numFilters, numImages, subsX, startX, strideX, outputsX, agg);
+        cudaFuncSetCacheConfig(kLocalPool<Pooler, 4, 32, 4, 2, false>, cudaFuncCachePreferL1);
+        kLocalPool<Pooler, 4, 32, 4, 2, false><<<blocks, threads>>>(images.getDevData(), target.getDevData(),
+                                                          imgSize, numFilters, numImages, subsX, startX, strideX, outputsX, pooler);
     }
 
     cutilCheckMsg("convLocalPool: kernel execution failed");
