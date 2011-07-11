@@ -22,7 +22,7 @@ void convLocalMaxUndo(NVMatrix& images, NVMatrix& maxGrads, NVMatrix& maxActs, N
                       int subsX, int startX, int strideX, int outputsX, float scaleTargets, float scaleOutput);
 
 void convContrastNorm(NVMatrix& images, NVMatrix& denoms, NVMatrix& target, int numFilters, int sizeX, float scale);
-void convContrastNormUndo(NVMatrix& outGrads, NVMatrix& denoms, NVMatrix& inputs, NVMatrix& target, int numFilters,
+void convContrastNormUndo(NVMatrix& outGrads, NVMatrix& denoms, NVMatrix& acts, NVMatrix& target, int numFilters,
                          int sizeX, float cNormScale, float scaleTargets, float scaleOutput);
 
 class CNormUndoOp {
