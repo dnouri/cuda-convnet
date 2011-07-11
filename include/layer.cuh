@@ -152,7 +152,7 @@ public:
 
 class PoolLayer : public Layer {
 private:
-    int _channels, _subsX, _start, _stride, _outputsX;
+    int _channels, _sizeX, _start, _stride, _outputsX;
     int _imgSize;
     string _pool;
 protected:

@@ -276,7 +276,7 @@ class PoolLayerParser(LayerWithInputParser):
         if len(dic['numInputs']) != 1:
             raise LayerParsingError("Layer '%s': number of inputs must be 1", name) 
         dic['channels'] = mcp.getint(name, 'channels')
-        dic['subsX'] = mcp.getint(name, 'subsX')
+        dic['sizeX'] = mcp.getint(name, 'sizeX')
         dic['start'] = mcp.getint(name, 'start')
         dic['stride'] = mcp.getint(name, 'stride')
         dic['outputsX'] = mcp.getint(name, 'outputsX')
@@ -286,8 +286,8 @@ class PoolLayerParser(LayerWithInputParser):
         dic['imgPixels'] = dic['numInputs'][0] / dic['channels']
         dic['imgSize'] = int(n.sqrt(dic['imgPixels']))
         
-        LayerParser.verify_int_range(dic['subsX'], name, 'subsX', 1, dic['imgSize'])
-        LayerParser.verify_int_range(dic['stride'], name, 'stride', 1, dic['subsX'])
+        LayerParser.verify_int_range(dic['sizeX'], name, 'sizeX', 1, dic['imgSize'])
+        LayerParser.verify_int_range(dic['stride'], name, 'stride', 1, dic['sizeX'])
         LayerParser.verify_int_range(dic['outputsX'], name, 'outputsX', 0, None)
         LayerParser.verify_int_range(dic['channels'], name, 'channels', 1, None)
         
@@ -300,7 +300,7 @@ class PoolLayerParser(LayerWithInputParser):
         if dic['numInputs'][0] % dic['imgPixels'] != 0 or dic['imgSize'] * dic['imgSize'] != dic['imgPixels']:
             raise LayerParsingError("Layer '%s': has %-d dimensional input, not interpretable as %d-channel images" % (name, dic['numInputs'][0], dic['channels']))
         if dic['outputsX'] <= 0:
-            dic['outputsX'] = int(ceil((dic['imgSize'] - dic['start'] - dic['subsX']) / float(dic['stride']))) + 1;
+            dic['outputsX'] = int(ceil((dic['imgSize'] - dic['start'] - dic['sizeX']) / float(dic['stride']))) + 1;
         dic['numOutputs'] = dic['outputsX']**2 * dic['channels']
         
         print "Initialized %s-pooling layer '%s', producing %dx%d %d-channel output" % (dic['pool'], name, dic['outputsX'], dic['outputsX'], dic['channels'])
@@ -315,7 +315,7 @@ class ContrastNormLayerParser(LayerWithInputParser):
             raise LayerParsingError("Layer '%s': number of inputs must be 1", name) 
         dic['channels'] = mcp.getint(name, 'channels')
         dic['sizeX'] = mcp.getint(name, 'sizeX')
-        dic['scale'] = mcp.getfloat(name, 'scale')
+        dic['scale'] = mcp.getfloat(name, 'scale') / (dic['sizeX']**2)
         
         dic['imgPixels'] = dic['numInputs'][0] / dic['channels']
         dic['imgSize'] = int(n.sqrt(dic['imgPixels']))

@@ -881,6 +881,10 @@ void NVMatrix::_sum_setParams(int n, dim3* blocks, dim3* threads, int* numCols) 
     *threads = dim3(DP_BLOCKSIZE);
 }
 
+float NVMatrix::mean() {
+    return sum() / getNumElements();
+}
+
 float NVMatrix::sum() {
     return _totalAgg(SumAggregator());
 }

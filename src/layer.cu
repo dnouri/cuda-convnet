@@ -440,7 +440,7 @@ void DataLayer::_bprop(NVMatrix& v) {
 PoolLayer::PoolLayer(PyObject* paramsDict, ConvNet* convNet) 
     : Layer(paramsDict, convNet, true, true, false) {
     _channels = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "channels"));
-    _subsX = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "subsX"));
+    _sizeX = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "sizeX"));
     _start = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "start"));
     _stride = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "stride"));
     _outputsX = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "outputsX"));
@@ -455,9 +455,9 @@ PoolLayer::PoolLayer(PyObject* paramsDict, ConvNet* convNet)
 void PoolLayer::_fprop(NVMatrixV& v) {
     NVMatrix& images = *v[0];
     if (_pool == string("max")) {
-        convLocalPool(images, _acts, _channels, _subsX, _start, _stride, _outputsX, MaxPooler());
+        convLocalPool(images, _acts, _channels, _sizeX, _start, _stride, _outputsX, MaxPooler());
     } else if (_pool == string("avg")) {
-        convLocalPool(images, _acts, _channels, _subsX, _start, _stride, _outputsX, AvgPooler(_subsX*_subsX));
+        convLocalPool(images, _acts, _channels, _sizeX, _start, _stride, _outputsX, AvgPooler(_sizeX*_sizeX));
     }
 }
 
@@ -465,9 +465,9 @@ void PoolLayer::_bprop(NVMatrix& v) {
     if (_prev[0]->isGradConsumer()) {
         float scaleTargets = _prev[0]->getRcvdBInputs() == 0 ? 0 : 1;
         if (_pool == string("max")) {
-            convLocalMaxUndo(_prev[0]->getActs(), v, _acts, _prev[0]->getActGrads(), _subsX, _start, _stride, _outputsX, scaleTargets, 1);
+            convLocalMaxUndo(_prev[0]->getActs(), v, _acts, _prev[0]->getActGrads(), _sizeX, _start, _stride, _outputsX, scaleTargets, 1);
         } else if (_pool == string("avg")) {
-            convLocalAvgUndo(v, _prev[0]->getActGrads(), _subsX, _start, _stride, _outputsX, _imgSize, scaleTargets, 1);
+            convLocalAvgUndo(v, _prev[0]->getActGrads(), _sizeX, _start, _stride, _outputsX, _imgSize, scaleTargets, 1);
         }
     }
 }

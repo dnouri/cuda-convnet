@@ -289,6 +289,7 @@ public:
     NVMatrix& max(int axis);
     void min(int axis, NVMatrix& target);
     NVMatrix& min(int axis);
+    float mean();
     float sum();
     float max();
     float min();
