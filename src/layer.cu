@@ -477,7 +477,6 @@ void PoolLayer::_bprop(NVMatrix& v) {
  * ContrastNormLayer
  * =====================
  */
-
 ContrastNormLayer::ContrastNormLayer(PyObject* paramsDict, ConvNet* convNet) 
     : Layer(paramsDict, convNet, true, true, false) {
     _channels = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "channels"));
@@ -494,7 +493,7 @@ void ContrastNormLayer::_fprop(NVMatrixV& v) {
 void ContrastNormLayer::_bprop(NVMatrix& v) {
     if (_prev[0]->isGradConsumer()) {
         float scaleTargets = _prev[0]->getRcvdBInputs() == 0 ? 0 : 1;
-        convContrastNormUndo(v, _denoms, _acts, _prev[0]->getActGrads(), _channels, _sizeX, _scale, scaleTargets, 1);
+        convContrastNormUndo(v, _denoms, _prev[0]->getActs(), _acts, _prev[0]->getActGrads(), _channels, _sizeX, _scale, scaleTargets, 1);
     }
 }
 
