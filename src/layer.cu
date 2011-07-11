@@ -16,14 +16,14 @@ using namespace std;
  * =======================
  */
 /*
- * Static variable that controls whether the weight matrices storing the
- * unit activity gradients get destroyed after they are used.
+ * Static variables that controls whether the matrices storing the
+ * unit activities and their gradients get destroyed after they are used.
  * 
  * Setting this to true might net a performance benefit of a few percent
- * while increasing memory consumption pretty significantly.
+ * while increasing memory consumption.
  */
-bool Layer::_saveActGrads = true;
 bool Layer::_saveActs = true;
+bool Layer::_saveActGrads = true;
 
 Layer::Layer(PyObject* paramsDict, ConvNet* convNet,
              bool gradConsumer, bool gradProducer, bool trans) : 
