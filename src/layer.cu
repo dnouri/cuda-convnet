@@ -15,7 +15,15 @@ using namespace std;
  * Layer
  * =======================
  */
-bool Layer::saveBwdActs = false;
+/*
+ * Static variable that controls whether the weight matrices storing the
+ * unit activity gradients get destroyed after they are used.
+ * 
+ * Setting this to true might net a performance benefit of a few percent
+ * while increasing memory consumption pretty significantly.
+ */
+bool Layer::_saveActGrads = true;
+bool Layer::_saveActs = true;
 
 Layer::Layer(PyObject* paramsDict, ConvNet* convNet,
              bool gradConsumer, bool gradProducer, bool trans) : 
@@ -52,21 +60,13 @@ void Layer::bpropPrev() {
     }
 }
 
-void Layer::truncActGrads() {
-    if (!saveBwdActs) { 
+void Layer::truncBwdActs() {
+    if (!_saveActGrads) { 
         _actGrads.truncate();
     }
-}
-
-/*
- * Static method that controls whether the weight matrices storing the
- * unit activity gradients get destroyed after they are used.
- * 
- * Setting this to true might net a performance benefit of a few percent
- * while increasing memory consumption.
- */
-void Layer::setSaveBwdActs(bool saveBwdActs) {
-    Layer::saveBwdActs = saveBwdActs;
+    if (!_saveActs) {
+        _acts.truncate();
+    }
 }
 
 void Layer::fprop() {
@@ -112,7 +112,7 @@ void Layer::bprop(NVMatrix& v) {
     }
     _acts.transpose(_trans);
     _bprop(v);
-    truncActGrads();
+    truncBwdActs();
     bpropPrev();
 }
 
@@ -288,7 +288,6 @@ ConvLayer::ConvLayer(PyObject* paramsDict, ConvNet* convNet) : Layer(paramsDict,
 
     char* neuronType = PyString_AS_STRING((PyStringObject*)PyDict_GetItemString(paramsDict, "neuron"));
     _neuron = &Neuron::makeNeuron(neuronType);
-    assert(_prev.size() == 1); // Conv layer only has one input
 }
 
 void ConvLayer::_fprop(NVMatrixV& v) {
@@ -315,11 +314,8 @@ void ConvLayer::_bprop(NVMatrix& v) {
     }
 
     if (_prev[0]->isGradConsumer()) {
-        if (_prev[0]->getRcvdBInputs() == 0) {
-            convImgActs(v, *_weights, _prev[0]->getActGrads(), _imgSize, _padding, _stride, _channels);
-        } else {
-            convImgActs(v, *_weights, _prev[0]->getActGrads(), _imgSize, _padding, _stride, _channels, 1, 1);
-        }
+        float scaleTargets = _prev[0]->getRcvdBInputs() == 0 ? 0 : 1;
+        convImgActs(v, *_weights, _prev[0]->getActGrads(), _imgSize, _padding, _stride, _channels, scaleTargets, 1);
     }
     if (_partialSum > 0 && _partialSum < _modules) {
         NVMatrix tmp;
@@ -497,6 +493,16 @@ void ContrastNormLayer::_bprop(NVMatrix& v) {
     }
 }
 
+void ContrastNormLayer::truncBwdActs() {
+    if (!_saveActGrads) { 
+        _actGrads.truncate();
+    }
+    if (!_saveActs) {
+        _acts.truncate();
+        _denoms.truncate();
+    }
+}
+
 /* 
  * =====================
  * Cost
@@ -524,7 +530,7 @@ void Cost::bprop() {
         }
         _acts.transpose(_trans);
         _bprop();
-        truncActGrads();
+        truncBwdActs();
         bpropPrev();
     }
 }

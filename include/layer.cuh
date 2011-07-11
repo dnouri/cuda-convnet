@@ -39,21 +39,19 @@ protected:
     std::vector<Layer*> _prev, _next;
     int _rcvdFInputs, _rcvdBInputs;
     NVMatrix _acts, _actGrads;
-    static bool saveBwdActs;
     bool _gradConsumer, _gradProducer, _trans;
     int _numGradProducersNext;
     char* _name;
     void fpropNext();
     void bpropPrev();
-    void truncActGrads(); 
+    virtual void truncBwdActs(); 
     virtual void _fprop(NVMatrixV& v) = 0;
     virtual void _bprop(NVMatrix& v) = 0;
-    
 public:
+    static bool _saveActGrads, _saveActs;
+    
     Layer(PyObject* paramsDict, ConvNet* convNet,
           bool gradConsumer, bool gradProducer, bool trans);
-    
-    static void setSaveBwdActs(bool saveBwdActs);
     
     virtual void updateWeights(int numCases) {
         // do nothing if this layer has no weights
@@ -170,6 +168,7 @@ private:
 protected:
     void _fprop(NVMatrixV& v);
     void _bprop(NVMatrix& v);
+    void truncBwdActs();
 public:
     ContrastNormLayer(PyObject* paramsDict, ConvNet* convNet);
 }; 

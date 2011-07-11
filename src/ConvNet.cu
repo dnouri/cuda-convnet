@@ -72,6 +72,10 @@ void ConvNet::initCuda() {
     cublasInit();
     NVMatrix::initRandom(time(0));
     
+    // Uncomment these lines to save memory
+//    Layer::_saveActGrads = false;
+//    Layer::_saveActs = false;
+    
     copyToGPU();
 }
 

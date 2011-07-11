@@ -408,7 +408,6 @@ __global__ void img_acts_manycolor_kernel(const float* hidActs, const float* fil
             const int pxIdxInFilter = pxInFilterY * filterSize + pxInFilterX;
 
             for (int f = 0; f < numFilters; f += 16) { // multiply with 16 filters at a time
-
                 #pragma unroll
                 for (int i = 0; i < imgsPerThread * B_X; i += 32) {
                     if (!checkCaseBounds || blockCaseIdx + hidActLoadX + i < numImages) {
