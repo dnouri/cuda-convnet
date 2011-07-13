@@ -14,7 +14,7 @@
 #include "layer.cuh"
 #include "util.cuh"
 
-class Cost;
+class CostLayer;
 
 class ErrorResult {
 private:
@@ -22,7 +22,7 @@ private:
     std::map<std::string,double> _costCoeffs;
 public:
     ErrorResult();
-    ErrorResult(std::vector<Cost*>& costs);
+    ErrorResult(std::vector<CostLayer*>& costs);
     doublev*& operator [](const std::string s);
     ErrorMap& getErrorMap();
     double getCost();

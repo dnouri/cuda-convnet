@@ -17,8 +17,8 @@ ErrorResult::ErrorResult() {
     
 }
 
-ErrorResult::ErrorResult(vector<Cost*>& costs) {
-    for (vector<Cost*>::iterator it = costs.begin(); it != costs.end(); ++it) {
+ErrorResult::ErrorResult(vector<CostLayer*>& costs) {
+    for (vector<CostLayer*>::iterator it = costs.begin(); it != costs.end(); ++it) {
         _errMap[(*it)->getName()] = &(*it)->getError();
         _costCoeffs[(*it)->getName()] = (*it)->getCoeff();
     }

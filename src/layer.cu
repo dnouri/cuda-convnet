@@ -318,13 +318,19 @@ void ConvLayer::_bprop(NVMatrix& v) {
         convImgActs(v, *_weights, _prev[0]->getActGrads(), _imgSize, _padding, _stride, _channels, scaleTargets, 1);
     }
     if (_partialSum > 0 && _partialSum < _modules) {
-        NVMatrix tmp;
-        convWeightActs(_prev[0]->getActs(), v, tmp, _modulesX, _filterSize, _padding, _stride, _channels, 0, 1, _partialSum);
-        tmp.reshape(_modules / _partialSum, _channels * _filterPixels * _numFilters);
-        tmp.sum(0, _weights.getGrads());
+        convWeightActs(_prev[0]->getActs(), v, _weightGradsTmp, _modulesX, _filterSize, _padding, _stride, _channels, 0, 1, _partialSum);
+        _weightGradsTmp.reshape(_modules / _partialSum, _channels * _filterPixels * _numFilters);
+        _weightGradsTmp.sum(0, _weights.getGrads());
         _weights.getGrads().reshape(_channels * _filterPixels, _numFilters);
     } else {
         convWeightActs(_prev[0]->getActs(), v, _weights.getGrads(), _modulesX, _filterSize, _padding, _stride, _channels);
+    }
+}
+
+void ConvLayer::truncBwdActs() {
+    Layer::truncBwdActs();
+    if (!_saveActGrads) {
+        _weightGradsTmp.truncate();
     }
 }
 
@@ -353,7 +359,6 @@ void ConvLayer::checkGradients() {
  * SoftmaxLayer
  * =======================
  */
-
 SoftmaxLayer::SoftmaxLayer(PyObject* paramsDict, ConvNet* convNet) 
     : Layer(paramsDict, convNet, true, true, true) {
 }
@@ -424,7 +429,6 @@ void DataLayer::fprop(NVMatrixV& data) {
 }
 
 void DataLayer::_bprop(NVMatrix& v) {
-
 }
 
 /* 
@@ -432,7 +436,6 @@ void DataLayer::_bprop(NVMatrix& v) {
  * PoolLayer
  * =====================
  */
-
 PoolLayer::PoolLayer(PyObject* paramsDict, ConvNet* convNet) 
     : Layer(paramsDict, convNet, true, true, false) {
     _channels = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "channels"));
@@ -505,37 +508,27 @@ void ContrastNormLayer::truncBwdActs() {
 
 /* 
  * =====================
- * Cost
+ * CostLayer
  * =====================
  */
-Cost::Cost(PyObject* paramsDict, ConvNet* convNet, bool propagateGrad, bool gradProducer, bool trans) 
+CostLayer::CostLayer(PyObject* paramsDict, ConvNet* convNet, bool propagateGrad, bool gradProducer, bool trans) 
     : Layer(paramsDict, convNet, propagateGrad, gradProducer, trans) {
     _coeff = PyFloat_AS_DOUBLE((PyFloatObject*)PyDict_GetItemString(paramsDict, "coeff"));
     _gradProducer = _coeff != 0;
+    _numGradProducersNext = 1;
 }
 
-double Cost::getCoeff() {
+double CostLayer::getCoeff() {
     return _coeff;
 }
 
-void Cost::_bprop(NVMatrix& v) {
-    throw string("Cost does not support _bprop(NVMatrix&)");
-}
-
-void Cost::bprop() {
+void CostLayer::bprop() {
     if (_coeff != 0) {
-        for (int i = 0; i < _prev.size(); i++) {
-            _prev[i]->getActs().transpose(_trans);
-            _prev[i]->getActGrads().transpose(_trans);
-        }
-        _acts.transpose(_trans);
-        _bprop();
-        truncBwdActs();
-        bpropPrev();
+        Layer::bprop();
     }
 }
 
-doublev& Cost::getError() {
+doublev& CostLayer::getError() {
     doublev& v = *new doublev();
     v.insert(v.begin(), _err.begin(), _err.end());
     return v;
@@ -543,27 +536,26 @@ doublev& Cost::getError() {
 
 /* 
  * =====================
- * LogregCost
+ * LogregCostLayer
  * =====================
  */
-
-LogregCost::LogregCost(PyObject* paramsDict, ConvNet* convNet) 
-    : Cost(paramsDict, convNet, true, true, false) {
+LogregCostLayer::LogregCostLayer(PyObject* paramsDict, ConvNet* convNet) 
+    : CostLayer(paramsDict, convNet, true, true, false) {
 }
 
-void LogregCost::_fprop(NVMatrixV& v) {
+void LogregCostLayer::_fprop(NVMatrixV& v) {
     _err.clear();
     NVMatrix& labels = *v[0];
     NVMatrix& probs = *v[1];
     int numCases = labels.getNumElements();
     
-    NVMatrix trueLabelLogProbs, correctProbs;
+    NVMatrix& trueLabelLogProbs = _acts, correctProbs;
     computeLogregCost(labels, probs, trueLabelLogProbs, correctProbs);
     _err.push_back(-trueLabelLogProbs.sum());
     _err.push_back(numCases - correctProbs.sum());
 }
 
-void LogregCost::_bprop() {
+void LogregCostLayer::_bprop(NVMatrix& v) {
     NVMatrix& labels = _prev[0]->getActs();
     NVMatrix& probs = _prev[1]->getActs();
     NVMatrix& target = _prev[1]->getActGrads();

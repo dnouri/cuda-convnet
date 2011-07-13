@@ -26,13 +26,13 @@ class Worker;
 class WorkResult;
 class Layer;
 class DataLayer;
-class Cost;
+class CostLayer;
 
 class ConvNet : public Thread {
 protected:
     std::vector<Layer*> _layers;
     std::vector<DataLayer*> _dataLayers;
-    std::vector<Cost*> _costs;
+    std::vector<CostLayer*> _costs;
     GPUData* _data;
 
     DataProvider* _dp;

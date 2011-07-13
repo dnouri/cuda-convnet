@@ -725,7 +725,6 @@ __global__ void kCNormUndo2(float* outGrads, float* denoms, float* inputs, float
                     if (!checkCaseBounds || imgIdx + i * B_X < numImages) {
                         #pragma unroll
                         for (int f = 0; f < filtersPerThread; f++) {
-                            // Strange that it's better to put the square inside this loop rather than the one above!
                             prod[f][i] += shActs[f][threadIdx.x + i * B_X];
                         }
                     }

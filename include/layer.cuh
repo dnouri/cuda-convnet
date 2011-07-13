@@ -27,7 +27,7 @@
 
 class ErrorResult;
 class ConvNet;
-class Cost;
+class CostLayer;
 class DataLayer;
 
 /*
@@ -136,9 +136,11 @@ private:
     int _partialSum;
     int _numFilters;
     bool _sharedBiases;
+    NVMatrix _weightGradsTmp;
 protected:
     void _fprop(NVMatrixV& v);
     void _bprop(NVMatrix& v);
+    void truncBwdActs();
 public:
     ConvLayer(PyObject* paramsDict, ConvNet* convNet);
 
@@ -173,15 +175,12 @@ public:
     ContrastNormLayer(PyObject* paramsDict, ConvNet* convNet);
 }; 
 
-class Cost : public Layer {
+class CostLayer : public Layer {
 protected:
     double _coeff;
     doublev _err;
-protected:
-    virtual void _bprop() = 0;
-    void _bprop(NVMatrix& v); // Not supported in Cost
 public:
-    Cost(PyObject* paramsDict, ConvNet* layerList, bool propagateGrad, bool gradProducer, bool trans);
+    CostLayer(PyObject* paramsDict, ConvNet* layerList, bool propagateGrad, bool gradProducer, bool trans);
 
     void bprop(); // This is what's called by other layers
     virtual doublev& getError();
@@ -192,12 +191,12 @@ public:
  * input 0: labels
  * input 1: logistic regression outputs
  */
-class LogregCost : public Cost {
+class LogregCostLayer : public CostLayer {
 protected:
     void _fprop(NVMatrixV& v);
-    void _bprop();
+    void _bprop(NVMatrix& v);
 public:
-    LogregCost(PyObject* paramsDict, ConvNet* convNet);
+    LogregCostLayer(PyObject* paramsDict, ConvNet* convNet);
 };
 
 #endif	/* LAYER_CUH */

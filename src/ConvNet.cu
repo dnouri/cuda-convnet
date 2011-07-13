@@ -39,7 +39,7 @@ ConvNet::ConvNet(PyListObject* layerParams, int minibatchSize, int deviceID)
             } else if (string(layerType) == string("softmax")) {
                 _layers.push_back(dynamic_cast<Layer*>(new SoftmaxLayer(paramsDict, this)));
             } else if (strncmp(layerType, "cost.logreg", 32) == 0) {
-                Cost *c = new LogregCost(paramsDict, this);
+                CostLayer *c = new LogregCostLayer(paramsDict, this);
                 _layers.push_back(dynamic_cast<Layer*>(c));
                 _costs.push_back(c);
             } else {
