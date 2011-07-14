@@ -180,7 +180,7 @@ protected:
     double _coeff;
     doublev _err;
 public:
-    CostLayer(PyObject* paramsDict, ConvNet* layerList, bool propagateGrad, bool gradProducer, bool trans);
+    CostLayer(PyObject* paramsDict, ConvNet* layerList, bool gradConsumer, bool gradProducer, bool trans);
 
     void bprop(); // This is what's called by other layers
     virtual doublev& getError();

@@ -511,8 +511,8 @@ void ContrastNormLayer::truncBwdActs() {
  * CostLayer
  * =====================
  */
-CostLayer::CostLayer(PyObject* paramsDict, ConvNet* convNet, bool propagateGrad, bool gradProducer, bool trans) 
-    : Layer(paramsDict, convNet, propagateGrad, gradProducer, trans) {
+CostLayer::CostLayer(PyObject* paramsDict, ConvNet* convNet, bool gradConsumer, bool gradProducer, bool trans) 
+    : Layer(paramsDict, convNet, gradConsumer, gradProducer, trans) {
     _coeff = PyFloat_AS_DOUBLE((PyFloatObject*)PyDict_GetItemString(paramsDict, "coeff"));
     _gradProducer = _coeff != 0;
     _numGradProducersNext = 1;
