@@ -42,22 +42,18 @@ int main(int argc, char** argv) {
 using namespace std;
 static ConvNet* model = NULL;
 
-/* ==== Set up the methods table ====================== */
 static PyMethodDef _ConvNetMethods[] = {  { "initModel",          initModel,          METH_VARARGS },
-                                                { "startBatch",         startBatch,         METH_VARARGS },
-                                                { "finishBatch",        finishBatch,        METH_VARARGS },
-                                                { "checkGradients",     checkGradients,     METH_VARARGS },
-                                                { "startMultiviewTest",     startMultiviewTest,     METH_VARARGS },
-                                                { "syncWithHost",       syncWithHost,       METH_VARARGS },
-                                                { NULL, NULL } /* Sentinel - marks the end of this structure */
+                                          { "startBatch",         startBatch,         METH_VARARGS },
+                                          { "finishBatch",        finishBatch,        METH_VARARGS },
+                                          { "checkGradients",     checkGradients,     METH_VARARGS },
+                                          { "startMultiviewTest", startMultiviewTest, METH_VARARGS },
+                                          { "syncWithHost",       syncWithHost,       METH_VARARGS },
+                                          { NULL, NULL }
 };
 
-/*
- * Module initialization function. Required for python C extensions (and called automatically).
- */
 void INITNAME() {
     (void) Py_InitModule(QUOTEME(MODELNAME), _ConvNetMethods);
-    import_array(); // Must be present for NumPy.  Called first after above line.
+    import_array();
 }
 
 PyObject* initModel(PyObject *self, PyObject *args) {
@@ -93,7 +89,7 @@ PyObject* startBatch(PyObject *self, PyObject *args) {
         &test)) {
         return NULL;
     }
-    MatrixV& mvec = *getMatrixVec(data);
+    MatrixV& mvec = *getMatrixVec((PyObject*)data);
     
     TrainingWorker* wr = new TrainingWorker(model, *new CPUData(mvec), test);
     model->getWorkerQueue().enqueue(wr);
@@ -113,7 +109,7 @@ PyObject* startMultiviewTest(PyObject *self, PyObject *args) {
         &logregIdx)) {
         return NULL;
     }
-    MatrixV& mvec = *getMatrixVec(data);
+    MatrixV& mvec = *getMatrixVec((PyObject*)data);
     
     MultiviewTestWorker* wr = new MultiviewTestWorker(model, *new CPUData(mvec), numViews, logregIdx);
     model->getWorkerQueue().enqueue(wr);
@@ -151,7 +147,7 @@ PyObject* checkGradients(PyObject *self, PyObject *args) {
         &PyList_Type, &data)) {
         return NULL;
     }
-    MatrixV& mvec = *getMatrixVec(data);
+    MatrixV& mvec = *getMatrixVec((PyObject*)data);
     
     GradCheckWorker* wr = new GradCheckWorker(model, *new CPUData(mvec));
     model->getWorkerQueue().enqueue(wr);

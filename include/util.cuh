@@ -33,9 +33,9 @@ typedef std::vector<double> doublev;
 typedef std::vector<float> floatv;
 typedef std::vector<int> intv;
 
-floatv* getFloatVec(PyListObject* pyList);
-intv* getIntVec(PyListObject* pyList);
-MatrixV* getMatrixVec(PyListObject* pyList);
+floatv* getFloatVec(PyObject* pyList);
+intv* getIntVec(PyObject* pyList);
+MatrixV* getMatrixVec(PyObject* pyList);
 
 template<typename T>
 std::string tostr(T n) {

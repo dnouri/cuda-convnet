@@ -6,29 +6,29 @@
 
 using namespace std;
 
-floatv* getFloatVec(PyListObject* pyList) {
+floatv* getFloatVec(PyObject* pyList) {
     if (pyList == NULL) {
         return NULL;
     }
     floatv* vec = new floatv(); 
     for (int i = 0; i < PyList_GET_SIZE(pyList); i++) {
-        vec->push_back(PyFloat_AS_DOUBLE((PyFloatObject*)PyList_GET_ITEM(pyList, i)));
+        vec->push_back(PyFloat_AS_DOUBLE(PyList_GET_ITEM(pyList, i)));
     }
     return vec;
 }
 
-intv* getIntVec(PyListObject* pyList) {
+intv* getIntVec(PyObject* pyList) {
     if (pyList == NULL) {
         return NULL;
     }
     intv* vec = new intv(); 
     for (int i = 0; i < PyList_GET_SIZE(pyList); i++) {
-        vec->push_back(PyInt_AS_LONG((PyFloatObject*)PyList_GET_ITEM(pyList, i)));
+        vec->push_back(PyInt_AS_LONG(PyList_GET_ITEM(pyList, i)));
     }
     return vec;
 }
 
-MatrixV* getMatrixVec(PyListObject* pyList) {
+MatrixV* getMatrixVec(PyObject* pyList) {
     if (pyList == NULL) {
         return NULL;
     }

@@ -29,10 +29,10 @@ Layer::Layer(PyObject* paramsDict, ConvNet* convNet,
              bool gradConsumer, bool gradProducer, bool trans) : 
              _convNet(convNet), _gradConsumer(gradConsumer),
              _gradProducer(gradProducer), _trans(trans) {
-    _name = PyString_AS_STRING((PyStringObject*)PyDict_GetItemString(paramsDict, "name"));
+    _name = PyString_AS_STRING(PyDict_GetItemString(paramsDict, "name"));
     // Connect backward links in graph for this layer
 
-    intv* inputLayers = getIntVec((PyListObject*)PyDict_GetItemString(paramsDict, "inputs"));
+    intv* inputLayers = getIntVec(PyDict_GetItemString(paramsDict, "inputs"));
 
     if (inputLayers != NULL) {
         for (int i = 0; i < inputLayers->size(); i++) {
@@ -183,20 +183,20 @@ void FCLayer::multByInput(NVMatrix& input, int idx) {
 }
 
 FCLayer::FCLayer(PyObject* paramsDict, ConvNet* convNet) : Layer(paramsDict, convNet, true, true, true) {
-    MatrixV* hWeights = getMatrixVec((PyListObject*)PyDict_GetItemString(paramsDict, "weights"));
-    MatrixV* hWeightsInc = getMatrixVec((PyListObject*)PyDict_GetItemString(paramsDict, "weightsInc"));
+    MatrixV* hWeights = getMatrixVec(PyDict_GetItemString(paramsDict, "weights"));
+    MatrixV* hWeightsInc = getMatrixVec(PyDict_GetItemString(paramsDict, "weightsInc"));
     Matrix* hBiases = new Matrix((PyArrayObject*)PyDict_GetItemString(paramsDict, "biases"));
     Matrix* hBiasesInc = new Matrix((PyArrayObject*)PyDict_GetItemString(paramsDict, "biasesInc"));
 
-    floatv* momW = getFloatVec((PyListObject*)PyDict_GetItemString(paramsDict, "momW"));
-    float momB = PyFloat_AS_DOUBLE((PyFloatObject*)PyDict_GetItemString(paramsDict, "momB"));
-    floatv* epsW = getFloatVec((PyListObject*)PyDict_GetItemString(paramsDict, "epsW"));
-    float epsB = PyFloat_AS_DOUBLE((PyFloatObject*)PyDict_GetItemString(paramsDict, "epsB"));
-    floatv* wc = getFloatVec((PyListObject*)PyDict_GetItemString(paramsDict, "wc"));
+    floatv* momW = getFloatVec(PyDict_GetItemString(paramsDict, "momW"));
+    float momB = PyFloat_AS_DOUBLE(PyDict_GetItemString(paramsDict, "momB"));
+    floatv* epsW = getFloatVec(PyDict_GetItemString(paramsDict, "epsW"));
+    float epsB = PyFloat_AS_DOUBLE(PyDict_GetItemString(paramsDict, "epsB"));
+    floatv* wc = getFloatVec(PyDict_GetItemString(paramsDict, "wc"));
     _weights.initialize(*hWeights, *hWeightsInc, *epsW, *wc, *momW, false);
     _biases.initialize(*hBiases, *hBiasesInc, epsB, 0, momB, true);
 
-    char* neuronType = PyString_AS_STRING((PyStringObject*)PyDict_GetItemString(paramsDict, "neuron"));
+    char* neuronType = PyString_AS_STRING(PyDict_GetItemString(paramsDict, "neuron"));
     _neuron = &Neuron::makeNeuron(neuronType);
     assert(_biases.getNumRows() == 1);
 }
@@ -286,7 +286,7 @@ ConvLayer::ConvLayer(PyObject* paramsDict, ConvNet* convNet) : Layer(paramsDict,
     _weights.initialize(*hWeights, *hWeightsInc, epsW, wc, momW, true);
     _biases.initialize(*hBiases, *hBiasesInc, epsB, 0, momB, true);
 
-    char* neuronType = PyString_AS_STRING((PyStringObject*)PyDict_GetItemString(paramsDict, "neuron"));
+    char* neuronType = PyString_AS_STRING(PyDict_GetItemString(paramsDict, "neuron"));
     _neuron = &Neuron::makeNeuron(neuronType);
 }
 
@@ -407,7 +407,7 @@ void SoftmaxLayer::_fprop(NVMatrixV& v) {
 
 DataLayer::DataLayer(PyObject* paramsDict, ConvNet* convNet) 
     : Layer(paramsDict, convNet, false, false, false) {
-    _dataIdx = PyInt_AS_LONG((PyIntObject*)PyDict_GetItemString(paramsDict, "dataIdx"));
+    _dataIdx = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "dataIdx"));
 }
 
 void DataLayer::fprop() {
@@ -445,7 +445,7 @@ PoolLayer::PoolLayer(PyObject* paramsDict, ConvNet* convNet)
     _outputsX = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "outputsX"));
     _imgSize = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "imgSize"));
     
-    _pool = string(PyString_AS_STRING((PyStringObject*)PyDict_GetItemString(paramsDict, "pool")));
+    _pool = string(PyString_AS_STRING(PyDict_GetItemString(paramsDict, "pool")));
     if (_pool != string("max") && _pool != string("avg")) {
         throw string("Unknown pooling type ") + _pool;
     }
@@ -481,7 +481,7 @@ ContrastNormLayer::ContrastNormLayer(PyObject* paramsDict, ConvNet* convNet)
     _channels = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "channels"));
     _sizeX = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "sizeX"));
 
-    _scale = PyFloat_AS_DOUBLE((PyStringObject*)PyDict_GetItemString(paramsDict, "scale"));
+    _scale = PyFloat_AS_DOUBLE(PyDict_GetItemString(paramsDict, "scale"));
 }
 
 void ContrastNormLayer::_fprop(NVMatrixV& v) {
@@ -513,7 +513,7 @@ void ContrastNormLayer::truncBwdActs() {
  */
 CostLayer::CostLayer(PyObject* paramsDict, ConvNet* convNet, bool gradConsumer, bool gradProducer, bool trans) 
     : Layer(paramsDict, convNet, gradConsumer, gradProducer, trans) {
-    _coeff = PyFloat_AS_DOUBLE((PyFloatObject*)PyDict_GetItemString(paramsDict, "coeff"));
+    _coeff = PyFloat_AS_DOUBLE(PyDict_GetItemString(paramsDict, "coeff"));
     _gradProducer = _coeff != 0;
     _numGradProducersNext = 1;
 }
