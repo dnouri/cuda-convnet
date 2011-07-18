@@ -45,8 +45,8 @@ protected:
     int _numFailures;
     int _numTests;
     double _baseErr;
-    bool _checkingGrads;
     
+    virtual Layer* initLayer(string& layerType, PyObject* paramsDict);
     void initCuda();
     void* run();
 public:
@@ -59,8 +59,8 @@ public:
     // DP wrappers
     void setData(CPUData& data);
     
-    Layer& operator[](const int idx);
-    Layer& getLayer(const int idx);
+    Layer& operator[](int idx);
+    Layer& getLayer(int idx);
     void copyToCPU();
     void copyToGPU();
     void updateWeights();

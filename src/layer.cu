@@ -25,23 +25,11 @@ using namespace std;
 bool Layer::_saveActs = true;
 bool Layer::_saveActGrads = true;
 
-Layer::Layer(PyObject* paramsDict, ConvNet* convNet,
-             bool gradConsumer, bool gradProducer, bool trans) : 
-             _convNet(convNet), _gradConsumer(gradConsumer),
-             _gradProducer(gradProducer), _trans(trans) {
+Layer::Layer(PyObject* paramsDict, bool gradConsumer, bool gradProducer, bool trans) : 
+             _gradConsumer(gradConsumer), _gradProducer(gradProducer), _trans(trans) {
+    
     _name = PyString_AS_STRING(PyDict_GetItemString(paramsDict, "name"));
-    // Connect backward links in graph for this layer
-
-    intv* inputLayers = getIntVec(PyDict_GetItemString(paramsDict, "inputs"));
-
-    if (inputLayers != NULL) {
-        for (int i = 0; i < inputLayers->size(); i++) {
-            addPrev(&convNet->getLayer(inputLayers->at(i)));
-        }
-    }
-    delete inputLayers;
-
-    this->_numGradProducersNext = 0;
+    _numGradProducersNext = 0;
 }
 
 void Layer::fpropNext() {
@@ -168,6 +156,10 @@ NVMatrix& Layer::getActGrads() {
     return _actGrads;
 }
 
+void Layer::setCheckingGrads(bool v) {
+    _checkingGrads = v;
+}
+
 /* 
  * =======================
  * FCLayer
@@ -182,7 +174,7 @@ void FCLayer::multByInput(NVMatrix& input, int idx) {
     }
 }
 
-FCLayer::FCLayer(PyObject* paramsDict, ConvNet* convNet) : Layer(paramsDict, convNet, true, true, true) {
+FCLayer::FCLayer(PyObject* paramsDict) : Layer(paramsDict, true, true, true) {
     MatrixV* hWeights = getMatrixVec(PyDict_GetItemString(paramsDict, "weights"));
     MatrixV* hWeightsInc = getMatrixVec(PyDict_GetItemString(paramsDict, "weightsInc"));
     Matrix* hBiases = new Matrix((PyArrayObject*)PyDict_GetItemString(paramsDict, "biases"));
@@ -224,8 +216,8 @@ void FCLayer::_bprop(NVMatrix& v) {
             delete &weights_T;
         }
         NVMatrix& prevActs_T = _prev[i]->getActs().getTranspose();
-        _weights[i].getInc().addProduct(prevActs_T, v,  (!_convNet->isCheckingGrads()) * _weights[i].getMom(),
-                                        _convNet->isCheckingGrads() ? 1 : _weights[i].getEps() / v.getNumRows());
+        _weights[i].getInc().addProduct(prevActs_T, v,  (!_checkingGrads) * _weights[i].getMom(),
+                                        _checkingGrads ? 1 : _weights[i].getEps() / v.getNumRows());
         delete &prevActs_T;
     }
 }
@@ -245,11 +237,11 @@ void FCLayer::copyToGPU() {
     _biases.copyToGPU();
 }
 
-void FCLayer::checkGradients() {
+void FCLayer::checkGradients(ConvNet* convNet) {
     for (int i = 0; i < _weights.getSize(); i++) {
-        _convNet->checkGradientsW(string(_name) + string(" weights[") + tostr(i) + string("]"), 0.1, _weights[i]);
+        convNet->checkGradientsW(string(_name) + string(" weights[") + tostr(i) + string("]"), 0.1, _weights[i]);
     }
-    _convNet->checkGradientsW(string(_name) + string(" biases"), 0.01, _biases);
+    convNet->checkGradientsW(string(_name) + string(" biases"), 0.01, _biases);
 }
 
 /* 
@@ -257,7 +249,7 @@ void FCLayer::checkGradients() {
  * ConvLayer
  * =======================
  */
-ConvLayer::ConvLayer(PyObject* paramsDict, ConvNet* convNet) : Layer(paramsDict, convNet, true, true, false) {
+ConvLayer::ConvLayer(PyObject* paramsDict) : Layer(paramsDict, true, true, false) {
     Matrix* hWeights = new Matrix((PyArrayObject*)PyDict_GetItemString(paramsDict, "weights"));
     Matrix* hWeightsInc = new Matrix((PyArrayObject*)PyDict_GetItemString(paramsDict, "weightsInc"));
     Matrix* hBiases = new Matrix((PyArrayObject*)PyDict_GetItemString(paramsDict, "biases"));
@@ -349,9 +341,9 @@ void ConvLayer::copyToGPU() {
     _biases.copyToGPU();
 }
 
-void ConvLayer::checkGradients() {
-    _convNet->checkGradientsW(string(_name) + string(" weights"), 0.01, _weights);
-    _convNet->checkGradientsW(string(_name) + string(" biases"), 0.02, _biases);
+void ConvLayer::checkGradients(ConvNet* convNet) {
+    convNet->checkGradientsW(string(_name) + string(" weights"), 0.01, _weights);
+    convNet->checkGradientsW(string(_name) + string(" biases"), 0.02, _biases);
 }
 
 /* 
@@ -359,8 +351,8 @@ void ConvLayer::checkGradients() {
  * SoftmaxLayer
  * =======================
  */
-SoftmaxLayer::SoftmaxLayer(PyObject* paramsDict, ConvNet* convNet) 
-    : Layer(paramsDict, convNet, true, true, true) {
+SoftmaxLayer::SoftmaxLayer(PyObject* paramsDict) 
+    : Layer(paramsDict, true, true, true) {
 }
 
 void SoftmaxLayer::_bprop(NVMatrix& v) {
@@ -405,8 +397,8 @@ void SoftmaxLayer::_fprop(NVMatrixV& v) {
  * =======================
  */
 
-DataLayer::DataLayer(PyObject* paramsDict, ConvNet* convNet) 
-    : Layer(paramsDict, convNet, false, false, false) {
+DataLayer::DataLayer(PyObject* paramsDict) 
+    : Layer(paramsDict, false, false, false) {
     _dataIdx = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "dataIdx"));
 }
 
@@ -436,8 +428,8 @@ void DataLayer::_bprop(NVMatrix& v) {
  * PoolLayer
  * =====================
  */
-PoolLayer::PoolLayer(PyObject* paramsDict, ConvNet* convNet) 
-    : Layer(paramsDict, convNet, true, true, false) {
+PoolLayer::PoolLayer(PyObject* paramsDict) 
+    : Layer(paramsDict, true, true, false) {
     _channels = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "channels"));
     _sizeX = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "sizeX"));
     _start = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "start"));
@@ -476,8 +468,8 @@ void PoolLayer::_bprop(NVMatrix& v) {
  * ContrastNormLayer
  * =====================
  */
-ContrastNormLayer::ContrastNormLayer(PyObject* paramsDict, ConvNet* convNet) 
-    : Layer(paramsDict, convNet, true, true, false) {
+ContrastNormLayer::ContrastNormLayer(PyObject* paramsDict) 
+    : Layer(paramsDict, true, true, false) {
     _channels = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "channels"));
     _sizeX = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "sizeX"));
 
@@ -511,8 +503,8 @@ void ContrastNormLayer::truncBwdActs() {
  * CostLayer
  * =====================
  */
-CostLayer::CostLayer(PyObject* paramsDict, ConvNet* convNet, bool gradConsumer, bool gradProducer, bool trans) 
-    : Layer(paramsDict, convNet, gradConsumer, gradProducer, trans) {
+CostLayer::CostLayer(PyObject* paramsDict, bool gradConsumer, bool gradProducer, bool trans) 
+    : Layer(paramsDict, gradConsumer, gradProducer, trans) {
     _coeff = PyFloat_AS_DOUBLE(PyDict_GetItemString(paramsDict, "coeff"));
     _gradProducer = _coeff != 0;
     _numGradProducersNext = 1;
@@ -534,13 +526,21 @@ doublev& CostLayer::getError() {
     return v;
 }
 
+// TODO: make this a factory object
+CostLayer& CostLayer::makeCostLayer(string& type, PyObject* paramsDict) {
+    if (type == string("cost.logreg")) {
+        return *new LogregCostLayer(paramsDict);
+    }
+    throw string("Unknown cost layer type ") + type;
+}
+
 /* 
  * =====================
  * LogregCostLayer
  * =====================
  */
-LogregCostLayer::LogregCostLayer(PyObject* paramsDict, ConvNet* convNet) 
-    : CostLayer(paramsDict, convNet, true, true, false) {
+LogregCostLayer::LogregCostLayer(PyObject* paramsDict) 
+    : CostLayer(paramsDict, true, true, false) {
 }
 
 void LogregCostLayer::_fprop(NVMatrixV& v) {

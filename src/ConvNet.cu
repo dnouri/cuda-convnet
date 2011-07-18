@@ -15,35 +15,26 @@ using namespace std;
  * =======================
  */
 
-ConvNet::ConvNet(PyListObject* layerParams, int minibatchSize, int deviceID) 
-    : Thread(false),  _deviceID(deviceID), _data(NULL), _checkingGrads(false) {
+ConvNet::ConvNet(PyListObject* layerParams, int minibatchSize, int deviceID) : Thread(false),  _deviceID(deviceID), _data(NULL) {
     try {       
-        int numDefs = PyList_GET_SIZE(layerParams);
+        int numLayers = PyList_GET_SIZE(layerParams);
     
-        for (int i = 0; i < numDefs; i++) {
+        for (int i = 0; i < numLayers; i++) {
             PyObject* paramsDict = PyList_GET_ITEM(layerParams, i);
-            char* layerType = PyString_AS_STRING(PyDict_GetItemString(paramsDict, "type"));
-
-            if (string(layerType) == string("fc")) {
-                _layers.push_back(dynamic_cast<Layer*>(new FCLayer(paramsDict, this)));
-            } else if (string(layerType) == string("conv")) {
-                _layers.push_back(dynamic_cast<Layer*>(new ConvLayer(paramsDict, this)));
-            } else if (string(layerType) == string("pool")) {
-                _layers.push_back(dynamic_cast<Layer*>(new PoolLayer(paramsDict, this)));
-            } else if (string(layerType) == string("cnorm")) {
-                _layers.push_back(dynamic_cast<Layer*>(new ContrastNormLayer(paramsDict, this)));
-            } else if (string(layerType) == string("data")) {
-                DataLayer *d = new DataLayer(paramsDict, this);
-                _layers.push_back(dynamic_cast<Layer*>(d));
-                _dataLayers.push_back(d);
-            } else if (string(layerType) == string("softmax")) {
-                _layers.push_back(dynamic_cast<Layer*>(new SoftmaxLayer(paramsDict, this)));
-            } else if (strncmp(layerType, "cost.logreg", 32) == 0) {
-                CostLayer *c = new LogregCostLayer(paramsDict, this);
-                _layers.push_back(dynamic_cast<Layer*>(c));
-                _costs.push_back(c);
+            string layerType = string(PyString_AS_STRING(PyDict_GetItemString(paramsDict, "type")));
+            
+            Layer* l = initLayer(layerType, paramsDict);
+            if (l != NULL) {
+                // Connect backward links in graph for this layer
+                intv* inputLayers = getIntVec(PyDict_GetItemString(paramsDict, "inputs"));
+                if (inputLayers != NULL) {
+                    for (int i = 0; i < inputLayers->size(); i++) {
+                        l->addPrev(&getLayer(inputLayers->at(i)));
+                    }
+                }
+                delete inputLayers;
             } else {
-                throw string("Unknown layer type ") + string(layerType);
+                throw string("Unknown layer type ") + layerType;
             }
         }
 
@@ -54,13 +45,41 @@ ConvNet::ConvNet(PyListObject* layerParams, int minibatchSize, int deviceID)
                 prev[j]->addNext(_layers[i]);
             }
         }
-        reset(); // For good measure
         
         this->_dp = new DataProvider(minibatchSize);
     } catch(string& s) {
         cout << "Error creating ConvNet: " << s << endl;
         exit(1);
     }
+}
+
+/*
+ * Override this in derived classes
+ */
+Layer* ConvNet::initLayer(string& layerType, PyObject* paramsDict) {
+    if (layerType == string("fc")) {
+        _layers.push_back(dynamic_cast<Layer*>(new FCLayer(paramsDict)));
+    } else if (layerType == string("conv")) {
+        _layers.push_back(dynamic_cast<Layer*>(new ConvLayer(paramsDict)));
+    } else if (layerType == string("pool")) {
+        _layers.push_back(dynamic_cast<Layer*>(new PoolLayer(paramsDict)));
+    } else if (layerType == string("cnorm")) {
+        _layers.push_back(dynamic_cast<Layer*>(new ContrastNormLayer(paramsDict)));
+    } else if (layerType == string("data")) {
+        DataLayer *d = new DataLayer(paramsDict);
+        _layers.push_back(dynamic_cast<Layer*>(d));
+        _dataLayers.push_back(d);
+    } else if (layerType == string("softmax")) {
+        _layers.push_back(dynamic_cast<Layer*>(new SoftmaxLayer(paramsDict)));
+    } else if (strncmp(layerType.c_str(), "cost.", 5) == 0) {
+        CostLayer *c = &CostLayer::makeCostLayer(layerType, paramsDict);
+        _layers.push_back(dynamic_cast<Layer*>(c));
+        _costs.push_back(c);
+    } else {
+        return NULL;
+    }
+
+    return _layers.back();
 }
 
 /*
@@ -102,11 +121,11 @@ DataProvider& ConvNet::getDataProvider() {
     return *_dp;
 }
 
-Layer& ConvNet::operator[](const int idx) {
+Layer& ConvNet::operator[](int idx) {
     return *_layers[idx];
 }
 
-Layer& ConvNet::getLayer(const int idx) {
+Layer& ConvNet::getLayer(int idx) {
     return *_layers[idx];
 }
 
@@ -182,12 +201,13 @@ double ConvNet::getCostFunctionValue() {
     return val;
 }
 
-bool ConvNet::isCheckingGrads() {
-    return _checkingGrads;
-}
-
+/*
+ * Gradient checking stuff
+ */
 void ConvNet::checkGradients() {
-    _checkingGrads = true;
+    for (vector<Layer*>::iterator it = _layers.begin(); it != _layers.end(); ++it) {
+        (*it)->setCheckingGrads(true);
+    }
     _numFailures = 0;
     _numTests = 0;
     fprop(0);
@@ -195,7 +215,7 @@ void ConvNet::checkGradients() {
     bprop();
     
     for (vector<Layer*>::iterator it = _layers.begin(); it != _layers.end(); ++it) {
-        (*it)->checkGradients();
+        (*it)->checkGradients(this);
     }
     
     cout << "------------------------" << endl;
@@ -204,7 +224,9 @@ void ConvNet::checkGradients() {
     } else {
         cout << "ALL " << _numTests << " TESTS PASSED" << endl;
     }
-    _checkingGrads = false;
+    for (vector<Layer*>::iterator it = _layers.begin(); it != _layers.end(); ++it) {
+        (*it)->setCheckingGrads(false);
+    }
 }
 
 bool ConvNet::checkGradientsW(const string& name, float eps, Weights& weights) {
