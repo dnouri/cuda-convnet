@@ -52,7 +52,7 @@ public:
     Neuron();
     virtual void activate(NVMatrix& input);
     virtual void computeInputGrads(NVMatrix& actGrads);
-    static Neuron& makeNeuron(char* type);
+    static Neuron& makeNeuron(std::string& type);
 };
 
 /*

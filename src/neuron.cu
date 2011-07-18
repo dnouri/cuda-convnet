@@ -29,23 +29,23 @@ void Neuron::computeInputGrads(NVMatrix& actGrads) {
     _computeInputGrads(actGrads);
 }
 
-Neuron& Neuron::makeNeuron(char* type) {
-    if (string(type) == string("relu")) {
+Neuron& Neuron::makeNeuron(string& type) {
+    if (type == "relu") {
         return *new ReluNeuron();
     }
 
-    if (string(type) == string("abs")) {
+    if (type == "abs") {
         return *new AbsNeuron();
     }
 
-    if (string(type) == string("logistic")) {
+    if (type == "logistic") {
         return *new LogisticNeuron();
     }
 
-    if (string(type) == string("ident")) {
+    if (type == "ident") {
         return *new Neuron();
     }
-    throw string("Unknown neuron type: ") + string(type);
+    throw string("Unknown neuron type: ") + type;
 }
 
 /* 

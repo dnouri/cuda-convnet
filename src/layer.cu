@@ -16,7 +16,7 @@ using namespace std;
  * =======================
  */
 /*
- * Static variables that controls whether the matrices storing the
+ * Static variables that control whether the matrices storing the
  * unit activities and their gradients get destroyed after they are used.
  * 
  * Setting this to true might net a performance benefit of a few percent
@@ -25,26 +25,23 @@ using namespace std;
 bool Layer::_saveActs = true;
 bool Layer::_saveActGrads = true;
 
+/*
+ * ConvNet sets this to true when gradient checking mode is enabled. Allows
+ * the layers to change their computation when in that mode.
+ */
+bool Layer::_checkingGrads = false;
+
 Layer::Layer(PyObject* paramsDict, bool gradConsumer, bool gradProducer, bool trans) : 
              _gradConsumer(gradConsumer), _gradProducer(gradProducer), _trans(trans) {
     
-    _name = PyString_AS_STRING(PyDict_GetItemString(paramsDict, "name"));
+    _name = string(PyString_AS_STRING(PyDict_GetItemString(paramsDict, "name")));
     _numGradProducersNext = 0;
+    _checkingGrads = false;
 }
 
 void Layer::fpropNext() {
     for (int i = 0; i < _next.size(); i++) {
         _next[i]->fprop();
-    }
-}
-
-void Layer::bpropPrev() {
-    if (_gradProducer) {
-        for (int i = 0; i < _prev.size(); i++) {
-            if (_prev[i]->isGradConsumer()) {
-                _prev[i]->bprop();
-            }
-        }
     }
 }
 
@@ -99,9 +96,21 @@ void Layer::bprop(NVMatrix& v) {
         _prev[i]->getActGrads().transpose(_trans);
     }
     _acts.transpose(_trans);
-    _bprop(v);
+    
+    bpropCommon(v);
+    if (_gradProducer) {
+        bpropActs(v);
+    }
+    bpropWeights(v);
     truncBwdActs();
-    bpropPrev();
+    
+    if (_gradProducer) {
+        for (int i = 0; i < _prev.size(); i++) {
+            if (_prev[i]->isGradConsumer()) {
+                _prev[i]->bprop();
+            }
+        }
+    }
 }
 
 void Layer::reset() {
@@ -109,7 +118,7 @@ void Layer::reset() {
     _rcvdBInputs = 0;
 }
 
-const char* Layer::getName() {
+string& Layer::getName() {
     return _name;
 }
 
@@ -156,10 +165,6 @@ NVMatrix& Layer::getActGrads() {
     return _actGrads;
 }
 
-void Layer::setCheckingGrads(bool v) {
-    _checkingGrads = v;
-}
-
 /* 
  * =======================
  * FCLayer
@@ -188,7 +193,7 @@ FCLayer::FCLayer(PyObject* paramsDict) : Layer(paramsDict, true, true, true) {
     _weights.initialize(*hWeights, *hWeightsInc, *epsW, *wc, *momW, false);
     _biases.initialize(*hBiases, *hBiasesInc, epsB, 0, momB, true);
 
-    char* neuronType = PyString_AS_STRING(PyDict_GetItemString(paramsDict, "neuron"));
+    string neuronType = string(PyString_AS_STRING(PyDict_GetItemString(paramsDict, "neuron")));
     _neuron = &Neuron::makeNeuron(neuronType);
     assert(_biases.getNumRows() == 1);
 }
@@ -202,9 +207,11 @@ void FCLayer::_fprop(NVMatrixV& v) {
     _neuron->activate(_acts);
 }
 
-void FCLayer::_bprop(NVMatrix& v) {
+void FCLayer::bpropCommon(NVMatrix& v) {
     _neuron->computeInputGrads(v);
-    v.sum(0, _biases.getGrads());
+}
+
+void FCLayer::bpropActs(NVMatrix& v) {
     for (int i = 0; i < _prev.size(); i++) {
         if (_prev[i]->isGradConsumer()) {
             NVMatrix& weights_T = _weights[i].getW().getTranspose();
@@ -215,12 +222,19 @@ void FCLayer::_bprop(NVMatrix& v) {
             }
             delete &weights_T;
         }
+    }
+}
+
+void FCLayer::bpropWeights(NVMatrix& v) {
+    v.sum(0, _biases.getGrads());
+    for (int i = 0; i < _prev.size(); i++) {
         NVMatrix& prevActs_T = _prev[i]->getActs().getTranspose();
         _weights[i].getInc().addProduct(prevActs_T, v,  (!_checkingGrads) * _weights[i].getMom(),
                                         _checkingGrads ? 1 : _weights[i].getEps() / v.getNumRows());
         delete &prevActs_T;
     }
 }
+
 
 void FCLayer::updateWeights(int numCases) {
     _weights.update(numCases);
@@ -239,9 +253,9 @@ void FCLayer::copyToGPU() {
 
 void FCLayer::checkGradients(ConvNet* convNet) {
     for (int i = 0; i < _weights.getSize(); i++) {
-        convNet->checkGradientsW(string(_name) + string(" weights[") + tostr(i) + string("]"), 0.1, _weights[i]);
+        convNet->checkGradientsW(_name + " weights[" + tostr(i) + "]", 0.1, _weights[i]);
     }
-    convNet->checkGradientsW(string(_name) + string(" biases"), 0.01, _biases);
+    convNet->checkGradientsW(_name + " biases", 0.01, _biases);
 }
 
 /* 
@@ -278,7 +292,7 @@ ConvLayer::ConvLayer(PyObject* paramsDict) : Layer(paramsDict, true, true, false
     _weights.initialize(*hWeights, *hWeightsInc, epsW, wc, momW, true);
     _biases.initialize(*hBiases, *hBiasesInc, epsB, 0, momB, true);
 
-    char* neuronType = PyString_AS_STRING(PyDict_GetItemString(paramsDict, "neuron"));
+    string neuronType = string(PyString_AS_STRING(PyDict_GetItemString(paramsDict, "neuron")));
     _neuron = &Neuron::makeNeuron(neuronType);
 }
 
@@ -295,19 +309,17 @@ void ConvLayer::_fprop(NVMatrixV& v) {
     _neuron->activate(_acts);
 }
 
-void ConvLayer::_bprop(NVMatrix& v) {
+void ConvLayer::bpropCommon(NVMatrix& v) {
     _neuron->computeInputGrads(v);
+}
+
+void ConvLayer::bpropWeights(NVMatrix& v) {
     if (_sharedBiases) {
         v.reshape(_numFilters, v.getNumElements() / _numFilters);
         v.sum(1, _biases.getGrads());
         v.reshape(_numFilters * _modules, v.getNumElements() / (_numFilters * _modules));
     } else {
         v.sum(1, _biases.getGrads());
-    }
-
-    if (_prev[0]->isGradConsumer()) {
-        float scaleTargets = _prev[0]->getRcvdBInputs() == 0 ? 0 : 1;
-        convImgActs(v, *_weights, _prev[0]->getActGrads(), _imgSize, _padding, _stride, _channels, scaleTargets, 1);
     }
     if (_partialSum > 0 && _partialSum < _modules) {
         convWeightActs(_prev[0]->getActs(), v, _weightGradsTmp, _modulesX, _filterSize, _padding, _stride, _channels, 0, 1, _partialSum);
@@ -316,6 +328,13 @@ void ConvLayer::_bprop(NVMatrix& v) {
         _weights.getGrads().reshape(_channels * _filterPixels, _numFilters);
     } else {
         convWeightActs(_prev[0]->getActs(), v, _weights.getGrads(), _modulesX, _filterSize, _padding, _stride, _channels);
+    }
+}
+
+void ConvLayer::bpropActs(NVMatrix& v) {
+    if (_prev[0]->isGradConsumer()) {
+        float scaleTargets = _prev[0]->getRcvdBInputs() == 0 ? 0 : 1;
+        convImgActs(v, *_weights, _prev[0]->getActGrads(), _imgSize, _padding, _stride, _channels, scaleTargets, 1);
     }
 }
 
@@ -342,8 +361,8 @@ void ConvLayer::copyToGPU() {
 }
 
 void ConvLayer::checkGradients(ConvNet* convNet) {
-    convNet->checkGradientsW(string(_name) + string(" weights"), 0.01, _weights);
-    convNet->checkGradientsW(string(_name) + string(" biases"), 0.02, _biases);
+    convNet->checkGradientsW(_name + " weights", 0.01, _weights);
+    convNet->checkGradientsW(_name + " biases", 0.02, _biases);
 }
 
 /* 
@@ -355,7 +374,7 @@ SoftmaxLayer::SoftmaxLayer(PyObject* paramsDict)
     : Layer(paramsDict, true, true, true) {
 }
 
-void SoftmaxLayer::_bprop(NVMatrix& v) {
+void SoftmaxLayer::bpropActs(NVMatrix& v) {
     if (_prev[0]->isGradConsumer()) {
         assert(_prev.size() == 1);
         NVMatrix& target = _prev[0]->getActGrads();
@@ -420,9 +439,6 @@ void DataLayer::fprop(NVMatrixV& data) {
     fpropNext();
 }
 
-void DataLayer::_bprop(NVMatrix& v) {
-}
-
 /* 
  * =====================
  * PoolLayer
@@ -438,26 +454,26 @@ PoolLayer::PoolLayer(PyObject* paramsDict)
     _imgSize = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "imgSize"));
     
     _pool = string(PyString_AS_STRING(PyDict_GetItemString(paramsDict, "pool")));
-    if (_pool != string("max") && _pool != string("avg")) {
+    if (_pool != "max" && _pool != "avg") {
         throw string("Unknown pooling type ") + _pool;
     }
 }
 
 void PoolLayer::_fprop(NVMatrixV& v) {
     NVMatrix& images = *v[0];
-    if (_pool == string("max")) {
+    if (_pool == "max") {
         convLocalPool(images, _acts, _channels, _sizeX, _start, _stride, _outputsX, MaxPooler());
-    } else if (_pool == string("avg")) {
+    } else if (_pool == "avg") {
         convLocalPool(images, _acts, _channels, _sizeX, _start, _stride, _outputsX, AvgPooler(_sizeX*_sizeX));
     }
 }
 
-void PoolLayer::_bprop(NVMatrix& v) {
+void PoolLayer::bpropActs(NVMatrix& v) {
     if (_prev[0]->isGradConsumer()) {
         float scaleTargets = _prev[0]->getRcvdBInputs() == 0 ? 0 : 1;
-        if (_pool == string("max")) {
+        if (_pool == "max") {
             convLocalMaxUndo(_prev[0]->getActs(), v, _acts, _prev[0]->getActGrads(), _sizeX, _start, _stride, _outputsX, scaleTargets, 1);
-        } else if (_pool == string("avg")) {
+        } else if (_pool == "avg") {
             convLocalAvgUndo(v, _prev[0]->getActGrads(), _sizeX, _start, _stride, _outputsX, _imgSize, scaleTargets, 1);
         }
     }
@@ -481,7 +497,7 @@ void ContrastNormLayer::_fprop(NVMatrixV& v) {
     convContrastNorm(images, _denoms, _acts, _channels, _sizeX, _scale);
 }
 
-void ContrastNormLayer::_bprop(NVMatrix& v) {
+void ContrastNormLayer::bpropActs(NVMatrix& v) {
     if (_prev[0]->isGradConsumer()) {
         float scaleTargets = _prev[0]->getRcvdBInputs() == 0 ? 0 : 1;
         convContrastNormUndo(v, _denoms, _prev[0]->getActs(), _acts, _prev[0]->getActGrads(), _channels, _sizeX, _scale, scaleTargets, 1);
@@ -528,7 +544,7 @@ doublev& CostLayer::getError() {
 
 // TODO: make this a factory object
 CostLayer& CostLayer::makeCostLayer(string& type, PyObject* paramsDict) {
-    if (type == string("cost.logreg")) {
+    if (type == "cost.logreg") {
         return *new LogregCostLayer(paramsDict);
     }
     throw string("Unknown cost layer type ") + type;
@@ -539,8 +555,7 @@ CostLayer& CostLayer::makeCostLayer(string& type, PyObject* paramsDict) {
  * LogregCostLayer
  * =====================
  */
-LogregCostLayer::LogregCostLayer(PyObject* paramsDict) 
-    : CostLayer(paramsDict, true, true, false) {
+LogregCostLayer::LogregCostLayer(PyObject* paramsDict) : CostLayer(paramsDict, true, true, false) {
 }
 
 void LogregCostLayer::_fprop(NVMatrixV& v) {
@@ -555,7 +570,7 @@ void LogregCostLayer::_fprop(NVMatrixV& v) {
     _err.push_back(numCases - correctProbs.sum());
 }
 
-void LogregCostLayer::_bprop(NVMatrix& v) {
+void LogregCostLayer::bpropActs(NVMatrix& v) {
     NVMatrix& labels = _prev[0]->getActs();
     NVMatrix& probs = _prev[1]->getActs();
     NVMatrix& target = _prev[1]->getActGrads();

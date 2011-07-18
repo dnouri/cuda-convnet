@@ -46,8 +46,8 @@ ConvNet::ConvNet(PyListObject* layerParams, int minibatchSize, int deviceID) : T
             }
         }
         
-        this->_dp = new DataProvider(minibatchSize);
-    } catch(string& s) {
+        _dp = new DataProvider(minibatchSize);
+    } catch (string& s) {
         cout << "Error creating ConvNet: " << s << endl;
         exit(1);
     }
@@ -57,19 +57,19 @@ ConvNet::ConvNet(PyListObject* layerParams, int minibatchSize, int deviceID) : T
  * Override this in derived classes
  */
 Layer* ConvNet::initLayer(string& layerType, PyObject* paramsDict) {
-    if (layerType == string("fc")) {
+    if (layerType == "fc") {
         _layers.push_back(dynamic_cast<Layer*>(new FCLayer(paramsDict)));
-    } else if (layerType == string("conv")) {
+    } else if (layerType == "conv") {
         _layers.push_back(dynamic_cast<Layer*>(new ConvLayer(paramsDict)));
-    } else if (layerType == string("pool")) {
+    } else if (layerType == "pool") {
         _layers.push_back(dynamic_cast<Layer*>(new PoolLayer(paramsDict)));
-    } else if (layerType == string("cnorm")) {
+    } else if (layerType == "cnorm") {
         _layers.push_back(dynamic_cast<Layer*>(new ContrastNormLayer(paramsDict)));
-    } else if (layerType == string("data")) {
+    } else if (layerType == "data") {
         DataLayer *d = new DataLayer(paramsDict);
         _layers.push_back(dynamic_cast<Layer*>(d));
         _dataLayers.push_back(d);
-    } else if (layerType == string("softmax")) {
+    } else if (layerType == "softmax") {
         _layers.push_back(dynamic_cast<Layer*>(new SoftmaxLayer(paramsDict)));
     } else if (strncmp(layerType.c_str(), "cost.", 5) == 0) {
         CostLayer *c = &CostLayer::makeCostLayer(layerType, paramsDict);
@@ -205,9 +205,7 @@ double ConvNet::getCostFunctionValue() {
  * Gradient checking stuff
  */
 void ConvNet::checkGradients() {
-    for (vector<Layer*>::iterator it = _layers.begin(); it != _layers.end(); ++it) {
-        (*it)->setCheckingGrads(true);
-    }
+    Layer::_checkingGrads = true;
     _numFailures = 0;
     _numTests = 0;
     fprop(0);
@@ -224,9 +222,7 @@ void ConvNet::checkGradients() {
     } else {
         cout << "ALL " << _numTests << " TESTS PASSED" << endl;
     }
-    for (vector<Layer*>::iterator it = _layers.begin(); it != _layers.end(); ++it) {
-        (*it)->setCheckingGrads(false);
-    }
+    Layer::_checkingGrads = false;
 }
 
 bool ConvNet::checkGradientsW(const string& name, float eps, Weights& weights) {
