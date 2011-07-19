@@ -1,7 +1,21 @@
 /* 
- * Author: Alex Krizhevsky (akrizhevsky@gmail.com)
- * June 2011
+    Abstract convolutional neural net in C++/CUDA.
+    Copyright (C) 2011  Alex Krizhevsky
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+
 #include <assert.h>
 
 #include "../include/layer_kernels.cuh"
@@ -111,4 +125,26 @@ void computeLogregGrads(NVMatrix& labels, NVMatrix& probs, NVMatrix& target, boo
     }
 
     cutilCheckMsg("kLogregCostGrads: Kernel execution failed");
+}
+
+void computeSoftmaxGrads(NVMatrix& acts, NVMatrix& actGrads, NVMatrix& target, bool add) {
+    int numCases = acts.getLeadingDim();
+    int numOut = acts.getFollowingDim();
+
+    assert(acts.isSameDims(actGrads));
+    assert(acts.isContiguous());
+    assert(actGrads.isContiguous());
+    assert(target.isContiguous());
+    assert(acts.isTrans());
+    assert(actGrads.isTrans());
+
+    dim3 threads(LOGREG_GRADS_THREADS_X, LOGREG_GRADS_THREADS_Y);
+    dim3 blocks(DIVUP(numCases, LOGREG_GRADS_THREADS_X), DIVUP(numOut, LOGREG_GRADS_THREADS_Y));
+    if (!add) {
+        target.resize(acts);
+        kSoftmaxGrads<false><<<blocks, threads>>>(actGrads.getDevData(), acts.getDevData(), target.getDevData(), numCases, numOut);
+    } else {
+        kSoftmaxGrads<true><<<blocks, threads>>>(actGrads.getDevData(), acts.getDevData(), target.getDevData(), numCases, numOut);
+    }
+    cutilCheckMsg("kSoftmaxGrads: Kernel execution failed");
 }

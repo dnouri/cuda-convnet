@@ -1,8 +1,19 @@
 /* 
- * File:   conv_util.cuh
- * Author: Alex Krizhevsky (akrizhevsky@gmail.com)
- *
- * Created on June 28, 2011, 3:45 PM
+    CUDA convolution routines.
+    Copyright (C) 2011  Alex Krizhevsky
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #ifndef CONV_UTIL_CUH
@@ -25,39 +36,32 @@ void convContrastNorm(NVMatrix& images, NVMatrix& denoms, NVMatrix& target, int 
 void convContrastNormUndo(NVMatrix& outGrads, NVMatrix& denoms, NVMatrix& inputs, NVMatrix& acts, NVMatrix& target, int numFilters,
                          int sizeX, float cNormScale, float scaleTargets, float scaleOutput);
 
-class CNormUndoOp {
-public:
-    __device__ inline float operator()(float a, float b) const {
-        return __fdividef(a, b*b);
-    }
-};
-
 class AvgPooler {
 private:
     float _num;
 public:
     AvgPooler(float num) : _num(num) {
     }
-    __device__ inline float operator()(float a, float b) const {
+    __device__ inline float operator()(const float a, const float b) const {
         return a + b;
     }
     __device__ inline float getBaseValue() const {
         return 0;
     }
-    __device__ inline float output(float a) const {
+    __device__ inline float output(const float a) const {
         return a / _num;
     }
 };
 
 class MaxPooler {
 public:
-    __device__ inline float operator()(float a, float b) const {
+    __device__ inline float operator()(const float a, const float b) const {
         return a > b ? a : b;
     }
     __device__ inline float getBaseValue() const {
         return -2e38; 
     }
-    __device__ inline float output(float a) const {
+    __device__ inline float output(const float a) const {
         return a;
     }
 };

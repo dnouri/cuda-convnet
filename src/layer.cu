@@ -1,9 +1,21 @@
 /* 
- * File:   layer.cu
- * Author: Alex Krizhevsky (akrizhevsky@gmail.com)
- *
- * Created on June 11, 2011, 6:18 AM
+    Abstract convolutional neural net in C++/CUDA.
+    Copyright (C) 2011  Alex Krizhevsky
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+
 #include <iostream>
 #include "../include/layer_kernels.cuh"
 #include "../include/layer.cuh"
@@ -362,30 +374,12 @@ void ConvLayer::checkGradients(ConvNet* convNet) {
  * SoftmaxLayer
  * =======================
  */
-SoftmaxLayer::SoftmaxLayer(PyObject* paramsDict) 
-    : Layer(paramsDict, true, true, true) {
+SoftmaxLayer::SoftmaxLayer(PyObject* paramsDict) : Layer(paramsDict, true, true, true) {
 }
 
 void SoftmaxLayer::bpropActs(NVMatrix& v) {
     if (_prev[0]->isGradConsumer()) {
-        assert(_prev.size() == 1);
-        NVMatrix& target = _prev[0]->getActGrads();
-
-        int numCases = _acts.getLeadingDim();
-        int numOut = _acts.getFollowingDim();
-
-        assert(v.getLeadingDim() == numCases && v.getFollowingDim() == numOut);
-
-        dim3 threads(LOGREG_GRADS_THREADS_X, LOGREG_GRADS_THREADS_Y);
-        dim3 blocks(DIVUP(numCases, LOGREG_GRADS_THREADS_X), DIVUP(numOut, LOGREG_GRADS_THREADS_Y));
-        if (_prev[0]->getRcvdBInputs() == 0) {
-            target.resize(_acts);
-            kSoftmaxGrads<false><<<blocks, threads>>>(v.getDevData(), _acts.getDevData(), target.getDevData(), numCases, numOut);
-        } else {
-            kSoftmaxGrads<true><<<blocks, threads>>>(v.getDevData(), _acts.getDevData(), target.getDevData(), numCases, numOut);
-        }
-
-        cutilCheckMsg("kSoftmaxGrads: Kernel execution failed");
+        computeSoftmaxGrads(_acts, v, _prev[0]->getActGrads(), _prev[0]->getRcvdBInputs() > 0);
     }
 }
 
@@ -407,8 +401,7 @@ void SoftmaxLayer::_fprop(NVMatrixV& v) {
  * DataLayer
  * =======================
  */
-DataLayer::DataLayer(PyObject* paramsDict) 
-    : Layer(paramsDict, false, false, false) {
+DataLayer::DataLayer(PyObject* paramsDict) : Layer(paramsDict, false, false, false) {
     _dataIdx = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "dataIdx"));
 }
 
@@ -475,8 +468,7 @@ void PoolLayer::bpropActs(NVMatrix& v) {
  * ContrastNormLayer
  * =====================
  */
-ContrastNormLayer::ContrastNormLayer(PyObject* paramsDict) 
-    : Layer(paramsDict, true, true, false) {
+ContrastNormLayer::ContrastNormLayer(PyObject* paramsDict) : Layer(paramsDict, true, true, false) {
     _channels = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "channels"));
     _sizeX = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "sizeX"));
 

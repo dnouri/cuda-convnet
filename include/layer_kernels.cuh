@@ -1,8 +1,19 @@
 /* 
- * File:   layer_kernels.cuh
- * Author: Alex Krizhevsky (akrizhevsky@gmail.com)
- *
- * Created on June 28, 2011, 12:52 PM
+    Abstract convolutional neural net in C++/CUDA.
+    Copyright (C) 2011  Alex Krizhevsky
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #ifndef LAYER_KERNELS_CUH
@@ -19,6 +30,7 @@
 
 void computeLogregCost(NVMatrix& labels, NVMatrix& probs, NVMatrix& labelLogProbs_out, NVMatrix& correctProbs_out);
 void computeLogregGrads(NVMatrix& labels, NVMatrix& probs, NVMatrix& target, bool add, float coeff);
+void computeSoftmaxGrads(NVMatrix& acts, NVMatrix& actGrads, NVMatrix& target, bool add);
 
 /*
  * dE_dy_l: (numOut, numCases)
