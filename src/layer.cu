@@ -171,14 +171,6 @@ NVMatrix& Layer::getActGrads() {
  * =======================
  */
 
-void FCLayer::multByInput(NVMatrix& input, int idx) {
-    if (idx == 0) {
-        input.rightMult(*_weights[idx], _acts);
-    } else {
-        _acts.addProduct(input, *_weights[idx]);
-    }
-}
-
 FCLayer::FCLayer(PyObject* paramsDict) : Layer(paramsDict, true, true, true) {
     MatrixV* hWeights = getMatrixVec(PyDict_GetItemString(paramsDict, "weights"));
     MatrixV* hWeightsInc = getMatrixVec(PyDict_GetItemString(paramsDict, "weightsInc"));
@@ -199,8 +191,9 @@ FCLayer::FCLayer(PyObject* paramsDict) : Layer(paramsDict, true, true, true) {
 }
 
 void FCLayer::_fprop(NVMatrixV& v) {
-    for (int i = 0; i < v.size(); i++) {
-        multByInput(*v[i], i);
+    v[0]->rightMult(*_weights[0], _acts);
+    for (int i = 1; i < v.size(); i++) {
+        _acts.addProduct(*v[i], *_weights[i]);
     }
     
     _acts.addVector(*_biases);
@@ -234,7 +227,6 @@ void FCLayer::bpropWeights(NVMatrix& v) {
         delete &prevActs_T;
     }
 }
-
 
 void FCLayer::updateWeights(int numCases) {
     _weights.update(numCases);
@@ -415,7 +407,6 @@ void SoftmaxLayer::_fprop(NVMatrixV& v) {
  * DataLayer
  * =======================
  */
-
 DataLayer::DataLayer(PyObject* paramsDict) 
     : Layer(paramsDict, false, false, false) {
     _dataIdx = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "dataIdx"));

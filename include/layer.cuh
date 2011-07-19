@@ -99,7 +99,6 @@ private:
     WeightList _weights;
     Weights _biases;
     Neuron* _neuron;
-    void multByInput(NVMatrix& input, int idx);
 protected:
     void _fprop(NVMatrixV& v);
     void bpropCommon(NVMatrix& v);
