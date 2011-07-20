@@ -54,7 +54,7 @@ protected:
     std::string _name;
     void fpropNext();
     virtual void truncBwdActs(); 
-    virtual void _fprop(NVMatrixV& v) = 0;
+    virtual void fpropActs(NVMatrixV& v) = 0;
     virtual void bpropCommon(NVMatrix& v) {
         // do nothing by default
     }
@@ -110,7 +110,7 @@ private:
     Weights _biases;
     Neuron* _neuron;
 protected:
-    void _fprop(NVMatrixV& v);
+    void fpropActs(NVMatrixV& v);
     void bpropCommon(NVMatrix& v);
     void bpropActs(NVMatrix& v);
     void bpropWeights(NVMatrix& v);
@@ -125,7 +125,7 @@ public:
 
 class SoftmaxLayer : public Layer {
 protected:
-    void _fprop(NVMatrixV& v);
+    void fpropActs(NVMatrixV& v);
     void bpropActs(NVMatrix& v);
 public:
     SoftmaxLayer(PyObject* paramsDict);
@@ -135,7 +135,7 @@ class DataLayer : public Layer {
 private:
     int _dataIdx;
 protected:
-    void _fprop(NVMatrixV& data);
+    void fpropActs(NVMatrixV& data);
 public:
     DataLayer(PyObject* paramsDict);
     
@@ -154,7 +154,7 @@ private:
     bool _sharedBiases;
     NVMatrix _weightGradsTmp;
 protected:
-    void _fprop(NVMatrixV& v);
+    void fpropActs(NVMatrixV& v);
     void bpropCommon(NVMatrix& v);
     void bpropActs(NVMatrix& v);
     void bpropWeights(NVMatrix& v);
@@ -174,7 +174,7 @@ private:
     int _imgSize;
     string _pool;
 protected:
-    void _fprop(NVMatrixV& v);
+    void fpropActs(NVMatrixV& v);
     void bpropActs(NVMatrix& v);
 public:
     PoolLayer(PyObject* paramsDict);
@@ -186,7 +186,7 @@ private:
     float _scale;
     NVMatrix _denoms;
 protected:
-    void _fprop(NVMatrixV& v);
+    void fpropActs(NVMatrixV& v);
     void bpropActs(NVMatrix& v);
     void truncBwdActs();
 public:
@@ -212,7 +212,7 @@ public:
  */
 class LogregCostLayer : public CostLayer {
 protected:
-    void _fprop(NVMatrixV& v);
+    void fpropActs(NVMatrixV& v);
     void bpropActs(NVMatrix& v);
 public:
     LogregCostLayer(PyObject* paramsDict);

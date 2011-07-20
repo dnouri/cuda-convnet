@@ -31,7 +31,7 @@ using namespace std;
  * Static variables that control whether the matrices storing the
  * unit activities and their gradients get destroyed after they are used.
  * 
- * Setting this to true might net a performance benefit of a few percent
+ * Setting these to true might net a performance benefit of a few percent
  * while increasing memory consumption.
  */
 bool Layer::_saveActs = true;
@@ -48,7 +48,6 @@ Layer::Layer(PyObject* paramsDict, bool gradConsumer, bool gradProducer, bool tr
     
     _name = string(PyString_AS_STRING(PyDict_GetItemString(paramsDict, "name")));
     _numGradProducersNext = 0;
-    _checkingGrads = false;
 }
 
 void Layer::fpropNext() {
@@ -90,7 +89,7 @@ void Layer::fprop(NVMatrixV& v) {
         (*it)->transpose(_trans);
     }
     _acts.transpose(_trans);
-    _fprop(v);
+    fpropActs(v);
     fpropNext();
 }
 
@@ -182,7 +181,6 @@ NVMatrix& Layer::getActGrads() {
  * FCLayer
  * =======================
  */
-
 FCLayer::FCLayer(PyObject* paramsDict) : Layer(paramsDict, true, true, true) {
     MatrixV* hWeights = getMatrixVec(PyDict_GetItemString(paramsDict, "weights"));
     MatrixV* hWeightsInc = getMatrixVec(PyDict_GetItemString(paramsDict, "weightsInc"));
@@ -202,7 +200,7 @@ FCLayer::FCLayer(PyObject* paramsDict) : Layer(paramsDict, true, true, true) {
     assert(_biases.getNumRows() == 1);
 }
 
-void FCLayer::_fprop(NVMatrixV& v) {
+void FCLayer::fpropActs(NVMatrixV& v) {
     v[0]->rightMult(*_weights[0], _acts);
     for (int i = 1; i < v.size(); i++) {
         _acts.addProduct(*v[i], *_weights[i]);
@@ -300,7 +298,7 @@ ConvLayer::ConvLayer(PyObject* paramsDict) : Layer(paramsDict, true, true, false
     _neuron = &Neuron::makeNeuron(neuronType);
 }
 
-void ConvLayer::_fprop(NVMatrixV& v) {
+void ConvLayer::fpropActs(NVMatrixV& v) {
     convFilterActs(*v[0], *_weights, _acts, _modulesX, _padding, _stride, _channels);
     if (_sharedBiases) {
         _acts.reshape(_numFilters, _acts.getNumElements() / _numFilters);
@@ -383,7 +381,7 @@ void SoftmaxLayer::bpropActs(NVMatrix& v) {
     }
 }
 
-void SoftmaxLayer::_fprop(NVMatrixV& v) {
+void SoftmaxLayer::fpropActs(NVMatrixV& v) {
     NVMatrix& input = *v[0];
 
     NVMatrix& max = input.max(1);
@@ -409,7 +407,7 @@ void DataLayer::fprop() {
     throw string("No dava given!");
 }
 
-void DataLayer::_fprop(NVMatrixV& data) {
+void DataLayer::fpropActs(NVMatrixV& data) {
     NVMatrix& d = *data[_dataIdx];
     // TODO: this is slightly inelegant because it creates a copy of the data structure
     // (though not of any GPU memory)
@@ -419,7 +417,7 @@ void DataLayer::_fprop(NVMatrixV& data) {
 }
 
 void DataLayer::fprop(NVMatrixV& data) {
-    _fprop(data);
+    fpropActs(data);
     fpropNext();
 }
 
@@ -428,8 +426,7 @@ void DataLayer::fprop(NVMatrixV& data) {
  * PoolLayer
  * =====================
  */
-PoolLayer::PoolLayer(PyObject* paramsDict) 
-    : Layer(paramsDict, true, true, false) {
+PoolLayer::PoolLayer(PyObject* paramsDict) : Layer(paramsDict, true, true, false) {
     _channels = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "channels"));
     _sizeX = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "sizeX"));
     _start = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "start"));
@@ -443,7 +440,7 @@ PoolLayer::PoolLayer(PyObject* paramsDict)
     }
 }
 
-void PoolLayer::_fprop(NVMatrixV& v) {
+void PoolLayer::fpropActs(NVMatrixV& v) {
     NVMatrix& images = *v[0];
     if (_pool == "max") {
         convLocalPool(images, _acts, _channels, _sizeX, _start, _stride, _outputsX, MaxPooler());
@@ -475,7 +472,7 @@ ContrastNormLayer::ContrastNormLayer(PyObject* paramsDict) : Layer(paramsDict, t
     _scale = PyFloat_AS_DOUBLE(PyDict_GetItemString(paramsDict, "scale"));
 }
 
-void ContrastNormLayer::_fprop(NVMatrixV& v) {
+void ContrastNormLayer::fpropActs(NVMatrixV& v) {
     NVMatrix& images = *v[0];
     convContrastNorm(images, _denoms, _acts, _channels, _sizeX, _scale);
 }
@@ -488,11 +485,8 @@ void ContrastNormLayer::bpropActs(NVMatrix& v) {
 }
 
 void ContrastNormLayer::truncBwdActs() {
-    if (!_saveActGrads) { 
-        _actGrads.truncate();
-    }
+    Layer::truncBwdActs();
     if (!_saveActs) {
-        _acts.truncate();
         _denoms.truncate();
     }
 }
@@ -541,7 +535,7 @@ CostLayer& CostLayer::makeCostLayer(string& type, PyObject* paramsDict) {
 LogregCostLayer::LogregCostLayer(PyObject* paramsDict) : CostLayer(paramsDict, true, true, false) {
 }
 
-void LogregCostLayer::_fprop(NVMatrixV& v) {
+void LogregCostLayer::fpropActs(NVMatrixV& v) {
     _err.clear();
     NVMatrix& labels = *v[0];
     NVMatrix& probs = *v[1];
