@@ -73,22 +73,20 @@ __global__ void kRNorm_fewfilter(float* imgs, float* denoms, float* target, cons
             prod[f][i] = 0; 
         }
     }
-
-    for (int sy = 0; sy < sizeX; sy++) {
-        for (int sx = 0; sx < sizeX; sx++) {
-            const int imgPxY = startPxY + sy;
-            const int imgPxX = startPxX + sx;
-
-            if (imgPxY >= 0 && imgPxY < imgSize && imgPxX >= 0 && imgPxX < imgSize) {
-                const int imgPx = imgPxY * imgSize + imgPxX;
-                #pragma unroll
-                for (int i = 0; i < imgsPerThread; i++) {
-                    if (!checkCaseBounds || imgIdx + i * 128 < numImages) {
-                        #pragma unroll
-                        for (int f = 0; f < numFilters; f++) {
-                            const float v = imgs[(f * imgPixels + imgPx) * numImages + i * 128];
-                            prod[f][i] += v*v;
-                        }
+    const int loopStartY = MAX(0, startPxY);
+    const int loopStartX = MAX(0, startPxX);
+    const int loopEndY = MIN(imgSize, startPxY + sizeX);
+    const int loopEndX = MIN(imgSize, startPxX + sizeX);
+    for (int y = loopStartY; y < loopEndY; y++) {
+        for (int x = loopStartX; x < loopEndX; x++) {
+            const int imgPx = y * imgSize + x;
+            #pragma unroll
+            for (int i = 0; i < imgsPerThread; i++) {
+                if (!checkCaseBounds || imgIdx + i * 128 < numImages) {
+                    #pragma unroll
+                    for (int f = 0; f < numFilters; f++) {
+                        const float v = imgs[(f * imgPixels + imgPx) * numImages + i * 128];
+                        prod[f][i] += v*v;
                     }
                 }
             }
@@ -154,24 +152,25 @@ __global__ void kRNorm_manyfilter(float* imgs, float* denoms, float* target, con
         }
     }
 
-    for (int sy = 0; sy < sizeX; sy++) {
-        for (int sx = 0; sx < sizeX; sx++) {
-            const int imgPxY = startPxY + sy;
-            const int imgPxX = startPxX + sx;
-
-            if (imgPxY >= 0 && imgPxY < imgSize && imgPxX >= 0 && imgPxX < imgSize) {
-                const int imgPx = imgPxY * imgSize + imgPxX;
-                #pragma unroll
-                for (int i = 0; i < imgsPerThread; i++) {
-                    if (!checkCaseBounds || imgIdx + i * B_X < numImages) {
-                        #pragma unroll
-                        for (int f = 0; f < filtersPerThread; f++) {
-                            const float v = imgs[(f * B_Y * imgPixels + imgPx) * numImages + i * B_X];
-                            prod[f][i] += v*v;
-                        }
+    const int loopStartY = MAX(0, startPxY);
+    const int loopStartX = MAX(0, startPxX);
+    const int loopEndY = MIN(imgSize, startPxY + sizeX);
+    const int loopEndX = MIN(imgSize, startPxX + sizeX);
+    
+    for (int y = loopStartY; y < loopEndY; y++) {
+        for (int x = loopStartX; x < loopEndX; x++) {
+            const int imgPx = y * imgSize + x;
+            #pragma unroll
+            for (int i = 0; i < imgsPerThread; i++) {
+                if (!checkCaseBounds || imgIdx + i * B_X < numImages) {
+                    #pragma unroll
+                    for (int f = 0; f < filtersPerThread; f++) {
+                        const float v = imgs[(f * B_Y * imgPixels + imgPx) * numImages + i * B_X];
+                        prod[f][i] += v*v;
                     }
                 }
             }
+            
         }
     }
     
@@ -262,6 +261,7 @@ __global__ void kRNorm2(float* imgs, float* denoms, float* target, const int img
     }
 
     for (int y = startPxY; y < endPxY; y++) {
+        const bool isInY = y >= myStartPxY && y < myEndPxY;
         for (int x = startPxX; x < endPxX; x++) {
             const int px = y * imgSize + x;
             // All the threads load a pixel from memory
@@ -279,7 +279,7 @@ __global__ void kRNorm2(float* imgs, float* denoms, float* target, const int img
             __syncthreads();
             
             // Each row of threads decides if it's interested in this pixel
-            if (y >= myStartPxY && y < myEndPxY && x >= myStartPxX && x < myEndPxX) {
+            if (isInY && x >= myStartPxX && x < myEndPxX) {
                 #pragma unroll
                 for (int i = 0; i < imgsPerThread; i++) {
                     if (!checkCaseBounds || imgIdx + i * B_X < numImages) {
@@ -720,6 +720,7 @@ __global__ void kRNormUndo2(float* outGrads, float* denoms, float* inputs, float
     }
 
     for (int y = startPxY; y < endPxY; y++) {
+        const bool isInY = y >= myStartPxY && y < myEndPxY;
         for (int x = startPxX; x < endPxX; x++) {
             const int px = y * imgSize + x;
             // All the threads load a pixel from memory
@@ -737,7 +738,7 @@ __global__ void kRNormUndo2(float* outGrads, float* denoms, float* inputs, float
             __syncthreads();
             
             // Each row of threads decides if it's interested in this pixel
-            if (y >= myStartPxY && y < myEndPxY && x >= myStartPxX && x < myEndPxX) {
+            if (isInY && x >= myStartPxX && x < myEndPxX) {
                 #pragma unroll
                 for (int i = 0; i < imgsPerThread; i++) {
                     if (!checkCaseBounds || imgIdx + i * B_X < numImages) {
@@ -1119,7 +1120,7 @@ void convResponseNorm(NVMatrix& images, NVMatrix& denoms, NVMatrix& target, int 
             }
         }
     }
-    cutilCheckMsg("convContrastNorm: kernel execution failed");
+    cutilCheckMsg("convResponseNorm: kernel execution failed");
 }
 
 /*

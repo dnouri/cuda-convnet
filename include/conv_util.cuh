@@ -121,21 +121,20 @@ __global__ void kLocalPool(float* imgs, float* target, const int imgSize, const 
             prod[f][i] = agg.getBaseValue(); 
         }
     }
-
-    for (int sy = 0; sy < subsX; sy++) {
-        for (int sx = 0; sx < subsX; sx++) {
-            const int imgPxY = startImgPxY + sy;
-            const int imgPxX = startImgPxX + sx;
-
-            if (imgPxY >= 0 && imgPxY < imgSize && imgPxX >= 0 && imgPxX < imgSize) {
-                const int imgPx = imgPxY * imgSize + imgPxX;
-                #pragma unroll
-                for (int i = 0; i < imgsPerThread; i++) {
-                    if (!checkCaseBounds || imgIdx + i * B_X < numImages) {
-                        #pragma unroll
-                        for (int f = 0; f < filtersPerThread; f++) {
-                            prod[f][i] = agg(prod[f][i], imgs[(f * B_Y * imgPixels + imgPx) * numImages + i * B_X]);
-                        }
+    
+    const int loopStartY = MAX(0, startImgPxY);
+    const int loopStartX = MAX(0, startImgPxX);
+    const int loopEndY = MIN(imgSize, startImgPxY + subsX);
+    const int loopEndX = MIN(imgSize, startImgPxX + subsX);
+    for (int y = loopStartY; y < loopEndY; y++) {
+        for (int x = loopStartX; x < loopEndX; x++) {
+            const int imgPx = y * imgSize + x;
+            #pragma unroll
+            for (int i = 0; i < imgsPerThread; i++) {
+                if (!checkCaseBounds || imgIdx + i * B_X < numImages) {
+                    #pragma unroll
+                    for (int f = 0; f < filtersPerThread; f++) {
+                        prod[f][i] = agg(prod[f][i], imgs[(f * B_Y * imgPixels + imgPx) * numImages + i * B_X]);
                     }
                 }
             }
@@ -237,6 +236,7 @@ __global__ void kLocalPool2(float* imgs, float* target, const int imgSize, const
     }
 
     for (int y = loopStartY; y < loopEndY; y++) {
+        const bool isInY = y >= myStartImgPxY && y < myEndImgPxY ;
         for (int x = loopStartX; x < loopEndX; x++) {
             // Load a pixel
             const int px = y * imgSize + x;
@@ -254,7 +254,7 @@ __global__ void kLocalPool2(float* imgs, float* target, const int imgSize, const
             __syncthreads();
 
             // Is this pixel in my region?
-            if (y >=myStartImgPxY && y < myEndImgPxY && x >= myStartImgPxX && x < myEndImgPxX) {
+            if (isInY && x >= myStartImgPxX && x < myEndImgPxX) {
                 #pragma unroll
                 for (int i = 0; i < imgsPerThread; i++) {
                     if (!checkCaseBounds || imgIdx + i * B_X < numImages) {
