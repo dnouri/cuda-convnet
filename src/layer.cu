@@ -1,19 +1,27 @@
 /* 
-    Abstract convolutional neural net in C++/CUDA.
-    Copyright (C) 2011  Alex Krizhevsky
-
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright (c) 2011, Alex Krizhevsky (akrizhevsky@gmail.com)
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without modification,
+ * are permitted provided that the following conditions are met:
+ *
+ * - Redistributions of source code must retain the above copyright notice,
+ *   this list of conditions and the following disclaimer.
+ * 
+ * - Redistributions in binary form must reproduce the above copyright notice,
+ *   this list of conditions and the following disclaimer in the documentation
+ *   and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
+ * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
 #include <iostream>
@@ -46,7 +54,7 @@ bool Layer::_checkingGrads = false;
 Layer::Layer(PyObject* paramsDict, bool gradConsumer, bool gradProducer, bool trans) : 
              _gradConsumer(gradConsumer), _gradProducer(gradProducer), _trans(trans) {
     
-    _name = string(PyString_AS_STRING(PyDict_GetItemString(paramsDict, "name")));
+    _name = pyDictGetString(paramsDict, "name");
     _numGradProducersNext = 0;
 }
 
@@ -82,6 +90,8 @@ void Layer::fprop(NVMatrix& v) {
     fprop(vl);
 }
 
+// TODO: make this remember v in a class variable, since it's necessary
+// for gradient computation. At present bprop just assumes v == prev.getActs().
 void Layer::fprop(NVMatrixV& v) {
     assert(v.size() == _prev.size());
     _rcvdFInputs = _prev.size();
@@ -182,22 +192,21 @@ NVMatrix& Layer::getActGrads() {
  * =======================
  */
 FCLayer::FCLayer(PyObject* paramsDict) : Layer(paramsDict, true, true, true) {
-    MatrixV* hWeights = getMatrixVec(PyDict_GetItemString(paramsDict, "weights"));
-    MatrixV* hWeightsInc = getMatrixVec(PyDict_GetItemString(paramsDict, "weightsInc"));
-    Matrix* hBiases = new Matrix((PyArrayObject*)PyDict_GetItemString(paramsDict, "biases"));
-    Matrix* hBiasesInc = new Matrix((PyArrayObject*)PyDict_GetItemString(paramsDict, "biasesInc"));
+    MatrixV* hWeights = pyDictGetMatrixV(paramsDict, "weights");
+    MatrixV* hWeightsInc = pyDictGetMatrixV(paramsDict, "weightsInc");
+    Matrix* hBiases = pyDictGetMatrix(paramsDict, "biases");
+    Matrix* hBiasesInc = pyDictGetMatrix(paramsDict, "biasesInc");
 
-    floatv* momW = getFloatVec(PyDict_GetItemString(paramsDict, "momW"));
-    float momB = PyFloat_AS_DOUBLE(PyDict_GetItemString(paramsDict, "momB"));
-    floatv* epsW = getFloatVec(PyDict_GetItemString(paramsDict, "epsW"));
-    float epsB = PyFloat_AS_DOUBLE(PyDict_GetItemString(paramsDict, "epsB"));
-    floatv* wc = getFloatVec(PyDict_GetItemString(paramsDict, "wc"));
+    floatv* momW = pyDictGetFloatV(paramsDict, "momW");
+    float momB = pyDictGetFloat(paramsDict, "momB");
+    floatv* epsW = pyDictGetFloatV(paramsDict, "epsW");
+    float epsB = pyDictGetFloat(paramsDict, "epsB");
+    floatv* wc = pyDictGetFloatV(paramsDict, "wc");
     _weights.initialize(*hWeights, *hWeightsInc, *epsW, *wc, *momW, false);
     _biases.initialize(*hBiases, *hBiasesInc, epsB, 0, momB, true);
 
-    string neuronType = string(PyString_AS_STRING(PyDict_GetItemString(paramsDict, "neuron")));
+    string neuronType = pyDictGetString(paramsDict, "neuron");
     _neuron = &Neuron::makeNeuron(neuronType);
-    assert(_biases.getNumRows() == 1);
 }
 
 void FCLayer::fpropActs(NVMatrixV& v) {
@@ -266,26 +275,26 @@ void FCLayer::checkGradients(ConvNet* convNet) {
  * =======================
  */
 ConvLayer::ConvLayer(PyObject* paramsDict) : Layer(paramsDict, true, true, false) {
-    Matrix* hWeights = new Matrix((PyArrayObject*)PyDict_GetItemString(paramsDict, "weights"));
-    Matrix* hWeightsInc = new Matrix((PyArrayObject*)PyDict_GetItemString(paramsDict, "weightsInc"));
-    Matrix* hBiases = new Matrix((PyArrayObject*)PyDict_GetItemString(paramsDict, "biases"));
-    Matrix* hBiasesInc = new Matrix((PyArrayObject*)PyDict_GetItemString(paramsDict, "biasesInc"));
+    Matrix* hWeights = pyDictGetMatrix(paramsDict, "weights");
+    Matrix* hWeightsInc = pyDictGetMatrix(paramsDict, "weightsInc");
+    Matrix* hBiases = pyDictGetMatrix(paramsDict, "biases");
+    Matrix* hBiasesInc = pyDictGetMatrix(paramsDict, "biasesInc");
     
-    float momW = PyFloat_AS_DOUBLE(PyDict_GetItemString(paramsDict, "momW"));
-    float momB = PyFloat_AS_DOUBLE(PyDict_GetItemString(paramsDict, "momB"));
-    float epsW = PyFloat_AS_DOUBLE(PyDict_GetItemString(paramsDict, "epsW"));
-    float epsB = PyFloat_AS_DOUBLE(PyDict_GetItemString(paramsDict, "epsB"));
-    float wc = PyFloat_AS_DOUBLE(PyDict_GetItemString(paramsDict, "wc"));
+    float momW = pyDictGetFloat(paramsDict, "momW");
+    float momB = pyDictGetFloat(paramsDict, "momB");
+    float epsW = pyDictGetFloat(paramsDict, "epsW");
+    float epsB = pyDictGetFloat(paramsDict, "epsB");
+    float wc = pyDictGetFloat(paramsDict, "wc");
     
-    _padding = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "padding"));
-    _stride = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "stride"));
-    _filterSize = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "filterSize"));
-    _modulesX = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "modulesX"));
-    _channels = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "channels"));
-    _imgSize = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "imgSize"));
-    _numFilters = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "numFilters"));
-    _partialSum = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "partialSum"));
-    _sharedBiases = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "sharedBiases"));
+    _padding = pyDictGetInt(paramsDict, "padding");
+    _stride = pyDictGetInt(paramsDict, "stride");
+    _filterSize = pyDictGetInt(paramsDict, "filterSize");
+    _modulesX = pyDictGetInt(paramsDict, "modulesX");
+    _channels = pyDictGetInt(paramsDict, "channels");
+    _imgSize = pyDictGetInt(paramsDict, "imgSize");
+    _numFilters = pyDictGetInt(paramsDict, "numFilters");
+    _partialSum = pyDictGetInt(paramsDict, "partialSum");
+    _sharedBiases = pyDictGetInt(paramsDict, "sharedBiases");
 
     _modules = _modulesX * _modulesX;
     _filterPixels = _filterSize * _filterSize;
@@ -294,7 +303,7 @@ ConvLayer::ConvLayer(PyObject* paramsDict) : Layer(paramsDict, true, true, false
     _weights.initialize(*hWeights, *hWeightsInc, epsW, wc, momW, true);
     _biases.initialize(*hBiases, *hBiasesInc, epsB, 0, momB, true);
 
-    string neuronType = string(PyString_AS_STRING(PyDict_GetItemString(paramsDict, "neuron")));
+    string neuronType = pyDictGetString(paramsDict, "neuron");
     _neuron = &Neuron::makeNeuron(neuronType);
 }
 
@@ -309,6 +318,7 @@ void ConvLayer::fpropActs(NVMatrixV& v) {
     }
     
     _neuron->activate(_acts);
+    cout << _acts.mean() << endl;
 }
 
 void ConvLayer::bpropCommon(NVMatrix& v) {
@@ -400,7 +410,7 @@ void SoftmaxLayer::fpropActs(NVMatrixV& v) {
  * =======================
  */
 DataLayer::DataLayer(PyObject* paramsDict) : Layer(paramsDict, false, false, false) {
-    _dataIdx = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "dataIdx"));
+    _dataIdx = pyDictGetInt(paramsDict, "dataIdx");
 }
 
 void DataLayer::fprop() {
@@ -427,14 +437,14 @@ void DataLayer::fprop(NVMatrixV& data) {
  * =====================
  */
 PoolLayer::PoolLayer(PyObject* paramsDict) : Layer(paramsDict, true, true, false) {
-    _channels = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "channels"));
-    _sizeX = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "sizeX"));
-    _start = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "start"));
-    _stride = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "stride"));
-    _outputsX = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "outputsX"));
-    _imgSize = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "imgSize"));
+    _channels = pyDictGetInt(paramsDict, "channels");
+    _sizeX = pyDictGetInt(paramsDict, "sizeX");
+    _start = pyDictGetInt(paramsDict, "start");
+    _stride = pyDictGetInt(paramsDict, "stride");
+    _outputsX = pyDictGetInt(paramsDict, "outputsX");
+    _imgSize = pyDictGetInt(paramsDict, "imgSize");
     
-    _pool = string(PyString_AS_STRING(PyDict_GetItemString(paramsDict, "pool")));
+    _pool = pyDictGetString(paramsDict, "pool");
     if (_pool != "max" && _pool != "avg") {
         throw string("Unknown pooling type ") + _pool;
     }
@@ -462,29 +472,29 @@ void PoolLayer::bpropActs(NVMatrix& v) {
 
 /* 
  * =====================
- * ContrastNormLayer
+ * ResponseNormLayer
  * =====================
  */
-ContrastNormLayer::ContrastNormLayer(PyObject* paramsDict) : Layer(paramsDict, true, true, false) {
-    _channels = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "channels"));
-    _sizeX = PyInt_AS_LONG(PyDict_GetItemString(paramsDict, "sizeX"));
+ResponseNormLayer::ResponseNormLayer(PyObject* paramsDict) : Layer(paramsDict, true, true, false) {
+    _channels = pyDictGetInt(paramsDict, "channels");
+    _sizeX = pyDictGetInt(paramsDict, "sizeX");
 
-    _scale = PyFloat_AS_DOUBLE(PyDict_GetItemString(paramsDict, "scale"));
+    _scale = pyDictGetFloat(paramsDict, "scale");
 }
 
-void ContrastNormLayer::fpropActs(NVMatrixV& v) {
+void ResponseNormLayer::fpropActs(NVMatrixV& v) {
     NVMatrix& images = *v[0];
-    convContrastNorm(images, _denoms, _acts, _channels, _sizeX, _scale);
+    convResponseNorm(images, _denoms, _acts, _channels, _sizeX, _scale);
 }
 
-void ContrastNormLayer::bpropActs(NVMatrix& v) {
+void ResponseNormLayer::bpropActs(NVMatrix& v) {
     if (_prev[0]->isGradConsumer()) {
         float scaleTargets = _prev[0]->getRcvdBInputs() == 0 ? 0 : 1;
-        convContrastNormUndo(v, _denoms, _prev[0]->getActs(), _acts, _prev[0]->getActGrads(), _channels, _sizeX, _scale, scaleTargets, 1);
+        convResponseNormUndo(v, _denoms, _prev[0]->getActs(), _acts, _prev[0]->getActGrads(), _channels, _sizeX, _scale, scaleTargets, 1);
     }
 }
 
-void ContrastNormLayer::truncBwdActs() {
+void ResponseNormLayer::truncBwdActs() {
     Layer::truncBwdActs();
     if (!_saveActs) {
         _denoms.truncate();
@@ -498,7 +508,7 @@ void ContrastNormLayer::truncBwdActs() {
  */
 CostLayer::CostLayer(PyObject* paramsDict, bool gradConsumer, bool gradProducer, bool trans) 
     : Layer(paramsDict, gradConsumer, gradProducer, trans) {
-    _coeff = PyFloat_AS_DOUBLE(PyDict_GetItemString(paramsDict, "coeff"));
+    _coeff = pyDictGetFloat(paramsDict, "coeff");
     _gradProducer = _coeff != 0;
     _numGradProducersNext = 1;
 }
