@@ -318,7 +318,6 @@ void ConvLayer::fpropActs(NVMatrixV& v) {
     }
     
     _neuron->activate(_acts);
-    cout << _acts.mean() << endl;
 }
 
 void ConvLayer::bpropCommon(NVMatrix& v) {
