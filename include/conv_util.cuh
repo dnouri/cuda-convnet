@@ -304,7 +304,7 @@ void convLocalPool(NVMatrix& images, NVMatrix& target, int numFilters,
     int outputs = outputsX * outputsX;
     target.resize(numFilters*outputs, numImages);
 
-    if (true) {
+    if (false) { // Incomplete!
         int imgsPerThread = 8;
         int filtersPerThread = 4;
         int bx = 8;
@@ -322,10 +322,6 @@ void convLocalPool(NVMatrix& images, NVMatrix& target, int numFilters,
             kLocalPool2<Pooler, 8, 8, 4, false><<<blocks, threads>>>(images.getDevData(), target.getDevData(),
                                                               imgSize, numFilters, numImages, subsX, startX, outputsX, pooler);
         }
-// template<class Agg, int B_X, int imgsPerThread, int filtersPerThread, bool checkCaseBounds>
-//__global__ void kLocalPool2(float* imgs, float* target, const int imgSize, const int numFilters,
-//                           const int numImages, const int subsX, const int startX,
-//                           const int outputsX, Agg agg)
     } else {
         dim3 threads(32, 4);
         dim3 blocks(DIVUP(numImages,32*4) * outputsX, (numFilters / (4 * 2)) * outputsX);
