@@ -31,11 +31,6 @@
 
 /*
  * A thread-safe circular queue that automatically grows but never shrinks.
- *
- * For some reason when I separate it into .h and .cpp and try to use it in
- * a Python module, the module can't find it! :(
- * Has something to do with the fact that it's a template class but I don't
- * know what.
  */
 template <class T>
 class Queue {
