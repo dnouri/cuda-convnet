@@ -479,17 +479,18 @@ ResponseNormLayer::ResponseNormLayer(PyObject* paramsDict) : Layer(paramsDict, t
     _sizeX = pyDictGetInt(paramsDict, "sizeX");
 
     _scale = pyDictGetFloat(paramsDict, "scale");
+    _pow = pyDictGetFloat(paramsDict, "pow");
 }
 
 void ResponseNormLayer::fpropActs(NVMatrixV& v) {
     NVMatrix& images = *v[0];
-    convResponseNorm(images, _denoms, _acts, _channels, _sizeX, _scale);
+    convResponseNorm(images, _denoms, _acts, _channels, _sizeX, _scale, _pow);
 }
 
 void ResponseNormLayer::bpropActs(NVMatrix& v) {
     if (_prev[0]->isGradConsumer()) {
         float scaleTargets = _prev[0]->getRcvdBInputs() == 0 ? 0 : 1;
-        convResponseNormUndo(v, _denoms, _prev[0]->getActs(), _acts, _prev[0]->getActGrads(), _channels, _sizeX, _scale, scaleTargets, 1);
+        convResponseNormUndo(v, _denoms, _prev[0]->getActs(), _acts, _prev[0]->getActGrads(), _channels, _sizeX, _scale, _pow, scaleTargets, 1);
     }
 }
 
@@ -497,6 +498,36 @@ void ResponseNormLayer::truncBwdActs() {
     Layer::truncBwdActs();
     if (!_saveActs) {
         _denoms.truncate();
+    }
+}
+
+/* 
+ * =====================
+ * ContrastNormLayer
+ * =====================
+ */
+ContrastNormLayer::ContrastNormLayer(PyObject* paramsDict) : ResponseNormLayer(paramsDict) {
+    _imgSize = pyDictGetInt(paramsDict, "imgSize");
+}
+
+void ContrastNormLayer::fpropActs(NVMatrixV& v) {
+    NVMatrix& images = *v[0];
+    convLocalPool(images, _meanDiffs, _channels, _sizeX, -_sizeX/2, 1, _imgSize, AvgPooler(_sizeX*_sizeX));
+    _meanDiffs.add(images, -1, 1);
+    convContrastNorm(images, _meanDiffs, _denoms, _acts, _channels, _sizeX, _scale, _pow);
+}
+
+void ContrastNormLayer::bpropActs(NVMatrix& v) {
+    if (_prev[0]->isGradConsumer()) {
+        float scaleTargets = _prev[0]->getRcvdBInputs() == 0 ? 0 : 1;
+        convContrastNormUndo(v, _denoms, _meanDiffs, _acts, _prev[0]->getActGrads(), _channels, _sizeX, _scale, _pow, scaleTargets, 1);
+    }
+}
+
+void ContrastNormLayer::truncBwdActs() {
+    ResponseNormLayer::truncBwdActs();
+    if (!_saveActs) {
+        _meanDiffs.truncate();
     }
 }
 

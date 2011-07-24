@@ -189,17 +189,29 @@ public:
 }; 
 
 class ResponseNormLayer : public Layer {
-private:
-    int _channels, _sizeX;
-    float _scale;
-    NVMatrix _denoms;
 protected:
+    int _channels, _sizeX;
+    float _scale, _pow;
+    NVMatrix _denoms;
+
     void fpropActs(NVMatrixV& v);
     void bpropActs(NVMatrix& v);
     void truncBwdActs();
 public:
     ResponseNormLayer(PyObject* paramsDict);
 }; 
+
+class ContrastNormLayer : public ResponseNormLayer {
+protected:
+    int _imgSize;
+    NVMatrix _meanDiffs;
+    
+    void fpropActs(NVMatrixV& v);
+    void bpropActs(NVMatrix& v);
+    void truncBwdActs();
+public:
+    ContrastNormLayer(PyObject* paramsDict);
+};
 
 class CostLayer : public Layer {
 protected:

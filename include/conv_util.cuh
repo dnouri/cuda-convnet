@@ -40,9 +40,12 @@ void convLocalAvgUndo(NVMatrix& avgGrads, NVMatrix& target,
 void convLocalMaxUndo(NVMatrix& images, NVMatrix& maxGrads, NVMatrix& maxActs, NVMatrix& target,
                       int subsX, int startX, int strideX, int outputsX, float scaleTargets, float scaleOutput);
 
-void convResponseNorm(NVMatrix& images, NVMatrix& denoms, NVMatrix& target, int numFilters, int sizeX, float scale);
+void convResponseNorm(NVMatrix& images, NVMatrix& denoms, NVMatrix& target, int numFilters, int sizeX, float addScale, float powScale);
 void convResponseNormUndo(NVMatrix& outGrads, NVMatrix& denoms, NVMatrix& inputs, NVMatrix& acts, NVMatrix& target, int numFilters,
-                         int sizeX, float rNormScale, float scaleTargets, float scaleOutput);
+                         int sizeX, float addScale, float powScale, float scaleTargets, float scaleOutput);
+void convContrastNorm(NVMatrix& images, NVMatrix& meanDiffs, NVMatrix& denoms, NVMatrix& target, int numFilters, int sizeX, float addScale, float powScale);
+void convContrastNormUndo(NVMatrix& outGrads, NVMatrix& denoms, NVMatrix& meanDiffs, NVMatrix& acts, NVMatrix& target, int numFilters,
+                         int sizeX, float addScale, float powScale, float scaleTargets, float scaleOutput);
 
 class AvgPooler {
 private:
@@ -300,11 +303,11 @@ void convLocalPool(NVMatrix& images, NVMatrix& target, int numFilters,
     assert(images.isContiguous());
     assert(numFilters % 8 == 0);
 //    assert(numImages % 128 == 0);
-    bool checkCaseBounds = numImages % 128 != 0;
+    
     int outputs = outputsX * outputsX;
     target.resize(numFilters*outputs, numImages);
 
-    if (false) { // Incomplete!
+    if (strideX == 1 && subsX >= 6) {
         int imgsPerThread = 8;
         int filtersPerThread = 4;
         int bx = 8;
@@ -323,6 +326,7 @@ void convLocalPool(NVMatrix& images, NVMatrix& target, int numFilters,
                                                               imgSize, numFilters, numImages, subsX, startX, outputsX, pooler);
         }
     } else {
+        bool checkCaseBounds = numImages % 128 != 0;
         dim3 threads(32, 4);
         dim3 blocks(DIVUP(numImages,32*4) * outputsX, (numFilters / (4 * 2)) * outputsX);
         if (checkCaseBounds) {

@@ -24,10 +24,18 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <iostream>
 #include <assert.h>
 #include <nvmatrix_kernel.cuh>
 #include <nvmatrix.cuh>
 #include "../include/conv_util.cuh"
+
+using namespace std;
+
+__device__ float square(const float a) {
+    return a*a;
+}
+
 
 /*
  * Block size 1x128
@@ -39,6 +47,7 @@
  * threadIdx.x determines img idx
  * 
  * imgs:        (numFilters, imgPixels, numImages)
+ * meanDiffs:   (numFilters, imgPixels, numImages)
  * denoms:      (numFilters, imgPixels, numImages) (out)
  * target:      (numFilters, imgPixels, numImages) (out)
  * 
@@ -47,8 +56,9 @@
  */
 
 template<int imgsPerThread, int numFilters, bool checkCaseBounds>
-__global__ void kRNorm_fewfilter(float* imgs, float* denoms, float* target, const int imgSize,
-                                  const int numImages, const int sizeX, const float scale) {
+__global__ void kCNorm_fewfilter(float* imgs, float* meanDiffs, float* denoms, float* target, const int imgSize,
+                                  const int numImages, const int sizeX, const float addScale, const float powScale) {
+
     const int imgPixels = imgSize * imgSize;
     const int numImgBlocks = DIVUP(numImages, 128*imgsPerThread);
     const int pxIdxX = blockIdx.x / numImgBlocks;
@@ -61,22 +71,26 @@ __global__ void kRNorm_fewfilter(float* imgs, float* denoms, float* target, cons
     const int startPxY = -sizeX/2 + pxIdxY;
     const int imgIdx = blockImgIdx + threadIdx.x;
     
-    imgs += imgIdx;
+    imgs += pxIdx * numImages + imgIdx;
     denoms += pxIdx * numImages + imgIdx;
+    meanDiffs  += imgIdx;
     target += pxIdx * numImages + imgIdx;
     
     float prod[numFilters][imgsPerThread];
     #pragma unroll
-    for (int f = 0; f < numFilters; f++) {
-        #pragma unroll
-        for (int i = 0; i < imgsPerThread; i++) {
-            prod[f][i] = 0; 
+    for (int i = 0; i < imgsPerThread; i++) {
+        if (!checkCaseBounds || imgIdx + i * 128 < numImages) {
+            #pragma unroll
+            for (int f = 0; f < numFilters; f++) {
+                prod[f][i] = 0; 
+            }
         }
     }
     const int loopStartY = MAX(0, startPxY);
     const int loopStartX = MAX(0, startPxX);
     const int loopEndY = MIN(imgSize, startPxY + sizeX);
     const int loopEndX = MIN(imgSize, startPxX + sizeX);
+        
     for (int y = loopStartY; y < loopEndY; y++) {
         for (int x = loopStartX; x < loopEndX; x++) {
             const int imgPx = y * imgSize + x;
@@ -85,8 +99,7 @@ __global__ void kRNorm_fewfilter(float* imgs, float* denoms, float* target, cons
                 if (!checkCaseBounds || imgIdx + i * 128 < numImages) {
                     #pragma unroll
                     for (int f = 0; f < numFilters; f++) {
-                        const float v = imgs[(f * imgPixels + imgPx) * numImages + i * 128];
-                        prod[f][i] += v*v;
+                        prod[f][i] += square(meanDiffs[(f * imgPixels + imgPx) * numImages + i * 128]);
                     }
                 }
             }
@@ -98,9 +111,9 @@ __global__ void kRNorm_fewfilter(float* imgs, float* denoms, float* target, cons
         if (!checkCaseBounds || imgIdx + i * 128 < numImages) {
             #pragma unroll
             for (int f = 0; f < numFilters; f++) {
-                prod[f][i] = 1 + scale * prod[f][i];
+                prod[f][i] = 1 + addScale * prod[f][i];
                 denoms[f * imgPixels * numImages + i * 128] = prod[f][i];
-                target[f * imgPixels * numImages + i * 128] = imgs[(f * imgPixels + pxIdx) * numImages + i * 128] / prod[f][i];
+                target[f * imgPixels * numImages + i * 128] = imgs[f * imgPixels * numImages + i * 128] * __powf(prod[f][i], -powScale);
             }
         }
     }
@@ -117,14 +130,16 @@ __global__ void kRNorm_fewfilter(float* imgs, float* denoms, float* target, cons
  * threadIdx.y determines filter idx
  * 
  * imgs:        (numFilters, imgPixels, numImages)
- * target:      (numFilters, imgPixels, numImages)
+ * means:       (numFilters, imgPixels, numImages)
+ * denoms:      (numFilters, imgPixels, numImages) (out)
+ * target:      (numFilters, imgPixels, numImages) (out)
  * 
  * numImages must be divisible by B_X*imgsPerThread if checkCaseBounds is false
  * numFilters must be divisible by B_Y*filtersPerThread
  */
 template<int B_Y, int B_X, int imgsPerThread, int filtersPerThread, bool checkCaseBounds>
-__global__ void kRNorm_manyfilter(float* imgs, float* denoms, float* target, const int imgSize, const int numFilters,
-                                  const int numImages, const int sizeX, const float scale) {
+__global__ void kCNorm_manyfilter(float* imgs, float* meanDiffs, float* denoms, float* target, const int imgSize,
+                                  const int numFilters, const int numImages, const int sizeX, const float addScale, const float powScale) {
     const int imgPixels = imgSize * imgSize;
     const int numImgBlocks = DIVUP(numImages, B_X*imgsPerThread);
     const int numFilterBlocks = numFilters/(B_Y*filtersPerThread);
@@ -139,16 +154,19 @@ __global__ void kRNorm_manyfilter(float* imgs, float* denoms, float* target, con
     const int startPxY = -sizeX/2 + pxIdxY;
     const int imgIdx = blockImgIdx + threadIdx.x;
     
-    imgs += (blockFilterIdx + threadIdx.y) * imgPixels * numImages + imgIdx;
+    imgs += ((blockFilterIdx + threadIdx.y) * imgPixels + pxIdx) * numImages + imgIdx;
+    meanDiffs += (blockFilterIdx + threadIdx.y) * imgPixels * numImages + imgIdx;
     denoms += ((blockFilterIdx + threadIdx.y) * imgPixels + pxIdx) * numImages + imgIdx;
     target += ((blockFilterIdx + threadIdx.y) * imgPixels + pxIdx) * numImages + imgIdx;
     
     float prod[filtersPerThread][imgsPerThread];
     #pragma unroll
-    for (int f = 0; f < filtersPerThread; f++) {
-        #pragma unroll
-        for (int i = 0; i < imgsPerThread; i++) {
-            prod[f][i] = 0; 
+    for (int i = 0; i < imgsPerThread; i++) {
+        if (!checkCaseBounds || imgIdx + i * B_X < numImages) {
+            #pragma unroll
+            for (int f = 0; f < filtersPerThread; f++) {
+                prod[f][i] = 0;
+            }
         }
     }
 
@@ -165,12 +183,10 @@ __global__ void kRNorm_manyfilter(float* imgs, float* denoms, float* target, con
                 if (!checkCaseBounds || imgIdx + i * B_X < numImages) {
                     #pragma unroll
                     for (int f = 0; f < filtersPerThread; f++) {
-                        const float v = imgs[(f * B_Y * imgPixels + imgPx) * numImages + i * B_X];
-                        prod[f][i] += v*v;
+                        prod[f][i] += square(meanDiffs[(f * B_Y * imgPixels + imgPx) * numImages + i * B_X]);
                     }
                 }
             }
-            
         }
     }
     
@@ -179,22 +195,19 @@ __global__ void kRNorm_manyfilter(float* imgs, float* denoms, float* target, con
         if (!checkCaseBounds || imgIdx + i * B_X < numImages) {
             #pragma unroll
             for (int f = 0; f < filtersPerThread; f++) {
-                prod[f][i] = 1 + scale * prod[f][i];
+                prod[f][i] = 1 + addScale * prod[f][i];
                 denoms[f * B_Y * imgPixels * numImages + i * B_X] = prod[f][i];
-                target[f * B_Y * imgPixels * numImages + i * B_X] = imgs[(f * B_Y * imgPixels + pxIdx) * numImages + i * B_X] / prod[f][i];
+                target[f * B_Y * imgPixels * numImages + i * B_X] = imgs[f * B_Y * imgPixels * numImages + i * B_X] * __powf(prod[f][i], -powScale);
             }
         }
     }
 }
 
-__device__ float square(const float a) {
-    return a*a;
-}
 
 /*
  * Block size 16xB_X
  * blockIdx.x determines 4x4 pixel.x region, image idx in batches of B_X*imgsPerThread
- * blockIdx.y determines 4x4 pixel.y region, filter idx in batches of B_Y*filtersPerThread
+ * blockIdx.y determines 4x4 pixel.y region, filter idx in batches of filtersPerThread
  * 
  * So each block does 4x4 region of pixels for some number of images/filters.
  * 
@@ -202,7 +215,9 @@ __device__ float square(const float a) {
  * threadIdx.y determines pixel idx
  * 
  * imgs:        (numFilters, imgPixels, numImages)
- * target:      (numFilters, imgPixels, numImages)
+ * means:       (numFilters, imgPixels, numImages)
+ * denoms:      (numFilters, imgPixels, numImages) (out)
+ * target:      (numFilters, imgPixels, numImages) (out)
  * 
  * B_X one of 8, 16, 32
  * imgsPerThread one of 1, 2, 4, 8, 16
@@ -217,9 +232,9 @@ __device__ float square(const float a) {
  * reading than writing here, and the reading is all coalesced, so it should be OK.
  */
 template<int B_X, int imgsPerThread, int filtersPerThread, bool checkCaseBounds>
-__global__ void kRNorm2(float* imgs, float* denoms, float* target, const int imgSize, const int numFilters,
-                        const int numImages, const int sizeX, const float scale) {
-    __shared__ float shImgs[filtersPerThread][B_X*imgsPerThread];
+__global__ void kCNorm2(float* imgs, float* meanDiffs, float* denoms, float* target, const int imgSize,
+                         const int numFilters, const int numImages, const int sizeX, const float addScale, const float powScale) {
+    __shared__ float shDiffs[filtersPerThread][B_X*imgsPerThread];
     const int imgPixels = imgSize * imgSize;
     const int numImgBlocks = DIVUP(numImages, B_X*imgsPerThread);
     const int numFilterBlocks = numFilters/(filtersPerThread);
@@ -247,16 +262,19 @@ __global__ void kRNorm2(float* imgs, float* denoms, float* target, const int img
     
     const int imgIdx = blockImgIdx + threadIdx.x;
         
-    imgs += (blockFilterIdx + loadY) * imgPixels * numImages + blockImgIdx + loadX;
-    denoms += (blockFilterIdx * imgPixels + myPxIdx) * numImages + imgIdx;
-    target += (blockFilterIdx * imgPixels + myPxIdx) * numImages + imgIdx;
+    imgs        += (blockFilterIdx * imgPixels + myPxIdx) * numImages + imgIdx;
+    meanDiffs   += (blockFilterIdx + loadY) * imgPixels * numImages + blockImgIdx + loadX;
+    denoms      += (blockFilterIdx * imgPixels + myPxIdx) * numImages + imgIdx;
+    target      += (blockFilterIdx * imgPixels + myPxIdx) * numImages + imgIdx;
     
     float prod[filtersPerThread][imgsPerThread];
     #pragma unroll
-    for (int f = 0; f < filtersPerThread; f++) {
-        #pragma unroll
-        for (int i = 0; i < imgsPerThread; i++) {
-            prod[f][i] = 0; 
+    for (int i = 0; i < imgsPerThread; i++) {
+        if (!checkCaseBounds || imgIdx + i * B_X < numImages) {
+            #pragma unroll
+            for (int f = 0; f < filtersPerThread; f++) {
+                prod[f][i] = 0;
+            }
         }
     }
 
@@ -271,7 +289,7 @@ __global__ void kRNorm2(float* imgs, float* denoms, float* target, const int img
                     #pragma unroll
                     for (int lx = 0; lx < B_X*imgsPerThread; lx += 32) {
                         if (!checkCaseBounds || lx + loadX + blockImgIdx < numImages) {
-                            shImgs[ly + loadY][lx + loadX] = imgs[(ly * imgPixels + px) * numImages + lx];
+                            shDiffs[ly + loadY][lx + loadX] = meanDiffs[(ly * imgPixels + px) * numImages + lx];
                         }
                     }
                 }
@@ -285,8 +303,7 @@ __global__ void kRNorm2(float* imgs, float* denoms, float* target, const int img
                     if (!checkCaseBounds || imgIdx + i * B_X < numImages) {
                         #pragma unroll
                         for (int f = 0; f < filtersPerThread; f++) {
-                            // Strange that it's better to put the square inside this loop rather than the one above!
-                            prod[f][i] += square(shImgs[f][threadIdx.x + i * B_X]);
+                            prod[f][i] += square(shDiffs[f][threadIdx.x + i * B_X]);
                         }
                     }
                 }
@@ -294,17 +311,17 @@ __global__ void kRNorm2(float* imgs, float* denoms, float* target, const int img
             __syncthreads();
         }
     }
-    imgs -= (loadY * imgPixels - myPxIdx) * numImages + loadX;
-    imgs += threadIdx.x;
+//    imgs -= (loadY * imgPixels - myPxIdx) * numImages + loadX;
+//    imgs += threadIdx.x;
     if (myPxX < imgSize && myPxY < imgSize) {
         #pragma unroll
         for (int i = 0; i < imgsPerThread; i++) {
             if (!checkCaseBounds || imgIdx + i * B_X < numImages) {
                 #pragma unroll
                 for (int f = 0; f < filtersPerThread; f++) {
-                    prod[f][i] = 1 + scale * prod[f][i];
+                    prod[f][i] = 1 + addScale * prod[f][i];
                     denoms[f * imgPixels * numImages + i * B_X] = prod[f][i];
-                    target[f * imgPixels * numImages + i * B_X] = imgs[f * imgPixels * numImages + i * B_X] / prod[f][i];
+                    target[f * imgPixels * numImages + i * B_X] = imgs[f * imgPixels * numImages + i * B_X] * __powf(prod[f][i], -powScale);
                 }
             }
         }
@@ -519,17 +536,18 @@ __global__ void kLocalMaxUndo(float* imgs, float* maxGrads, float* maxActs, floa
 }
 
 /*
- * acts := acts x outGrads / denoms
+ * acts := -2 x scale x acts x outGrads / (denoms x N)
  */
 template<int B_X, int eltsPerThread>
-__global__ void kRNormUndoPrelims(float* acts, float* denoms, float* outGrads, const uint numElements) {
+__global__ void kRNormUndoPrelims(float* acts, float* denoms, float* outGrads,
+                                  const uint numElements, const float scale) {
     const uint e = B_X * blockIdx.x * eltsPerThread + threadIdx.x;
     const uint numThreads = B_X * gridDim.x;
     for (uint i = e; i < numElements; i += numThreads*eltsPerThread) {
         #pragma unroll
         for (uint k = 0; k < eltsPerThread; k++) {
             if (i + k * B_X < numElements) {
-                acts[i + k * B_X] = __fdividef(outGrads[i + k * B_X] * acts[i + k * B_X], denoms[i + k * B_X]);
+                acts[i + k * B_X] = __fdividef(scale*outGrads[i + k * B_X] * acts[i + k * B_X], denoms[i + k * B_X]);
             }
         }
     }
@@ -558,8 +576,7 @@ __global__ void kRNormUndoPrelims(float* acts, float* denoms, float* outGrads, c
  */
 template<int B_Y, int B_X, int imgsPerThread, int filtersPerThread, bool add, bool checkCaseBounds>
 __global__ void kRNormUndo(float* outGrads, float* denoms, float* inputs, float* acts, float* target, const int imgSize, const int numFilters,
-                              const int numImages, const int sizeX, const float rNormScale,
-                              const float scaleTargets, const float scaleOutputs) {
+                              const int numImages, const int sizeX, const float powScale, const float scaleTargets, const float scaleOutputs) {
     const int numImgBlocks = DIVUP(numImages,B_X*imgsPerThread);
     const int numFilterBlocks = numFilters/(B_Y*filtersPerThread);
     
@@ -619,7 +636,7 @@ __global__ void kRNormUndo(float* outGrads, float* denoms, float* inputs, float*
                     const float inp = inputs[(f * B_Y * imgPixels) * numImages + i * B_X];
                     const float out = outGrads[(f * B_Y * imgPixels) * numImages + i * B_X];
                     const float den = denoms[(f * B_Y * imgPixels) * numImages + i * B_X];
-                    prod[f][i] = (rNormScale * inp * -2 * prod[f][i] + __fdividef(out, den));
+                    prod[f][i] = inp * prod[f][i] + out * __powf(den, -powScale);
                     target[f * B_Y * imgPixels * numImages + i * B_X] = prod[f][i];
                 }
             }
@@ -633,7 +650,7 @@ __global__ void kRNormUndo(float* outGrads, float* denoms, float* inputs, float*
                     const float inp = inputs[(f * B_Y * imgPixels) * numImages + i * B_X];
                     const float out = outGrads[(f * B_Y * imgPixels) * numImages + i * B_X];
                     const float den = denoms[(f * B_Y * imgPixels) * numImages + i * B_X];
-                    prod[f][i] = (rNormScale * inp * -2 * prod[f][i] + __fdividef(out, den));
+                    prod[f][i] = inp * prod[f][i] + out * __powf(den, -powScale);
                     target[f * B_Y * imgPixels * numImages + i * B_X] = 
                                                 scaleTargets * target[f * B_Y * imgPixels * numImages + i * B_X] 
                                                 + scaleOutputs * prod[f][i];
@@ -647,7 +664,7 @@ __global__ void kRNormUndo(float* outGrads, float* denoms, float* inputs, float*
 /*
  * Block size 16xB_X
  * blockIdx.x determines 4x4 pixel.x region, image idx in batches of B_X*imgsPerThread
- * blockIdx.y determines 4x4 pixel.y region, filter idx in batches of B_Y*filtersPerThread
+ * blockIdx.y determines 4x4 pixel.y region, filter idx in batches of filtersPerThread
  * 
  * So each block does 4x4 region for some number of images/filters.
  * 
@@ -674,8 +691,7 @@ __global__ void kRNormUndo(float* outGrads, float* denoms, float* inputs, float*
  */
 template<int B_X, int imgsPerThread, int filtersPerThread, bool add, bool checkCaseBounds>
 __global__ void kRNormUndo2(float* outGrads, float* denoms, float* inputs, float* acts, float* target, const int imgSize, const int numFilters,
-                        const int numImages, const int sizeX, const float rNormScale,
-                              const float scaleTargets, const float scaleOutputs) {
+                            const int numImages, const int sizeX, const float powScale, const float scaleTargets, const float scaleOutputs) {
     __shared__ float shActs[filtersPerThread][B_X*imgsPerThread];
     const int imgPixels = imgSize * imgSize;
     const int numImgBlocks = DIVUP(numImages, B_X*imgsPerThread);
@@ -764,7 +780,7 @@ __global__ void kRNormUndo2(float* outGrads, float* denoms, float* inputs, float
                         const float out = outGrads[f * imgPixels * numImages + i * B_X];
                         const float den = denoms[f * imgPixels * numImages + i * B_X];
                         const float inp = inputs[f * imgPixels * numImages + i * B_X];
-                        prod[f][i] = (rNormScale * inp * -2 * prod[f][i] + __fdividef(out, den));
+                        prod[f][i] = inp * prod[f][i] + out * __powf(den, -powScale);
                         target[f * imgPixels * numImages + i * B_X] = prod[f][i];
                     }
                 }
@@ -778,7 +794,7 @@ __global__ void kRNormUndo2(float* outGrads, float* denoms, float* inputs, float
                         const float out = outGrads[f * imgPixels * numImages + i * B_X];
                         const float den = denoms[f * imgPixels * numImages + i * B_X];
                         const float inp = inputs[f * imgPixels * numImages + i * B_X];
-                        prod[f][i] = (rNormScale * inp * -2 * prod[f][i] + __fdividef(out, den));
+                        prod[f][i] = inp * prod[f][i] + out * __powf(den, -powScale);
                         target[f * imgPixels * numImages + i * B_X] = scaleTargets * target[f * imgPixels * numImages + i * B_X] + scaleOutputs * prod[f][i];
                     }
                 }
@@ -908,29 +924,33 @@ void convLocalAvgUndo(NVMatrix& avgGrads, NVMatrix& target,
     cutilCheckMsg("convLocalAvgUndo: kernel execution failed");
 }
 
+void convResponseNorm(NVMatrix& images, NVMatrix& denoms, NVMatrix& target, int numFilters, int sizeX, float addScale, float powScale) {
+    convContrastNorm(images, images, denoms, target, numFilters, sizeX, addScale, powScale);
+}
+
 /*
  * images:      (numFilters, imgPixels, numImages)
+ * meanDiffs:   (numFilters, imgPixels, numImages)
  * denoms:      (numFilters, imgPixels, numImages) (out)
  * target:      (numFilters, imgPixels, numImages) (out)
  */
-void convResponseNorm(NVMatrix& images, NVMatrix& denoms, NVMatrix& target, int numFilters, int sizeX, float scale) {
+void convContrastNorm(NVMatrix& images, NVMatrix& meanDiffs, NVMatrix& denoms, NVMatrix& target, int numFilters, int sizeX, float addScale, float powScale) {
     int numImages = images.getNumCols();
     int imgPixels = images.getNumRows() / numFilters;
     assert(images.getNumRows() == numFilters * imgPixels);
     int imgSize = int(sqrt(imgPixels));
     assert(imgSize * imgSize == imgPixels);
+    assert(meanDiffs.isSameDims(images));
     
+    assert(!meanDiffs.isTrans());
     assert(!images.isTrans());
     assert(images.isContiguous());
-    assert(numFilters % 16 == 0 || numFilters < 16);
+    assert(meanDiffs.isContiguous());
+    assert(numFilters % 16 == 0 || numFilters <= 8);
 
     target.resize(images);
     denoms.resize(images);
-    
-//    template<int B_X, int imgsPerThread, int filtersPerThread, bool checkCaseBounds>
-//__global__ void kRNorm3(float* imgs, float* denoms, float* target, const int imgSize, const int numFilters,
-//                        const int numImages, const int sizeX, const float scale) {
-    
+
     if (sizeX >= 6 && numFilters % 4 == 0) {
         // This one is faster for large regions (my tests show regions >= 6...)
         int imgsPerThread = 8;
@@ -938,189 +958,125 @@ void convResponseNorm(NVMatrix& images, NVMatrix& denoms, NVMatrix& target, int 
         int bx = 8;
         bool checkCaseBounds = numImages % (bx*imgsPerThread) != 0;
         assert((imgsPerThread * bx) % 32 == 0);
+        assert(numFilters % filtersPerThread == 0);
         dim3 threads(bx, 16);
         dim3 blocks(DIVUP(imgSize, 4) * DIVUP(numImages, bx*imgsPerThread), DIVUP(imgSize, 4) * numFilters / filtersPerThread);
 
         if (checkCaseBounds) {
-            cudaFuncSetCacheConfig(kRNorm2<8, 8, 4, true>, cudaFuncCachePreferL1);
-            kRNorm2<8, 8, 4, true><<<blocks, threads>>>(images.getDevData(), denoms.getDevData(), target.getDevData(),
-                                                           imgSize, numFilters, numImages, sizeX, scale);
+            cudaFuncSetCacheConfig(kCNorm2<8, 8, 4, true>, cudaFuncCachePreferL1); // L1 faster here
+            kCNorm2<8, 8, 4, true><<<blocks, threads>>>(images.getDevData(), meanDiffs.getDevData(), denoms.getDevData(), target.getDevData(),
+                                                           imgSize, numFilters, numImages, sizeX, addScale, powScale);
         } else {
-            cudaFuncSetCacheConfig(kRNorm2<8, 8, 4, false>, cudaFuncCachePreferL1);
-            kRNorm2<8, 8, 4, false><<<blocks, threads>>>(images.getDevData(), denoms.getDevData(), target.getDevData(),
-                                                           imgSize, numFilters, numImages, sizeX, scale);
+            cudaFuncSetCacheConfig(kCNorm2<8, 8, 4, false>, cudaFuncCachePreferL1); // L1 faster here
+            kCNorm2<8, 8, 4, false><<<blocks, threads>>>(images.getDevData(), meanDiffs.getDevData(), denoms.getDevData(), target.getDevData(),
+                                                           imgSize, numFilters, numImages, sizeX, addScale, powScale);
         }
     } else {
         bool checkCaseBounds = numImages % 128 != 0;
-        if (numFilters < 16) {
+        if (numFilters <= 8) {
             dim3 threads(128);
             dim3 blocks(DIVUP(numImages,128) * imgSize, imgSize);
             if (numFilters == 1) {
                 if (checkCaseBounds) {
-                    cudaFuncSetCacheConfig(kRNorm_fewfilter<1, 1, true>, cudaFuncCachePreferL1);
-                    kRNorm_fewfilter<1, 1, true><<<blocks, threads>>>(images.getDevData(), denoms.getDevData(), target.getDevData(),
-                                                                      imgSize, numImages, sizeX, scale);
+                    cudaFuncSetCacheConfig(kCNorm_fewfilter<1, 1, true>, cudaFuncCachePreferL1);
+                    kCNorm_fewfilter<1, 1, true><<<blocks, threads>>>(images.getDevData(), meanDiffs.getDevData(), denoms.getDevData(), target.getDevData(),
+                                                                      imgSize, numImages, sizeX, addScale, powScale);
                 } else {
-                    cudaFuncSetCacheConfig(kRNorm_fewfilter<1, 1, false>, cudaFuncCachePreferL1);
-                    kRNorm_fewfilter<1, 1, false><<<blocks, threads>>>(images.getDevData(), denoms.getDevData(), target.getDevData(),
-                                                                      imgSize, numImages, sizeX, scale);
+                    cudaFuncSetCacheConfig(kCNorm_fewfilter<1, 1, false>, cudaFuncCachePreferL1);
+                    kCNorm_fewfilter<1, 1, false><<<blocks, threads>>>(images.getDevData(), meanDiffs.getDevData(), denoms.getDevData(), target.getDevData(),
+                                                                      imgSize, numImages, sizeX, addScale, powScale);
                 }
             } else  if (numFilters == 2) {
                 if (checkCaseBounds) {
-                    cudaFuncSetCacheConfig(kRNorm_fewfilter<1, 2, true>, cudaFuncCachePreferL1);
-                    kRNorm_fewfilter<1, 2, true><<<blocks, threads>>>(images.getDevData(), denoms.getDevData(), target.getDevData(),
-                                                                      imgSize, numImages, sizeX, scale);
+                    cudaFuncSetCacheConfig(kCNorm_fewfilter<1, 2, true>, cudaFuncCachePreferL1);
+                    kCNorm_fewfilter<1, 2, true><<<blocks, threads>>>(images.getDevData(), meanDiffs.getDevData(), denoms.getDevData(), target.getDevData(),
+                                                                      imgSize, numImages, sizeX, addScale, powScale);
                 } else {
-                    cudaFuncSetCacheConfig(kRNorm_fewfilter<1, 2, false>, cudaFuncCachePreferL1);
-                    kRNorm_fewfilter<1, 2, false><<<blocks, threads>>>(images.getDevData(), denoms.getDevData(), target.getDevData(),
-                                                                      imgSize, numImages, sizeX, scale);
+                    cudaFuncSetCacheConfig(kCNorm_fewfilter<1, 2, false>, cudaFuncCachePreferL1);
+                    kCNorm_fewfilter<1, 2, false><<<blocks, threads>>>(images.getDevData(), meanDiffs.getDevData(), denoms.getDevData(), target.getDevData(),
+                                                                      imgSize, numImages, sizeX, addScale, powScale);
                 }
             } else  if (numFilters == 3) {
                 if (checkCaseBounds) {
-                    cudaFuncSetCacheConfig(kRNorm_fewfilter<1, 3, true>, cudaFuncCachePreferL1);
-                    kRNorm_fewfilter<1, 3, true><<<blocks, threads>>>(images.getDevData(), denoms.getDevData(), target.getDevData(),
-                                                                      imgSize, numImages, sizeX, scale);
+                    cudaFuncSetCacheConfig(kCNorm_fewfilter<1, 3, true>, cudaFuncCachePreferL1);
+                    kCNorm_fewfilter<1, 3, true><<<blocks, threads>>>(images.getDevData(), meanDiffs.getDevData(), denoms.getDevData(), target.getDevData(),
+                                                                      imgSize, numImages, sizeX, addScale, powScale);
                 } else {
-                    cudaFuncSetCacheConfig(kRNorm_fewfilter<1, 3, false>, cudaFuncCachePreferL1);
-                    kRNorm_fewfilter<1, 3, false><<<blocks, threads>>>(images.getDevData(), denoms.getDevData(), target.getDevData(),
-                                                                      imgSize, numImages, sizeX, scale);
+                    cudaFuncSetCacheConfig(kCNorm_fewfilter<1, 3, false>, cudaFuncCachePreferL1);
+                    kCNorm_fewfilter<1, 3, false><<<blocks, threads>>>(images.getDevData(), meanDiffs.getDevData(), denoms.getDevData(), target.getDevData(),
+                                                                      imgSize, numImages, sizeX, addScale, powScale);
                 }
             } else  if (numFilters == 4) {
                 if (checkCaseBounds) {
-                    cudaFuncSetCacheConfig(kRNorm_fewfilter<1, 4, true>, cudaFuncCachePreferL1);
-                    kRNorm_fewfilter<1, 4, true><<<blocks, threads>>>(images.getDevData(), denoms.getDevData(), target.getDevData(),
-                                                                      imgSize, numImages, sizeX, scale);
+                    cudaFuncSetCacheConfig(kCNorm_fewfilter<1, 4, true>, cudaFuncCachePreferL1);
+                    kCNorm_fewfilter<1, 4, true><<<blocks, threads>>>(images.getDevData(), meanDiffs.getDevData(), denoms.getDevData(), target.getDevData(),
+                                                                      imgSize, numImages, sizeX, addScale, powScale);
                 } else {
-                    cudaFuncSetCacheConfig(kRNorm_fewfilter<1, 4, false>, cudaFuncCachePreferL1);
-                    kRNorm_fewfilter<1, 4, false><<<blocks, threads>>>(images.getDevData(), denoms.getDevData(), target.getDevData(),
-                                                                      imgSize, numImages, sizeX, scale);
+                    cudaFuncSetCacheConfig(kCNorm_fewfilter<1, 4, false>, cudaFuncCachePreferL1);
+                    kCNorm_fewfilter<1, 4, false><<<blocks, threads>>>(images.getDevData(), meanDiffs.getDevData(), denoms.getDevData(), target.getDevData(),
+                                                                      imgSize, numImages, sizeX, addScale, powScale);
                 }
             } else  if (numFilters == 5) {
                 if (checkCaseBounds) {
-                    cudaFuncSetCacheConfig(kRNorm_fewfilter<1, 5, true>, cudaFuncCachePreferL1);
-                    kRNorm_fewfilter<1, 5, true><<<blocks, threads>>>(images.getDevData(), denoms.getDevData(), target.getDevData(),
-                                                                      imgSize, numImages, sizeX, scale);
+                    cudaFuncSetCacheConfig(kCNorm_fewfilter<1, 5, true>, cudaFuncCachePreferL1);
+                    kCNorm_fewfilter<1, 5, true><<<blocks, threads>>>(images.getDevData(), meanDiffs.getDevData(), denoms.getDevData(), target.getDevData(),
+                                                                      imgSize, numImages, sizeX, addScale, powScale);
                 } else {
-                    cudaFuncSetCacheConfig(kRNorm_fewfilter<1, 5, false>, cudaFuncCachePreferL1);
-                    kRNorm_fewfilter<1, 5, false><<<blocks, threads>>>(images.getDevData(), denoms.getDevData(), target.getDevData(),
-                                                                      imgSize, numImages, sizeX, scale);
+                    cudaFuncSetCacheConfig(kCNorm_fewfilter<1, 5, false>, cudaFuncCachePreferL1);
+                    kCNorm_fewfilter<1, 5, false><<<blocks, threads>>>(images.getDevData(), meanDiffs.getDevData(), denoms.getDevData(), target.getDevData(),
+                                                                      imgSize, numImages, sizeX, addScale, powScale);
                 }
             } else  if (numFilters == 6) {
                 if (checkCaseBounds) {
-                    cudaFuncSetCacheConfig(kRNorm_fewfilter<1, 6, true>, cudaFuncCachePreferL1);
-                    kRNorm_fewfilter<1, 6, true><<<blocks, threads>>>(images.getDevData(), denoms.getDevData(), target.getDevData(),
-                                                                      imgSize, numImages, sizeX, scale);
+                    cudaFuncSetCacheConfig(kCNorm_fewfilter<1, 6, true>, cudaFuncCachePreferL1);
+                    kCNorm_fewfilter<1, 6, true><<<blocks, threads>>>(images.getDevData(), meanDiffs.getDevData(), denoms.getDevData(), target.getDevData(),
+                                                                      imgSize, numImages, sizeX, addScale, powScale);
                 } else {
-                    cudaFuncSetCacheConfig(kRNorm_fewfilter<1, 6, false>, cudaFuncCachePreferL1);
-                    kRNorm_fewfilter<1, 6, false><<<blocks, threads>>>(images.getDevData(), denoms.getDevData(), target.getDevData(),
-                                                                      imgSize, numImages, sizeX, scale);
+                    cudaFuncSetCacheConfig(kCNorm_fewfilter<1, 6, false>, cudaFuncCachePreferL1);
+                    kCNorm_fewfilter<1, 6, false><<<blocks, threads>>>(images.getDevData(), meanDiffs.getDevData(), denoms.getDevData(), target.getDevData(),
+                                                                      imgSize, numImages, sizeX, addScale, powScale);
                 }
             } else  if (numFilters == 7) {
                 if (checkCaseBounds) {
-                    cudaFuncSetCacheConfig(kRNorm_fewfilter<1, 7, true>, cudaFuncCachePreferL1);
-                    kRNorm_fewfilter<1, 7, true><<<blocks, threads>>>(images.getDevData(), denoms.getDevData(), target.getDevData(),
-                                                                      imgSize, numImages, sizeX, scale);
+                    cudaFuncSetCacheConfig(kCNorm_fewfilter<1, 7, true>, cudaFuncCachePreferL1);
+                    kCNorm_fewfilter<1, 7, true><<<blocks, threads>>>(images.getDevData(), meanDiffs.getDevData(), denoms.getDevData(), target.getDevData(),
+                                                                      imgSize, numImages, sizeX, addScale, powScale);
                 } else {
-                    cudaFuncSetCacheConfig(kRNorm_fewfilter<1, 7, false>, cudaFuncCachePreferL1);
-                    kRNorm_fewfilter<1, 7, false><<<blocks, threads>>>(images.getDevData(), denoms.getDevData(), target.getDevData(),
-                                                                      imgSize, numImages, sizeX, scale);
+                    cudaFuncSetCacheConfig(kCNorm_fewfilter<1, 7, false>, cudaFuncCachePreferL1);
+                    kCNorm_fewfilter<1, 7, false><<<blocks, threads>>>(images.getDevData(), meanDiffs.getDevData(), denoms.getDevData(), target.getDevData(),
+                                                                      imgSize, numImages, sizeX, addScale, powScale);
                 }
             } else  if (numFilters == 8) {
                 if (checkCaseBounds) {
-                    cudaFuncSetCacheConfig(kRNorm_fewfilter<1, 8, true>, cudaFuncCachePreferL1);
-                    kRNorm_fewfilter<1, 8, true><<<blocks, threads>>>(images.getDevData(), denoms.getDevData(), target.getDevData(),
-                                                                      imgSize, numImages, sizeX, scale);
+                    cudaFuncSetCacheConfig(kCNorm_fewfilter<1, 8, true>, cudaFuncCachePreferL1);
+                    kCNorm_fewfilter<1, 8, true><<<blocks, threads>>>(images.getDevData(), meanDiffs.getDevData(), denoms.getDevData(), target.getDevData(),
+                                                                      imgSize, numImages, sizeX, addScale, powScale);
                 } else {
-                    cudaFuncSetCacheConfig(kRNorm_fewfilter<1, 8, false>, cudaFuncCachePreferL1);
-                    kRNorm_fewfilter<1, 8, false><<<blocks, threads>>>(images.getDevData(), denoms.getDevData(), target.getDevData(),
-                                                                      imgSize, numImages, sizeX, scale);
-                }
-            } else  if (numFilters == 9) {
-                if (checkCaseBounds) {
-                    cudaFuncSetCacheConfig(kRNorm_fewfilter<1, 9, true>, cudaFuncCachePreferL1);
-                    kRNorm_fewfilter<1, 9, true><<<blocks, threads>>>(images.getDevData(), denoms.getDevData(), target.getDevData(),
-                                                                      imgSize, numImages, sizeX, scale);
-                } else {
-                    cudaFuncSetCacheConfig(kRNorm_fewfilter<1, 9, false>, cudaFuncCachePreferL1);
-                    kRNorm_fewfilter<1, 9, false><<<blocks, threads>>>(images.getDevData(), denoms.getDevData(), target.getDevData(),
-                                                                      imgSize, numImages, sizeX, scale);
-                }
-            } else  if (numFilters == 10) {
-                if (checkCaseBounds) {
-                    cudaFuncSetCacheConfig(kRNorm_fewfilter<1, 10, true>, cudaFuncCachePreferL1);
-                    kRNorm_fewfilter<1, 10, true><<<blocks, threads>>>(images.getDevData(), denoms.getDevData(), target.getDevData(),
-                                                                      imgSize, numImages, sizeX, scale);
-                } else {
-                    cudaFuncSetCacheConfig(kRNorm_fewfilter<1, 10, false>, cudaFuncCachePreferL1);
-                    kRNorm_fewfilter<1, 10, false><<<blocks, threads>>>(images.getDevData(), denoms.getDevData(), target.getDevData(),
-                                                                      imgSize, numImages, sizeX, scale);
-                }
-            } else  if (numFilters == 11) {
-                if (checkCaseBounds) {
-                    cudaFuncSetCacheConfig(kRNorm_fewfilter<1, 11, true>, cudaFuncCachePreferL1);
-                    kRNorm_fewfilter<1, 11, true><<<blocks, threads>>>(images.getDevData(), denoms.getDevData(), target.getDevData(),
-                                                                      imgSize, numImages, sizeX, scale);
-                } else {
-                    cudaFuncSetCacheConfig(kRNorm_fewfilter<1, 11, false>, cudaFuncCachePreferL1);
-                    kRNorm_fewfilter<1, 11, false><<<blocks, threads>>>(images.getDevData(), denoms.getDevData(), target.getDevData(),
-                                                                      imgSize, numImages, sizeX, scale);
-                }
-            } else  if (numFilters == 12) {
-                if (checkCaseBounds) {
-                    cudaFuncSetCacheConfig(kRNorm_fewfilter<1, 12, true>, cudaFuncCachePreferL1);
-                    kRNorm_fewfilter<1, 12, true><<<blocks, threads>>>(images.getDevData(), denoms.getDevData(), target.getDevData(),
-                                                                      imgSize, numImages, sizeX, scale);
-                } else {
-                    cudaFuncSetCacheConfig(kRNorm_fewfilter<1, 12, false>, cudaFuncCachePreferL1);
-                    kRNorm_fewfilter<1, 12, false><<<blocks, threads>>>(images.getDevData(), denoms.getDevData(), target.getDevData(),
-                                                                      imgSize, numImages, sizeX, scale);
-                }
-            } else  if (numFilters == 13) {
-                if (checkCaseBounds) {
-                    cudaFuncSetCacheConfig(kRNorm_fewfilter<1, 13, true>, cudaFuncCachePreferL1);
-                    kRNorm_fewfilter<1, 13, true><<<blocks, threads>>>(images.getDevData(), denoms.getDevData(), target.getDevData(),
-                                                                      imgSize, numImages, sizeX, scale);
-                } else {
-                    cudaFuncSetCacheConfig(kRNorm_fewfilter<1, 13, false>, cudaFuncCachePreferL1);
-                    kRNorm_fewfilter<1, 13, false><<<blocks, threads>>>(images.getDevData(), denoms.getDevData(), target.getDevData(),
-                                                                      imgSize, numImages, sizeX, scale);
-                }
-            } else  if (numFilters == 14) {
-                if (checkCaseBounds) {
-                    cudaFuncSetCacheConfig(kRNorm_fewfilter<1, 14, true>, cudaFuncCachePreferL1);
-                    kRNorm_fewfilter<1, 14, true><<<blocks, threads>>>(images.getDevData(), denoms.getDevData(), target.getDevData(),
-                                                                      imgSize, numImages, sizeX, scale);
-                } else {
-                    cudaFuncSetCacheConfig(kRNorm_fewfilter<1, 14, false>, cudaFuncCachePreferL1);
-                    kRNorm_fewfilter<1, 14, false><<<blocks, threads>>>(images.getDevData(), denoms.getDevData(), target.getDevData(),
-                                                                      imgSize, numImages, sizeX, scale);
-                }
-            } else  if (numFilters == 15) {
-                if (checkCaseBounds) {
-                    cudaFuncSetCacheConfig(kRNorm_fewfilter<1, 15, true>, cudaFuncCachePreferL1);
-                    kRNorm_fewfilter<1, 15, true><<<blocks, threads>>>(images.getDevData(), denoms.getDevData(), target.getDevData(),
-                                                                      imgSize, numImages, sizeX, scale);
-                } else {
-                    cudaFuncSetCacheConfig(kRNorm_fewfilter<1, 15, false>, cudaFuncCachePreferL1);
-                    kRNorm_fewfilter<1, 15, false><<<blocks, threads>>>(images.getDevData(), denoms.getDevData(), target.getDevData(),
-                                                                      imgSize, numImages, sizeX, scale);
+                    cudaFuncSetCacheConfig(kCNorm_fewfilter<1, 8, false>, cudaFuncCachePreferL1);
+                    kCNorm_fewfilter<1, 8, false><<<blocks, threads>>>(images.getDevData(), meanDiffs.getDevData(), denoms.getDevData(), target.getDevData(),
+                                                                      imgSize, numImages, sizeX, addScale, powScale);
                 }
             } 
         } else {
             dim3 threads(32, 4);
             dim3 blocks(DIVUP(numImages,32*4) * imgSize, (numFilters / (4 * 2)) * imgSize);
             if (checkCaseBounds) {
-                cudaFuncSetCacheConfig(kRNorm_manyfilter<4, 32, 4, 2, true>, cudaFuncCachePreferL1);
-                kRNorm_manyfilter<4, 32, 4, 2, true><<<blocks, threads>>>(images.getDevData(), denoms.getDevData(), target.getDevData(),
-                                                                  imgSize, numFilters, numImages, sizeX, scale);
+                cudaFuncSetCacheConfig(kCNorm_manyfilter<4, 32, 4, 2, true>, cudaFuncCachePreferL1);
+                kCNorm_manyfilter<4, 32, 4, 2, true><<<blocks, threads>>>(images.getDevData(), meanDiffs.getDevData(), denoms.getDevData(), target.getDevData(),
+                                                                  imgSize, numFilters, numImages, sizeX, addScale, powScale);
             } else {
-                cudaFuncSetCacheConfig(kRNorm_manyfilter<4, 32, 4, 2, false>, cudaFuncCachePreferL1);
-                kRNorm_manyfilter<4, 32, 4, 2, false><<<blocks, threads>>>(images.getDevData(), denoms.getDevData(), target.getDevData(),
-                                                                  imgSize, numFilters, numImages, sizeX, scale);
+                cudaFuncSetCacheConfig(kCNorm_manyfilter<4, 32, 4, 2, false>, cudaFuncCachePreferL1);
+                kCNorm_manyfilter<4, 32, 4, 2, false><<<blocks, threads>>>(images.getDevData(), meanDiffs.getDevData(), denoms.getDevData(), target.getDevData(),
+                                                                  imgSize, numFilters, numImages, sizeX, addScale, powScale);
             }
         }
     }
     cutilCheckMsg("convResponseNorm: kernel execution failed");
+}
+
+void convContrastNormUndo(NVMatrix& outGrads, NVMatrix& denoms, NVMatrix& meanDiffs, NVMatrix& acts, NVMatrix& target, int numFilters,
+                         int sizeX, float addScale, float powScale, float scaleTargets, float scaleOutput) {
+    convResponseNormUndo(outGrads, denoms, meanDiffs, acts, target, numFilters, sizeX, addScale, powScale, scaleTargets, scaleOutput);
 }
 
 /*
@@ -1133,7 +1089,7 @@ void convResponseNorm(NVMatrix& images, NVMatrix& denoms, NVMatrix& target, int 
  * THIS WILL OVERWRITE THE ACTS MATRIX.
  */
 void convResponseNormUndo(NVMatrix& outGrads, NVMatrix& denoms, NVMatrix& inputs, NVMatrix& acts, NVMatrix& target, int numFilters,
-                         int sizeX, float rNormScale, float scaleTargets, float scaleOutput) {
+                         int sizeX, float addScale, float powScale, float scaleTargets, float scaleOutput) {
     int numImages = outGrads.getNumCols();
     int imgPixels = outGrads.getNumRows() / numFilters;
 
@@ -1154,12 +1110,12 @@ void convResponseNormUndo(NVMatrix& outGrads, NVMatrix& denoms, NVMatrix& inputs
     
     target.resize(outGrads);
     
-    // First do acts := acts x outGrads / denoms
+    // First do acts := -2 x scale x acts x outGrads / (denoms x N)
     // so that the main routine only has to do an addition in its inner loop.
     int prelimEltsPerThread = 4;
     dim3 threads(128);
     dim3 blocks(MIN(512, DIVUP(outGrads.getNumElements(),(threads.x * prelimEltsPerThread))));
-    kRNormUndoPrelims<128, 4><<<blocks, threads>>>(acts.getDevData(), denoms.getDevData(), outGrads.getDevData(), outGrads.getNumElements());
+    kRNormUndoPrelims<128, 4><<<blocks, threads>>>(acts.getDevData(), denoms.getDevData(), outGrads.getDevData(), outGrads.getNumElements(), -2*addScale*powScale);
    
     // Now the main routine
     if (sizeX >= 6 && numFilters % 4 == 0) {
@@ -1176,24 +1132,24 @@ void convResponseNormUndo(NVMatrix& outGrads, NVMatrix& denoms, NVMatrix& inputs
             if (scaleTargets == 0 && scaleOutput == 1) {
                 cudaFuncSetCacheConfig(kRNormUndo2<16, 8, 4, true, true>, cudaFuncCachePreferL1);
                 kRNormUndo2<16, 8, 4, true, true><<<blocks, threads>>>(outGrads.getDevData(), denoms.getDevData(), inputs.getDevData(), acts.getDevData(),
-                                                                              target.getDevData(), imgSize, numFilters, numImages, sizeX, rNormScale,
+                                                                              target.getDevData(), imgSize, numFilters, numImages, sizeX, powScale,
                                                                               scaleTargets, scaleOutput);
             } else {
                 cudaFuncSetCacheConfig(kRNormUndo2<16, 8, 4, false, true>, cudaFuncCachePreferL1);
                 kRNormUndo2<16, 8, 4, false, true><<<blocks, threads>>>(outGrads.getDevData(), denoms.getDevData(), inputs.getDevData(), acts.getDevData(),
-                                                                              target.getDevData(), imgSize, numFilters, numImages, sizeX, rNormScale,
+                                                                              target.getDevData(), imgSize, numFilters, numImages, sizeX, powScale,
                                                                               scaleTargets, scaleOutput);
             }
         } else {
             if (scaleTargets == 0 && scaleOutput == 1) {
                 cudaFuncSetCacheConfig(kRNormUndo2<16, 8, 4, true, false>, cudaFuncCachePreferL1);
                 kRNormUndo2<16, 8, 4, true, false><<<blocks, threads>>>(outGrads.getDevData(), denoms.getDevData(), inputs.getDevData(), acts.getDevData(),
-                                                                              target.getDevData(), imgSize, numFilters, numImages, sizeX, rNormScale,
+                                                                              target.getDevData(), imgSize, numFilters, numImages, sizeX, powScale,
                                                                               scaleTargets, scaleOutput);
             } else {
                 cudaFuncSetCacheConfig(kRNormUndo2<16, 8, 4, false, false>, cudaFuncCachePreferL1);
                 kRNormUndo2<16, 8, 4, false, false><<<blocks, threads>>>(outGrads.getDevData(), denoms.getDevData(), inputs.getDevData(), acts.getDevData(),
-                                                                              target.getDevData(), imgSize, numFilters, numImages, sizeX, rNormScale,
+                                                                              target.getDevData(), imgSize, numFilters, numImages, sizeX, powScale,
                                                                               scaleTargets, scaleOutput);
             }
         }
@@ -1205,24 +1161,24 @@ void convResponseNormUndo(NVMatrix& outGrads, NVMatrix& denoms, NVMatrix& inputs
             if (scaleTargets == 0 && scaleOutput == 1) {
                 cudaFuncSetCacheConfig(kRNormUndo<4, 32, 2, 2, false, true>, cudaFuncCachePreferL1);
                 kRNormUndo<4, 32, 2, 2, false, true><<<blocks, threads>>>(outGrads.getDevData(), denoms.getDevData(), inputs.getDevData(), acts.getDevData(),
-                                                                          target.getDevData(), imgSize, numFilters, numImages, sizeX, rNormScale,
+                                                                          target.getDevData(), imgSize, numFilters, numImages, sizeX, powScale,
                                                                           scaleTargets, scaleOutput);
             } else {
                 cudaFuncSetCacheConfig(kRNormUndo<4, 32, 2, 2, true, true>, cudaFuncCachePreferL1);
                 kRNormUndo<4, 32, 2, 2, true, true><<<blocks, threads>>>(outGrads.getDevData(), denoms.getDevData(), inputs.getDevData(), acts.getDevData(),
-                                                                          target.getDevData(), imgSize, numFilters, numImages, sizeX, rNormScale,
+                                                                          target.getDevData(), imgSize, numFilters, numImages, sizeX, powScale,
                                                                           scaleTargets, scaleOutput);
             }
         } else {
             if (scaleTargets == 0 && scaleOutput == 1) {
                 cudaFuncSetCacheConfig(kRNormUndo<4, 32, 2, 2, false, false>, cudaFuncCachePreferL1);
                 kRNormUndo<4, 32, 2, 2, false, false><<<blocks, threads>>>(outGrads.getDevData(), denoms.getDevData(), inputs.getDevData(), acts.getDevData(),
-                                                                          target.getDevData(), imgSize, numFilters, numImages, sizeX, rNormScale,
+                                                                          target.getDevData(), imgSize, numFilters, numImages, sizeX, powScale,
                                                                           scaleTargets, scaleOutput);
             } else {
                 cudaFuncSetCacheConfig(kRNormUndo<4, 32, 2, 2, true, false>, cudaFuncCachePreferL1);
                 kRNormUndo<4, 32, 2, 2, true, false><<<blocks, threads>>>(outGrads.getDevData(), denoms.getDevData(), inputs.getDevData(), acts.getDevData(),
-                                                                          target.getDevData(), imgSize, numFilters, numImages, sizeX, rNormScale,
+                                                                          target.getDevData(), imgSize, numFilters, numImages, sizeX, powScale,
                                                                           scaleTargets, scaleOutput);
             }
         }
