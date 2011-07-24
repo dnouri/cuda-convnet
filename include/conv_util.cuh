@@ -159,12 +159,12 @@ __global__ void kLocalPool(float* imgs, float* target, const int imgSize, const 
 /*
  * Block size 16xB_X
  * blockIdx.x determines 4x4 pixel.x region, image idx in batches of B_X*imgsPerThread
- * blockIdx.y determines 4x4 pixel.y region, filter idx in batches of B_Y*filtersPerThread
+ * blockIdx.y determines 4x4 pixel.y region, filter idx in batches of filtersPerThread
  * 
- * So each block does one pixel for some number of images/filters.
+ * So each block does a 4x4 region for some number of images/filters.
  * 
  * threadIdx.x determines img idx
- * threadIdx.y determines filter idx
+ * threadIdx.y determines pixel idx
  * 
  * imgs:        (numFilters, imgPixels, numImages)
  * target:      (numFilters, numOutputs, numImages)
@@ -301,7 +301,7 @@ void convLocalPool(NVMatrix& images, NVMatrix& target, int numFilters,
     assert(!images.isTrans());
     assert(!target.isTrans());
     assert(images.isContiguous());
-    assert(numFilters % 8 == 0);
+    assert(numFilters % 4 == 0);
 //    assert(numImages % 128 == 0);
     
     int outputs = outputsX * outputsX;

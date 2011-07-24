@@ -317,7 +317,6 @@ class NormLayerParser(LayerWithInputParser):
         self.norm_type = norm_type
         
     def parse(self, name, mcp, prev_layers, model):
-
         dic = LayerWithInputParser.parse(self, name, mcp, prev_layers, model)
         if len(dic['numInputs']) != 1:
             raise LayerParsingError("Layer '%s': number of inputs must be 1", name) 
@@ -352,7 +351,7 @@ class LogregCostParser(CostParser):
     def parse(self, name, mcp, prev_layers, model):
         dic = CostParser.parse(self, name, mcp, prev_layers, model)
         
-        if len(dic['numInputs']) != 2: # the inputs are labels, predicted probabilities
+        if len(dic['numInputs']) != 2: # the inputs are [labels, predicted probabilities]
             raise LayerParsingError("Layer '%s': Number of inputs must be 2: labels and predicted probabilities", name)
         if dic['numInputs'][0] != 1: # first input must be labels
             raise LayerParsingError("Layer '%s': Dimensionality of first input must be 1", name)
