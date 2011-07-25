@@ -37,8 +37,12 @@
 #define LOGREG_ERR_THREADS_Y        1
 
 void computeLogregCost(NVMatrix& labels, NVMatrix& probs, NVMatrix& labelLogProbs_out, NVMatrix& correctProbs_out);
-void computeLogregGrads(NVMatrix& labels, NVMatrix& probs, NVMatrix& target, bool add, float coeff, bool divideByProbs);
-void computeSoftmaxGrads(NVMatrix& acts, NVMatrix& actGrads, NVMatrix& target, bool add, bool multByProbs);
+void computeLogregGrads(NVMatrix& labels, NVMatrix& probs, NVMatrix& target, bool add, float coeff);
+void computeSoftmaxGrads(NVMatrix& acts, NVMatrix& actGrads, NVMatrix& target, bool add);
+
+// Numerical stability optimization: this routine combines computeLogregGrads with computeSoftmaxGrads
+// to avoi dividing and then multiplying by quantities that may be near zero.
+void computeLogregSoftmaxGrads(NVMatrix& labels, NVMatrix& probs, NVMatrix& target, bool add, float coeff);
 
 #endif	/* LAYER_KERNELS_CUH */
 

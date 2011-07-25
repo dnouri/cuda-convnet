@@ -391,8 +391,14 @@ SoftmaxLayer::SoftmaxLayer(PyObject* paramsDict) : Layer(paramsDict, true, true,
 
 void SoftmaxLayer::bpropActs(NVMatrix& v) {
     if (_prev[0]->isGradConsumer()) {
-        bool multByProbs = _next.size() > 1 || _next[0]->getType() != "cost.logreg";
-        computeSoftmaxGrads(_acts, v, _prev[0]->getActGrads(), _prev[0]->getRcvdBInputs() > 0, multByProbs);
+        bool doLogregGrad = _next.size() == 1 && _next[0]->getType() == "cost.logreg";
+        if (doLogregGrad) {
+            NVMatrix& labels = _next[0]->getPrev()[0]->getActs();
+            float gradCoeff = dynamic_cast<CostLayer*>(_next[0])->getCoeff();
+            computeLogregSoftmaxGrads(labels, _acts, _prev[0]->getActGrads(), _prev[0]->getRcvdBInputs() > 0, gradCoeff);
+        } else {
+            computeSoftmaxGrads(_acts, v, _prev[0]->getActGrads(), _prev[0]->getRcvdBInputs() > 0);
+        }
     }
 }
 
@@ -602,6 +608,8 @@ void LogregCostLayer::bpropActs(NVMatrix& v) {
     NVMatrix& target = _prev[1]->getActGrads();
     // Numerical stability optimization: if the layer below me is a softmax layer, I don't need to divide by the
     // probabilities that it produced (which could be near zero), because it will just end up multiplying by them.
-    bool divideByProbs = _prev[1]->getNext().size() > 1 || _prev[1]->getType() != "softmax";
-    computeLogregGrads(labels, probs, target, _prev[1]->getRcvdBInputs() > 0, _coeff, divideByProbs);
+    bool doWork = _prev[1]->getNext().size() > 1 || _prev[1]->getType() != "softmax";
+    if (doWork) {
+        computeLogregGrads(labels, probs, target, _prev[1]->getRcvdBInputs() > 0, _coeff);
+    }
 }

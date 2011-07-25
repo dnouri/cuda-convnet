@@ -77,12 +77,38 @@ __global__ void kLogregCost(float* probs, float* labels, float* maxProbs, float*
 }
 
 /*
+ * E = -log(y_t)
+ * y_l:     (numOut, numCases)
+ * labels:  (1, numCases)
+ * 
+ * dE_dy_l: (numOut, numCases)
+ */
+template <bool add>
+__global__ void kLogregCostGrads(float* y_l, float* labels, float* dE_dy_l, const int numCases,
+                                 const int numOut, const float gradCoeff) {
+    const int tx = blockIdx.x * LOGREG_GRADS_THREADS_X + threadIdx.x;
+    const int ty = blockIdx.y * LOGREG_GRADS_THREADS_Y + threadIdx.y;
+    const int tidx = ty * numCases + tx;
+    
+    if (ty < numOut && tx < numCases) {
+        const int label = int(labels[tx]);
+        float v = gradCoeff * (label == ty);
+        v = __fdividef(v, y_l[tidx]);
+        if (add) {
+            dE_dy_l[tidx] += v;
+        } else {
+            dE_dy_l[tidx] = v;
+        }
+    }
+}
+
+/*
  * dE_dy_l: (numOut, numCases)
  * y_l:     (numOut, numCases)
  * 
  * dE_dx_l: (numOut, numCases)
  */
-template <bool add, bool mult>
+template <bool add>
 __global__ void kSoftmaxGrads(float* dE_dy_l, float* y_l, float* dE_dx_l, const int numCases, const int numOut) {
     const int tx = blockIdx.x * LOGREG_GRADS_THREADS_X + threadIdx.x;
     const int ty = blockIdx.y * LOGREG_GRADS_THREADS_Y + threadIdx.y;
@@ -90,15 +116,10 @@ __global__ void kSoftmaxGrads(float* dE_dy_l, float* y_l, float* dE_dx_l, const 
     
     if (ty < numOut && tx < numCases) {
         float v = 0;
-        if (mult) {
-            for (int j = 0; j < numOut; j++) {
-                v += dE_dy_l[j * numCases + tx] * ((j == ty) - y_l[j * numCases + tx]);
-            }
-            v *= y_l[tidx];
-
-        } else {
-            v = (dE_dy_l[tidx] != 0) - y_l[tidx];
+        for (int j = 0; j < numOut; j++) {
+            v += dE_dy_l[j * numCases + tx] * ((j == ty) - y_l[j * numCases + tx]);
         }
+        v *= y_l[tidx];
         
         if (add) {
             dE_dx_l[tidx] += v;
@@ -113,10 +134,10 @@ __global__ void kSoftmaxGrads(float* dE_dy_l, float* y_l, float* dE_dx_l, const 
  * y_l:     (numOut, numCases)
  * labels:  (1, numCases)
  * 
- * dE_dy_l: (numOut, numCases)
+ * dE_dx_l: (numOut, numCases)
  */
-template <bool add, bool divide>
-__global__ void kLogregCostGrads(float* y_l, float* labels, float* dE_dy_l, const int numCases,
+template <bool add>
+__global__ void kLogregSoftmaxGrads(float* y_l, float* labels, float* dE_dx_l, const int numCases,
                                  const int numOut, const float gradCoeff) {
     const int tx = blockIdx.x * LOGREG_GRADS_THREADS_X + threadIdx.x;
     const int ty = blockIdx.y * LOGREG_GRADS_THREADS_Y + threadIdx.y;
@@ -124,14 +145,11 @@ __global__ void kLogregCostGrads(float* y_l, float* labels, float* dE_dy_l, cons
     
     if (ty < numOut && tx < numCases) {
         const int label = int(labels[tx]);
-        float v = gradCoeff * (label == ty);
-        if (divide) {
-            v = __fdividef(v, y_l[tidx]);
-        }
+        float v = gradCoeff * ((label == ty) - y_l[tidx]);
         if (add) {
-            dE_dy_l[tidx] += v;
+            dE_dx_l[tidx] += v;
         } else {
-            dE_dy_l[tidx] = v;
+            dE_dx_l[tidx] = v;
         }
     }
 }
@@ -166,14 +184,14 @@ void computeLogregCost(NVMatrix& labels, NVMatrix& probs, NVMatrix& labelLogProb
     kLogregCost<<<blocks, threads>>>(probs.getDevData(), labels.getDevData(), maxProbs.getDevData(),
                                      labelLogProbs_out.getDevData(), correctProbs_out.getDevData(),
                                      numCases, numOut);
-    cutilCheckMsg("kLogregCost: Kernel execution failed");
+    cutilCheckMsg("computeLogregCost: Kernel execution failed");
 //    cudaThreadSynchronize();
     delete &maxProbs;
 }
 
-void computeLogregGrads(NVMatrix& labels, NVMatrix& probs, NVMatrix& target, bool add, float coeff, bool divideByProbs) {
-    int numCases = probs.getNumCols(); 
-    int numOut = probs.getNumRows(); 
+void computeLogregGrads(NVMatrix& labels, NVMatrix& probs, NVMatrix& target, bool add, float coeff) {
+    int numCases = probs.getLeadingDim(); 
+    int numOut = probs.getFollowingDim(); 
     assert(labels.getNumElements() == numCases);
     assert(probs.isContiguous());
     assert(target.isContiguous());
@@ -185,27 +203,17 @@ void computeLogregGrads(NVMatrix& labels, NVMatrix& probs, NVMatrix& target, boo
     dim3 blocks(DIVUP(numCases, LOGREG_GRADS_THREADS_X), DIVUP(numOut, LOGREG_GRADS_THREADS_Y));
     if (!add) {
         target.resize(probs);
-        if (divideByProbs) {
-            kLogregCostGrads<false, true><<<blocks, threads>>>(probs.getDevData(), labels.getDevData(), target.getDevData(),
+        kLogregCostGrads<false><<<blocks, threads>>>(probs.getDevData(), labels.getDevData(), target.getDevData(),
                                                      numCases, numOut, coeff);
-        } else {
-            kLogregCostGrads<false, false><<<blocks, threads>>>(probs.getDevData(), labels.getDevData(), target.getDevData(),
-                                                     numCases, numOut, coeff);
-        }
     } else {
-        if (divideByProbs) {
-            kLogregCostGrads<true, true><<<blocks, threads>>>(probs.getDevData(), labels.getDevData(), target.getDevData(),
+        kLogregCostGrads<true><<<blocks, threads>>>(probs.getDevData(), labels.getDevData(), target.getDevData(),
                                                      numCases, numOut, coeff);
-        } else {
-            kLogregCostGrads<true, false><<<blocks, threads>>>(probs.getDevData(), labels.getDevData(), target.getDevData(),
-                                                     numCases, numOut, coeff);
-        }
     }
 
-    cutilCheckMsg("kLogregCostGrads: Kernel execution failed");
+    cutilCheckMsg("computeLogregGrads: Kernel execution failed");
 }
 
-void computeSoftmaxGrads(NVMatrix& acts, NVMatrix& actGrads, NVMatrix& target, bool add, bool multByProbs) {
+void computeSoftmaxGrads(NVMatrix& acts, NVMatrix& actGrads, NVMatrix& target, bool add) {
     int numCases = acts.getLeadingDim();
     int numOut = acts.getFollowingDim();
 
@@ -220,17 +228,32 @@ void computeSoftmaxGrads(NVMatrix& acts, NVMatrix& actGrads, NVMatrix& target, b
     dim3 blocks(DIVUP(numCases, LOGREG_GRADS_THREADS_X), DIVUP(numOut, LOGREG_GRADS_THREADS_Y));
     if (!add) {
         target.resize(acts);
-        if (multByProbs) {
-            kSoftmaxGrads<false, true><<<blocks, threads>>>(actGrads.getDevData(), acts.getDevData(), target.getDevData(), numCases, numOut);
-        } else {
-            kSoftmaxGrads<false, false><<<blocks, threads>>>(actGrads.getDevData(), acts.getDevData(), target.getDevData(), numCases, numOut);
-        }
+        kSoftmaxGrads<false><<<blocks, threads>>>(actGrads.getDevData(), acts.getDevData(), target.getDevData(), numCases, numOut);
     } else {
-        if (multByProbs) {
-            kSoftmaxGrads<true, true><<<blocks, threads>>>(actGrads.getDevData(), acts.getDevData(), target.getDevData(), numCases, numOut);
-        } else {
-            kSoftmaxGrads<true, false><<<blocks, threads>>>(actGrads.getDevData(), acts.getDevData(), target.getDevData(), numCases, numOut);
-        }
+        kSoftmaxGrads<true><<<blocks, threads>>>(actGrads.getDevData(), acts.getDevData(), target.getDevData(), numCases, numOut);
     }
-    cutilCheckMsg("kSoftmaxGrads: Kernel execution failed");
+    cutilCheckMsg("computeSoftmaxGrads: Kernel execution failed");
+}
+
+void computeLogregSoftmaxGrads(NVMatrix& labels, NVMatrix& probs, NVMatrix& target, bool add, float coeff) {
+    int numCases = probs.getLeadingDim(); 
+    int numOut = probs.getFollowingDim(); 
+    assert(labels.getNumElements() == numCases);
+    assert(probs.isContiguous());
+    assert(target.isContiguous());
+    assert(labels.isContiguous());
+    assert(probs.isTrans());
+    
+    dim3 threads(LOGREG_GRADS_THREADS_X, LOGREG_GRADS_THREADS_Y);
+    dim3 blocks(DIVUP(numCases, LOGREG_GRADS_THREADS_X), DIVUP(numOut, LOGREG_GRADS_THREADS_Y));
+    if (!add) {
+        target.resize(probs);
+        kLogregSoftmaxGrads<false><<<blocks, threads>>>(probs.getDevData(), labels.getDevData(), target.getDevData(),
+                                                     numCases, numOut, coeff);
+    } else {
+        kLogregSoftmaxGrads<true><<<blocks, threads>>>(probs.getDevData(), labels.getDevData(), target.getDevData(),
+                                                     numCases, numOut, coeff);
+    }
+
+    cutilCheckMsg("computeLogregSoftmaxGrads: Kernel execution failed");
 }
