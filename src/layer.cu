@@ -497,12 +497,9 @@ void ResponseNormLayer::fpropActs(NVMatrixV& v) {
 void ResponseNormLayer::bpropActs(NVMatrix& v) {
     if (_prev[0]->isGradConsumer()) {
         float scaleTargets = _prev[0]->getRcvdBInputs() == 0 ? 0 : 1;
-//        printf("_denoms: %f, %f, %f\n", _denoms.min(), _denoms.mean(), _denoms.max());
-//        printf("v: %f, %f, %f\n", v.min(), v.mean(), v.max());
-//        printf("_prev[0]->getActs(): %f, %f, %f\n", _prev[0]->getActs().min(), _prev[0]->getActs().mean(), _prev[0]->getActs().max());
-//        printf("_acts: %f, %f, %f\n", _acts.min(), _acts.mean(), _acts.max());
+
         convResponseNormUndo(v, _denoms, _prev[0]->getActs(), _acts, _prev[0]->getActGrads(), _channels, _sizeX, _scale, _pow, scaleTargets, 1);
-//        printf("_prev[0]->getActGrads(): %f, %f, %f\n", _prev[0]->getActGrads().min(), _prev[0]->getActGrads().mean(), _prev[0]->getActGrads().max());
+
     }
 }
 
