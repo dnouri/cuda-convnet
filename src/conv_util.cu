@@ -226,7 +226,7 @@ __global__ void kCNorm_manyfilter(float* imgs, float* meanDiffs, float* denoms, 
  * Number of filters MUST be divisible by filtersPerThread.
  * 
  * numImages must be divisible by B_X*imgsPerThread if checkCaseBounds is false
- * numFilters must be divisible by B_Y*filtersPerThread
+ * numFilters must be divisible by filtersPerThread
  * 
  * Final write-out will not be fully coalesced unless B_X is 32. But there's a lot more
  * reading than writing here, and the reading is all coalesced, so it should be OK.
@@ -684,7 +684,7 @@ __global__ void kRNormUndo(float* outGrads, float* denoms, float* inputs, float*
  * Number of filters MUST be divisible by filtersPerThread.
  * 
  * numImages must be divisible by B_X*imgsPerThread if checkCaseBounds is false
- * numFilters must be divisible by B_Y*filtersPerThread
+ * numFilters must be divisible by filtersPerThread
  * 
  * Final write-out will not be fully coalesced unless B_X is 32. But there's a lot more
  * reading than writing here, and the reading is all coalesced, so it should be OK.
