@@ -536,7 +536,7 @@ __global__ void kLocalMaxUndo(float* imgs, float* maxGrads, float* maxActs, floa
 }
 
 /*
- * acts := -2 x scale x acts x outGrads / (denoms x N)
+ * acts := -2 x scale x acts x outGrads / denoms
  */
 template<int B_X, int eltsPerThread>
 __global__ void kRNormUndoPrelims(float* acts, float* denoms, float* outGrads,
@@ -1110,7 +1110,7 @@ void convResponseNormUndo(NVMatrix& outGrads, NVMatrix& denoms, NVMatrix& inputs
     
     target.resize(outGrads);
     
-    // First do acts := -2 x scale x acts x outGrads / (denoms x N)
+    // First do acts := -2 x scale x acts x outGrads / denoms
     // so that the main routine only has to do an addition in its inner loop.
     int prelimEltsPerThread = 4;
     dim3 threads(128);

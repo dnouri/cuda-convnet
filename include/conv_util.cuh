@@ -312,7 +312,7 @@ void convLocalPool(NVMatrix& images, NVMatrix& target, int numFilters,
 
     if (strideX == 1 && subsX >= 6) {
         int imgsPerThread = 8;
-        int filtersPerThread = numFilters % 4 == 0 ? 4 : numFilters % 3 == 0 ? 3 : numFilters % 2 == 0 ? 1 : 1;
+        int filtersPerThread = numFilters % 4 == 0 ? 4 : numFilters % 3 == 0 ? 3 : numFilters % 2 == 0 ? 2 : 1;
         int bx = 8;
         bool checkCaseBounds = numImages % (bx*imgsPerThread) != 0;
         assert((imgsPerThread * bx) % 32 == 0);

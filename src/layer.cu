@@ -55,6 +55,7 @@ Layer::Layer(PyObject* paramsDict, bool gradConsumer, bool gradProducer, bool tr
              _gradConsumer(gradConsumer), _gradProducer(gradProducer), _trans(trans) {
     
     _name = pyDictGetString(paramsDict, "name");
+    _type = pyDictGetString(paramsDict, "type");
     _numGradProducersNext = 0;
 }
 
@@ -141,6 +142,10 @@ void Layer::reset() {
 
 string& Layer::getName() {
     return _name;
+}
+
+string& Layer::getType() {
+    return _type;
 }
 
 int Layer::getRcvdFInputs() {
@@ -386,7 +391,8 @@ SoftmaxLayer::SoftmaxLayer(PyObject* paramsDict) : Layer(paramsDict, true, true,
 
 void SoftmaxLayer::bpropActs(NVMatrix& v) {
     if (_prev[0]->isGradConsumer()) {
-        computeSoftmaxGrads(_acts, v, _prev[0]->getActGrads(), _prev[0]->getRcvdBInputs() > 0);
+        bool multByProbs = _next.size() > 1 || _next[0]->getType() != "cost.logreg";
+        computeSoftmaxGrads(_acts, v, _prev[0]->getActGrads(), _prev[0]->getRcvdBInputs() > 0, multByProbs);
     }
 }
 
@@ -485,12 +491,18 @@ ResponseNormLayer::ResponseNormLayer(PyObject* paramsDict) : Layer(paramsDict, t
 void ResponseNormLayer::fpropActs(NVMatrixV& v) {
     NVMatrix& images = *v[0];
     convResponseNorm(images, _denoms, _acts, _channels, _sizeX, _scale, _pow);
+    
 }
 
 void ResponseNormLayer::bpropActs(NVMatrix& v) {
     if (_prev[0]->isGradConsumer()) {
         float scaleTargets = _prev[0]->getRcvdBInputs() == 0 ? 0 : 1;
+//        printf("_denoms: %f, %f, %f\n", _denoms.min(), _denoms.mean(), _denoms.max());
+//        printf("v: %f, %f, %f\n", v.min(), v.mean(), v.max());
+//        printf("_prev[0]->getActs(): %f, %f, %f\n", _prev[0]->getActs().min(), _prev[0]->getActs().mean(), _prev[0]->getActs().max());
+//        printf("_acts: %f, %f, %f\n", _acts.min(), _acts.mean(), _acts.max());
         convResponseNormUndo(v, _denoms, _prev[0]->getActs(), _acts, _prev[0]->getActGrads(), _channels, _sizeX, _scale, _pow, scaleTargets, 1);
+//        printf("_prev[0]->getActGrads(): %f, %f, %f\n", _prev[0]->getActGrads().min(), _prev[0]->getActGrads().mean(), _prev[0]->getActGrads().max());
     }
 }
 
@@ -591,6 +603,8 @@ void LogregCostLayer::bpropActs(NVMatrix& v) {
     NVMatrix& labels = _prev[0]->getActs();
     NVMatrix& probs = _prev[1]->getActs();
     NVMatrix& target = _prev[1]->getActGrads();
-
-    computeLogregGrads(labels, probs, target, _prev[1]->getRcvdBInputs() > 0, _coeff);
+    // Numerical stability optimization: if the layer below me is a softmax layer, I don't need to divide by the
+    // probabilities that it produced (which could be near zero), because it will just end up multiplying by them.
+    bool divideByProbs = _prev[1]->getNext().size() > 1 || _prev[1]->getType() != "softmax";
+    computeLogregGrads(labels, probs, target, _prev[1]->getRcvdBInputs() > 0, _coeff, divideByProbs);
 }

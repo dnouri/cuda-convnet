@@ -59,7 +59,7 @@ protected:
     NVMatrix _acts, _actGrads;
     bool _gradConsumer, _gradProducer, _trans;
     int _numGradProducersNext;
-    std::string _name;
+    std::string _name, _type;
     void fpropNext();
     virtual void truncBwdActs(); 
     virtual void fpropActs(NVMatrixV& v) = 0;
@@ -96,6 +96,7 @@ public:
     bool isGradConsumer();
     bool isGradProducer();
     std::string& getName();
+    std::string& getType();
     void addNext(Layer* l);
     void addPrev(Layer* l);
     std::vector<Layer*>& getPrev();

@@ -37,63 +37,8 @@
 #define LOGREG_ERR_THREADS_Y        1
 
 void computeLogregCost(NVMatrix& labels, NVMatrix& probs, NVMatrix& labelLogProbs_out, NVMatrix& correctProbs_out);
-void computeLogregGrads(NVMatrix& labels, NVMatrix& probs, NVMatrix& target, bool add, float coeff);
-void computeSoftmaxGrads(NVMatrix& acts, NVMatrix& actGrads, NVMatrix& target, bool add);
-
-/*
- * dE_dy_l: (numOut, numCases)
- * y_l:     (numOut, numCases)
- * 
- * dE_dx_l: (numOut, numCases)
- */
-template <bool add>
-__global__ void kSoftmaxGrads(float* dE_dy_l, float* y_l, float* dE_dx_l, const int numCases, const int numOut) {
-    const int tx = blockIdx.x * LOGREG_GRADS_THREADS_X + threadIdx.x;
-    const int ty = blockIdx.y * LOGREG_GRADS_THREADS_Y + threadIdx.y;
-    const int tidx = ty * numCases + tx;
-    
-    if (ty < numOut && tx < numCases) {
-        float v = 0;
-        for (int j = 0; j < numOut; j++) {
-            v += dE_dy_l[j * numCases + tx] * ((j == ty) - y_l[j * numCases + tx]);
-        }
-        v *= y_l[tidx];
-        
-        if (add) {
-            dE_dx_l[tidx] += v;
-        } else {
-            dE_dx_l[tidx] = v;
-        }
-    }
-}
-
-/*
- * E = -log(y_t)
- * y_l:     (numOut, numCases)
- * labels:  (1, numCases)
- * 
- * dE_dy_l: (numOut, numCases)
- */
-template <bool add>
-__global__ void kLogregCostGrads(float* y_l, float* labels, float* dE_dy_l, const int numCases,
-                                 const int numOut, const float gradCoeff) {
-    const int tx = blockIdx.x * LOGREG_GRADS_THREADS_X + threadIdx.x;
-    const int ty = blockIdx.y * LOGREG_GRADS_THREADS_Y + threadIdx.y;
-//    const int tidx = ty * numCases + tx;
-    
-    if (ty < numOut && tx < numCases) {
-        const int label = int(labels[tx]);
-        const float v = gradCoeff * __fdividef(1.0f, y_l[ty * numCases + tx]) * (label == ty);
-        if (add) {
-            dE_dy_l[ty * numCases + tx] += v;
-        } else {
-            dE_dy_l[ty * numCases + tx] = v;
-        }
-    }
-}
-
-__global__ void kLogregCost(float* probs, float* labels, float* maxProbs, float* labelLogProbs, float* correctProbs,
-                            const int numCases, const int numOut);
+void computeLogregGrads(NVMatrix& labels, NVMatrix& probs, NVMatrix& target, bool add, float coeff, bool divideByProbs);
+void computeSoftmaxGrads(NVMatrix& acts, NVMatrix& actGrads, NVMatrix& target, bool add, bool multByProbs);
 
 #endif	/* LAYER_KERNELS_CUH */
 

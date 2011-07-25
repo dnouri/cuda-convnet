@@ -37,7 +37,7 @@
 #include <matrix.h>
 
 // For gradient checking
-#define GC_SUPPRESS_PASSES     true
+#define GC_SUPPRESS_PASSES     false
 #define GC_REL_ERR_THRESH      0.02
 /*
  * Store entire data matrix on GPU if its size does not exceed this many MB.
