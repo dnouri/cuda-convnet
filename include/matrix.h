@@ -72,7 +72,9 @@
 #endif /* DOUBLE_PRECISION */
 
 #else
+extern "C" {
 #include <cblas.h>
+}
 #define IS_MKL false
 #endif /* USE_MKL */
 

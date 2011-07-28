@@ -497,15 +497,12 @@ ResponseNormLayer::ResponseNormLayer(PyObject* paramsDict) : Layer(paramsDict, t
 void ResponseNormLayer::fpropActs(NVMatrixV& v) {
     NVMatrix& images = *v[0];
     convResponseNorm(images, _denoms, _acts, _channels, _sizeX, _scale, _pow);
-    
 }
 
 void ResponseNormLayer::bpropActs(NVMatrix& v) {
     if (_prev[0]->isGradConsumer()) {
         float scaleTargets = _prev[0]->getRcvdBInputs() == 0 ? 0 : 1;
-
         convResponseNormUndo(v, _denoms, _prev[0]->getActs(), _acts, _prev[0]->getActGrads(), _channels, _sizeX, _scale, _pow, scaleTargets, 1);
-
     }
 }
 
@@ -558,7 +555,7 @@ CostLayer::CostLayer(PyObject* paramsDict, bool gradConsumer, bool gradProducer,
     _numGradProducersNext = 1;
 }
 
-double CostLayer::getCoeff() {
+float CostLayer::getCoeff() {
     return _coeff;
 }
 
@@ -606,8 +603,8 @@ void LogregCostLayer::bpropActs(NVMatrix& v) {
     NVMatrix& labels = _prev[0]->getActs();
     NVMatrix& probs = _prev[1]->getActs();
     NVMatrix& target = _prev[1]->getActGrads();
-    // Numerical stability optimization: if the layer below me is a softmax layer, I don't need to divide by the
-    // probabilities that it produced (which could be near zero), because it will just end up multiplying by them.
+    // Numerical stability optimization: if the layer below me is a softmax layer, let it handle
+    // the entire gradient computation to avoid multiplying and dividing by a near-zero quantity.
     bool doWork = _prev[1]->getNext().size() > 1 || _prev[1]->getType() != "softmax";
     if (doWork) {
         computeLogregGrads(labels, probs, target, _prev[1]->getRcvdBInputs() > 0, _coeff);

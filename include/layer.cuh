@@ -216,13 +216,13 @@ public:
 
 class CostLayer : public Layer {
 protected:
-    double _coeff;
+    float _coeff;
     doublev _err;
 public:
     CostLayer(PyObject* paramsDict, bool gradConsumer, bool gradProducer, bool trans);
     void bprop(); // This is what's called by other layers
     virtual doublev& getError();
-    double getCoeff();
+    float getCoeff();
     
     static CostLayer& makeCostLayer(string& type, PyObject* paramsDict);
 };
