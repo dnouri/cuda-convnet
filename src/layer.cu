@@ -105,7 +105,10 @@ void Layer::fprop(NVMatrixV& v) {
 }
 
 void Layer::bprop() {
-    bprop(_actGrads);
+    if (_rcvdBInputs == _numGradProducersNext) {
+        _rcvdBInputs++; // avoid doing bprop computation twice
+        bprop(_actGrads);
+    }
 }
 
 void Layer::bprop(NVMatrix& v) {
@@ -118,15 +121,12 @@ void Layer::bprop(NVMatrix& v) {
     
     bpropCommon(v);
     
-    // We have to remember this because calling bprop on layer 1 can change its value
-    // for layer 2. We want bprop to be called only once per layer.
-    intv prevRcvdBInputs;
     if (_gradProducer) {
         for (int i = 0; i < _prev.size(); i++) {
             if (_prev[i]->isGradConsumer()) {
                 bpropActs(v, i);
+                _prev[i]->incRcvdBInputs();
             }
-            prevRcvdBInputs.push_back(_prev[i]->incRcvdBInputs());
         }    
     }
     
@@ -135,7 +135,7 @@ void Layer::bprop(NVMatrix& v) {
     
     if (_gradProducer) {
         for (int i = 0; i < _prev.size(); i++) {
-            if (_prev[i]->isGradConsumer() && prevRcvdBInputs[i] == _prev[i]->getNumGradProducersNext()) {
+            if (_prev[i]->isGradConsumer()) {
                 _prev[i]->bprop();
             }
         }
@@ -165,10 +165,6 @@ int Layer::getRcvdBInputs() {
 
 int Layer::incRcvdBInputs() {
     return ++_rcvdBInputs;
-}
-
-int Layer::getNumGradProducersNext() {
-    return _numGradProducersNext;
 }
 
 void Layer::addNext(Layer* l) {
