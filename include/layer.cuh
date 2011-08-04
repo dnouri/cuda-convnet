@@ -94,7 +94,6 @@ public:
     int incRcvdBInputs();
     int getRcvdFInputs();
     int getRcvdBInputs();
-    int getNumGradProducersNext();
     bool isGradConsumer();
     bool isGradProducer();
     std::string& getName();
