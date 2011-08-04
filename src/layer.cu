@@ -105,10 +105,7 @@ void Layer::fprop(NVMatrixV& v) {
 }
 
 void Layer::bprop() {
-    _rcvdBInputs += 1;
-    if (_rcvdBInputs == _numGradProducersNext) {
-        bprop(_actGrads);
-    }
+    bprop(_actGrads);
 }
 
 void Layer::bprop(NVMatrix& v) {
@@ -120,15 +117,25 @@ void Layer::bprop(NVMatrix& v) {
     _acts.transpose(_trans);
     
     bpropCommon(v);
+    
+    // We have to remember this because calling bprop on layer 1 can change its value
+    // for layer 2. We want bprop to be called only once per layer.
+    intv prevRcvdBInputs;
     if (_gradProducer) {
-        bpropActs(v);
+        for (int i = 0; i < _prev.size(); i++) {
+            if (_prev[i]->isGradConsumer()) {
+                bpropActs(v, i);
+            }
+            prevRcvdBInputs.push_back(_prev[i]->incRcvdBInputs());
+        }    
     }
+    
     bpropWeights(v);
     truncBwdActs();
     
     if (_gradProducer) {
         for (int i = 0; i < _prev.size(); i++) {
-            if (_prev[i]->isGradConsumer()) {
+            if (_prev[i]->isGradConsumer() && prevRcvdBInputs[i] == _prev[i]->getNumGradProducersNext()) {
                 _prev[i]->bprop();
             }
         }
@@ -154,6 +161,14 @@ int Layer::getRcvdFInputs() {
 
 int Layer::getRcvdBInputs() {
     return _rcvdBInputs;
+}
+
+int Layer::incRcvdBInputs() {
+    return ++_rcvdBInputs;
+}
+
+int Layer::getNumGradProducersNext() {
+    return _numGradProducersNext;
 }
 
 void Layer::addNext(Layer* l) {
@@ -228,18 +243,14 @@ void FCLayer::bpropCommon(NVMatrix& v) {
     _neuron->computeInputGrads(v);
 }
 
-void FCLayer::bpropActs(NVMatrix& v) {
-    for (int i = 0; i < _prev.size(); i++) {
-        if (_prev[i]->isGradConsumer()) {
-            NVMatrix& weights_T = _weights[i].getW().getTranspose();
-            if (_prev[i]->getRcvdBInputs() == 0) {
-                v.rightMult(weights_T, _prev[i]->getActGrads());
-            } else {
-                _prev[i]->getActGrads().addProduct(v, weights_T);
-            }
-            delete &weights_T;
-        }
+void FCLayer::bpropActs(NVMatrix& v, int inpIdx) {
+    NVMatrix& weights_T = _weights[inpIdx].getW().getTranspose();
+    if (_prev[inpIdx]->getRcvdBInputs() == 0) {
+        v.rightMult(weights_T, _prev[inpIdx]->getActGrads());
+    } else {
+        _prev[inpIdx]->getActGrads().addProduct(v, weights_T);
     }
+    delete &weights_T;
 }
 
 void FCLayer::bpropWeights(NVMatrix& v) {
@@ -347,11 +358,9 @@ void ConvLayer::bpropWeights(NVMatrix& v) {
     }
 }
 
-void ConvLayer::bpropActs(NVMatrix& v) {
-    if (_prev[0]->isGradConsumer()) {
-        float scaleTargets = _prev[0]->getRcvdBInputs() == 0 ? 0 : 1;
-        convImgActs(v, *_weights, _prev[0]->getActGrads(), _imgSize, _padding, _stride, _channels, scaleTargets, 1);
-    }
+void ConvLayer::bpropActs(NVMatrix& v, int inpIdx) {
+    float scaleTargets = _prev[inpIdx]->getRcvdBInputs() == 0 ? 0 : 1;
+    convImgActs(v, *_weights, _prev[inpIdx]->getActGrads(), _imgSize, _padding, _stride, _channels, scaleTargets, 1);
 }
 
 void ConvLayer::truncBwdActs() {
@@ -389,16 +398,14 @@ void ConvLayer::checkGradients(ConvNet* convNet) {
 SoftmaxLayer::SoftmaxLayer(PyObject* paramsDict) : Layer(paramsDict, true, true, true) {
 }
 
-void SoftmaxLayer::bpropActs(NVMatrix& v) {
-    if (_prev[0]->isGradConsumer()) {
-        bool doLogregGrad = _next.size() == 1 && _next[0]->getType() == "cost.logreg";
-        if (doLogregGrad) {
-            NVMatrix& labels = _next[0]->getPrev()[0]->getActs();
-            float gradCoeff = dynamic_cast<CostLayer*>(_next[0])->getCoeff();
-            computeLogregSoftmaxGrads(labels, _acts, _prev[0]->getActGrads(), _prev[0]->getRcvdBInputs() > 0, gradCoeff);
-        } else {
-            computeSoftmaxGrads(_acts, v, _prev[0]->getActGrads(), _prev[0]->getRcvdBInputs() > 0);
-        }
+void SoftmaxLayer::bpropActs(NVMatrix& v, int inpIdx) {
+    bool doLogregGrad = _next.size() == 1 && _next[0]->getType() == "cost.logreg";
+    if (doLogregGrad) {
+        NVMatrix& labels = _next[0]->getPrev()[0]->getActs();
+        float gradCoeff = dynamic_cast<CostLayer*>(_next[0])->getCoeff();
+        computeLogregSoftmaxGrads(labels, _acts, _prev[inpIdx]->getActGrads(), _prev[inpIdx]->getRcvdBInputs() > 0, gradCoeff);
+    } else {
+        computeSoftmaxGrads(_acts, v, _prev[inpIdx]->getActGrads(), _prev[inpIdx]->getRcvdBInputs() > 0);
     }
 }
 
@@ -470,14 +477,13 @@ void PoolLayer::fpropActs(NVMatrixV& v) {
     }
 }
 
-void PoolLayer::bpropActs(NVMatrix& v) {
-    if (_prev[0]->isGradConsumer()) {
-        float scaleTargets = _prev[0]->getRcvdBInputs() == 0 ? 0 : 1;
-        if (_pool == "max") {
-            convLocalMaxUndo(_prev[0]->getActs(), v, _acts, _prev[0]->getActGrads(), _sizeX, _start, _stride, _outputsX, scaleTargets, 1);
-        } else if (_pool == "avg") {
-            convLocalAvgUndo(v, _prev[0]->getActGrads(), _sizeX, _start, _stride, _outputsX, _imgSize, scaleTargets, 1);
-        }
+void PoolLayer::bpropActs(NVMatrix& v, int inpIdx) {
+    float scaleTargets = _prev[inpIdx]->getRcvdBInputs() == 0 ? 0 : 1;
+
+    if (_pool == "max") {
+        convLocalMaxUndo(_prev[inpIdx]->getActs(), v, _acts, _prev[inpIdx]->getActGrads(), _sizeX, _start, _stride, _outputsX, scaleTargets, 1);
+    } else if (_pool == "avg") {
+        convLocalAvgUndo(v, _prev[inpIdx]->getActGrads(), _sizeX, _start, _stride, _outputsX, _imgSize, scaleTargets, 1);
     }
 }
 
@@ -499,11 +505,9 @@ void ResponseNormLayer::fpropActs(NVMatrixV& v) {
     convResponseNorm(images, _denoms, _acts, _channels, _sizeX, _scale, _pow);
 }
 
-void ResponseNormLayer::bpropActs(NVMatrix& v) {
-    if (_prev[0]->isGradConsumer()) {
-        float scaleTargets = _prev[0]->getRcvdBInputs() == 0 ? 0 : 1;
-        convResponseNormUndo(v, _denoms, _prev[0]->getActs(), _acts, _prev[0]->getActGrads(), _channels, _sizeX, _scale, _pow, scaleTargets, 1);
-    }
+void ResponseNormLayer::bpropActs(NVMatrix& v, int inpIdx) {
+    float scaleTargets = _prev[inpIdx]->getRcvdBInputs() == 0 ? 0 : 1;
+    convResponseNormUndo(v, _denoms, _prev[inpIdx]->getActs(), _acts, _prev[inpIdx]->getActGrads(), _channels, _sizeX, _scale, _pow, scaleTargets, 1);
 }
 
 void ResponseNormLayer::truncBwdActs() {
@@ -529,11 +533,9 @@ void ContrastNormLayer::fpropActs(NVMatrixV& v) {
     convContrastNorm(images, _meanDiffs, _denoms, _acts, _channels, _sizeX, _scale, _pow);
 }
 
-void ContrastNormLayer::bpropActs(NVMatrix& v) {
-    if (_prev[0]->isGradConsumer()) {
-        float scaleTargets = _prev[0]->getRcvdBInputs() == 0 ? 0 : 1;
-        convContrastNormUndo(v, _denoms, _meanDiffs, _acts, _prev[0]->getActGrads(), _channels, _sizeX, _scale, _pow, scaleTargets, 1);
-    }
+void ContrastNormLayer::bpropActs(NVMatrix& v, int inpIdx) {
+    float scaleTargets = _prev[inpIdx]->getRcvdBInputs() == 0 ? 0 : 1;
+    convContrastNormUndo(v, _denoms, _meanDiffs, _acts, _prev[inpIdx]->getActGrads(), _channels, _sizeX, _scale, _pow, scaleTargets, 1);
 }
 
 void ContrastNormLayer::truncBwdActs() {
@@ -552,7 +554,6 @@ CostLayer::CostLayer(PyObject* paramsDict, bool gradConsumer, bool gradProducer,
     : Layer(paramsDict, gradConsumer, gradProducer, trans) {
     _coeff = pyDictGetFloat(paramsDict, "coeff");
     _gradProducer = _coeff != 0;
-    _numGradProducersNext = 1;
 }
 
 float CostLayer::getCoeff() {
@@ -599,14 +600,14 @@ void LogregCostLayer::fpropActs(NVMatrixV& v) {
     _err.push_back(numCases - correctProbs.sum());
 }
 
-void LogregCostLayer::bpropActs(NVMatrix& v) {
+void LogregCostLayer::bpropActs(NVMatrix& v, int inpIdx) {
     NVMatrix& labels = _prev[0]->getActs();
-    NVMatrix& probs = _prev[1]->getActs();
-    NVMatrix& target = _prev[1]->getActGrads();
+    NVMatrix& probs = _prev[inpIdx]->getActs();
+    NVMatrix& target = _prev[inpIdx]->getActGrads();
     // Numerical stability optimization: if the layer below me is a softmax layer, let it handle
     // the entire gradient computation to avoid multiplying and dividing by a near-zero quantity.
-    bool doWork = _prev[1]->getNext().size() > 1 || _prev[1]->getType() != "softmax";
+    bool doWork = _prev[inpIdx]->getNext().size() > 1 || _prev[inpIdx]->getType() != "softmax";
     if (doWork) {
-        computeLogregGrads(labels, probs, target, _prev[1]->getRcvdBInputs() > 0, _coeff);
+        computeLogregGrads(labels, probs, target, _prev[inpIdx]->getRcvdBInputs() > 0, _coeff);
     }
 }

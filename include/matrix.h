@@ -36,6 +36,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 
 #ifdef USE_MKL
 #include <mkl.h>
@@ -285,6 +286,8 @@ public:
     void reshape(int numRows, int numCols);
     Matrix& reshaped(int numRows, int numCols);
     void printShape(const char* name) const;
+    bool hasNan() const;
+    bool hasInf() const;
 #ifdef USE_MKL
     void randomizeNormal(VSLStreamStatePtr stream, MTYPE mean, MTYPE stdev);
     void randomizeUniform(VSLStreamStatePtr stream);

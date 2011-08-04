@@ -34,6 +34,7 @@
 #include <matrix.h>
 #include <queue.h>
 #include <thread.h>
+#include <math.h>
 
 #include "../include/layer.cuh"
 #include "../include/util.cuh"

@@ -249,6 +249,10 @@ void ConvNet::checkGradients() {
     Layer::_checkingGrads = false;
 }
 
+/*
+ * name: weight matrix name
+ * eps: finite difference step
+ */
 bool ConvNet::checkGradientsW(const string& name, float eps, Weights& weights) {
     Matrix numGrads(weights.getNumRows(), weights.getNumCols());
     Matrix diff(numGrads);
@@ -266,6 +270,12 @@ bool ConvNet::checkGradientsW(const string& name, float eps, Weights& weights) {
             fprop();
             double err = getCostFunctionValue();
             numGrads(i,j) = (err - _baseErr) / (_data->getNumCases() * eps);
+            if (isnan(numGrads(i,j)) || isinf(numGrads(i,j))) {
+                cout << "Numerical computation produced nan or inf when checking '" << name << "': " << numGrads(i,j) << endl;
+                cout << "Consider reducing the sizes of the weights or finite difference steps." << endl;
+                cout << "Exiting." << endl;
+                exit(1);
+            }
             weights.getW().copyFromHost(weightsCPU);
         }
     }

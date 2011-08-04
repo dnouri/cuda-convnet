@@ -66,7 +66,7 @@ protected:
     virtual void bpropCommon(NVMatrix& v) {
         // do nothing by default
     }
-    virtual void bpropActs(NVMatrix& v) {
+    virtual void bpropActs(NVMatrix& v, int inpIdx) {
         assert(!_gradProducer); // only do nothing if not grad producer
     }
     virtual void bpropWeights(NVMatrix& v) {
@@ -91,8 +91,10 @@ public:
     virtual void bprop();
     void bprop(NVMatrix& v);
     void reset();
+    int incRcvdBInputs();
     int getRcvdFInputs();
     int getRcvdBInputs();
+    int getNumGradProducersNext();
     bool isGradConsumer();
     bool isGradProducer();
     std::string& getName();
@@ -103,7 +105,7 @@ public:
     std::vector<Layer*>& getNext();
     NVMatrix& getActs();
     NVMatrix& getActGrads();
-
+    
     virtual void copyToCPU() {
         // do nothing if this layer has no weights
     }
@@ -121,7 +123,7 @@ private:
 protected:
     void fpropActs(NVMatrixV& v);
     void bpropCommon(NVMatrix& v);
-    void bpropActs(NVMatrix& v);
+    void bpropActs(NVMatrix& v, int inpIdx);
     void bpropWeights(NVMatrix& v);
 public:
     FCLayer(PyObject* paramsDict);
@@ -135,7 +137,7 @@ public:
 class SoftmaxLayer : public Layer {
 protected:
     void fpropActs(NVMatrixV& v);
-    void bpropActs(NVMatrix& v);
+    void bpropActs(NVMatrix& v, int inpIdx);
 public:
     SoftmaxLayer(PyObject* paramsDict);
 };
@@ -165,7 +167,7 @@ private:
 protected:
     void fpropActs(NVMatrixV& v);
     void bpropCommon(NVMatrix& v);
-    void bpropActs(NVMatrix& v);
+    void bpropActs(NVMatrix& v, int inpIdx);
     void bpropWeights(NVMatrix& v);
     void truncBwdActs();
 public:
@@ -184,7 +186,7 @@ private:
     string _pool;
 protected:
     void fpropActs(NVMatrixV& v);
-    void bpropActs(NVMatrix& v);
+    void bpropActs(NVMatrix& v, int inpIdx);
 public:
     PoolLayer(PyObject* paramsDict);
 }; 
@@ -196,7 +198,7 @@ protected:
     NVMatrix _denoms;
 
     void fpropActs(NVMatrixV& v);
-    void bpropActs(NVMatrix& v);
+    void bpropActs(NVMatrix& v, int inpIdx);
     void truncBwdActs();
 public:
     ResponseNormLayer(PyObject* paramsDict);
@@ -208,7 +210,7 @@ protected:
     NVMatrix _meanDiffs;
     
     void fpropActs(NVMatrixV& v);
-    void bpropActs(NVMatrix& v);
+    void bpropActs(NVMatrix& v, int inpIdx);
     void truncBwdActs();
 public:
     ContrastNormLayer(PyObject* paramsDict);
@@ -234,7 +236,7 @@ public:
 class LogregCostLayer : public CostLayer {
 protected:
     void fpropActs(NVMatrixV& v);
-    void bpropActs(NVMatrix& v);
+    void bpropActs(NVMatrix& v, int inpIdx);
 public:
     LogregCostLayer(PyObject* paramsDict);
 };
