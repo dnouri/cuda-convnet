@@ -8,16 +8,16 @@
 export CUDA_INSTALL_PATH=/usr/local/cuda
 
 # CUDA SDK installation directory
-export CUDA_SDK_PATH=/home/spoon/NVIDIA_GPU_Computing_SDK/
+export CUDA_SDK_PATH=/home/spoon/NVIDIA_GPU_Computing_SDK
 
 # Python include directory. This should contain the file Python.h, among others.
-export PYTHON_INCLUDE=/usr/include/python2.7/
+export PYTHON_INCLUDE_PATH=/usr/include/python2.7
 
 # Numpy include directory. This should contain the file arrayobject.h, among others.
-export NUMPY_INCLUDE=/usr/include/python2.7_d/numpy/
+export NUMPY_INCLUDE_PATH=/usr/lib64/python2.7/site-packages/numpy/core/include/numpy
 
-# Leave this line alone.
-export LD_LIBRARY_PATH=$CUDA_INSTALL_PATH/lib64:$CUDA_INSTALL_PATH/lib:$LD_LIBRARY_PATH
+# ATLAS library directory. This should contain the file libcblas.so, among others.
+export ATLAS_LIB_PATH=/usr/lib64/atlas
 
 make $*
 
