@@ -57,7 +57,7 @@ WorkResult::RESULTS WorkResult::getResultType() {
  * Worker
  * ====================
  */
-Worker::Worker(ConvNet* convNet) : _convNet(convNet) {
+Worker::Worker(ConvNet& convNet) : _convNet(&convNet) {
 }
 
 void Worker::incError(ErrorResult& src, ErrorResult& tgt) {
@@ -70,7 +70,7 @@ void Worker::incError(ErrorResult& src, ErrorResult& tgt) {
  * TrainingWorker
  * ====================
  */
-TrainingWorker::TrainingWorker(ConvNet* convNet, CPUData& data, bool test) 
+TrainingWorker::TrainingWorker(ConvNet& convNet, CPUData& data, bool test) 
     : Worker(convNet), _data(&data), _test(test) {
 }
 
@@ -99,7 +99,7 @@ void TrainingWorker::run() {
  * SyncWorker
  * ====================
  */
-SyncWorker::SyncWorker(ConvNet* convNet) : Worker(convNet) {
+SyncWorker::SyncWorker(ConvNet& convNet) : Worker(convNet) {
 }
 
 void SyncWorker::run() {
@@ -112,7 +112,7 @@ void SyncWorker::run() {
  * GradCheckWorker
  * ====================
  */
-GradCheckWorker::GradCheckWorker(ConvNet* convNet, CPUData& data) 
+GradCheckWorker::GradCheckWorker(ConvNet& convNet, CPUData& data) 
     : Worker(convNet), _data(&data) {
 }
 
@@ -127,7 +127,7 @@ void GradCheckWorker::run() {
  * MultiviewTestWorker
  * ====================
  */
-MultiviewTestWorker::MultiviewTestWorker(ConvNet* convNet, CPUData& data, int numViews, int logregIdx) 
+MultiviewTestWorker::MultiviewTestWorker(ConvNet& convNet, CPUData& data, int numViews, int logregIdx) 
     : Worker(convNet), _data(&data), _numViews(numViews), _logregIdx(logregIdx) {
     assert(_data->getNumCases() % _numViews == 0);
 }

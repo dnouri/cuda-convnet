@@ -117,7 +117,7 @@ PyObject* startBatch(PyObject *self, PyObject *args) {
     }
     MatrixV& mvec = *getMatrixV((PyObject*)data);
     
-    TrainingWorker* wr = new TrainingWorker(model, *new CPUData(mvec), test);
+    TrainingWorker* wr = new TrainingWorker(*model, *new CPUData(mvec), test);
     model->getWorkerQueue().enqueue(wr);
     return Py_BuildValue("i", 0);
 }
@@ -137,7 +137,7 @@ PyObject* startMultiviewTest(PyObject *self, PyObject *args) {
     }
     MatrixV& mvec = *getMatrixV((PyObject*)data);
     
-    MultiviewTestWorker* wr = new MultiviewTestWorker(model, *new CPUData(mvec), numViews, logregIdx);
+    MultiviewTestWorker* wr = new MultiviewTestWorker(*model, *new CPUData(mvec), numViews, logregIdx);
     model->getWorkerQueue().enqueue(wr);
     return Py_BuildValue("i", 0);
 }
@@ -175,7 +175,7 @@ PyObject* checkGradients(PyObject *self, PyObject *args) {
     }
     MatrixV& mvec = *getMatrixV((PyObject*)data);
     
-    GradCheckWorker* wr = new GradCheckWorker(model, *new CPUData(mvec));
+    GradCheckWorker* wr = new GradCheckWorker(*model, *new CPUData(mvec));
     model->getWorkerQueue().enqueue(wr);
     WorkResult* res = model->getResultQueue().dequeue();
     assert(res != NULL);
@@ -189,7 +189,7 @@ PyObject* checkGradients(PyObject *self, PyObject *args) {
  */
 PyObject* syncWithHost(PyObject *self, PyObject *args) {
     assert(model != NULL);
-    SyncWorker* wr = new SyncWorker(model);
+    SyncWorker* wr = new SyncWorker(*model);
     model->getWorkerQueue().enqueue(wr);
     WorkResult* res = model->getResultQueue().dequeue();
     assert(res != NULL);

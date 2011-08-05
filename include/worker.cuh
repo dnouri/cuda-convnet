@@ -53,7 +53,7 @@ class Worker {
 protected:
     ConvNet* _convNet;
 public:
-    Worker(ConvNet* convNet);
+    Worker(ConvNet& convNet);
     virtual void run() = 0;
     static void incError(ErrorResult& src, ErrorResult& tgt);
 };
@@ -63,13 +63,13 @@ protected:
     bool _test;
     CPUData* _data;
 public:
-    TrainingWorker(ConvNet* convNet, CPUData& data, bool test);
+    TrainingWorker(ConvNet& convNet, CPUData& data, bool test);
     void run();
 };
 
 class SyncWorker : public Worker {
 public:
-    SyncWorker(ConvNet* convNet);
+    SyncWorker(ConvNet& convNet);
     void run();
 };
 
@@ -77,7 +77,7 @@ class GradCheckWorker : public Worker {
 protected:
     CPUData* _data;
 public:
-    GradCheckWorker(ConvNet* convNet, CPUData& data);
+    GradCheckWorker(ConvNet& convNet, CPUData& data);
     void run();
 };
 
@@ -86,7 +86,7 @@ protected:
     CPUData* _data;
     int _numViews, _logregIdx;
 public:
-    MultiviewTestWorker(ConvNet* convNet, CPUData& data, int numViews, int logregIdx);
+    MultiviewTestWorker(ConvNet& convNet, CPUData& data, int numViews, int logregIdx);
     void run();
 };
 
