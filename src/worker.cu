@@ -48,7 +48,7 @@ ErrorResult& WorkResult::getResults() const {
     return *_results;
 }
 
-WorkResult::RESULTS WorkResult::getResultType() {
+WorkResult::RESULTS WorkResult::getResultType() const {
     return _resultType;
 }
 
@@ -74,9 +74,9 @@ TrainingWorker::TrainingWorker(ConvNet& convNet, CPUData& data, bool test)
     : Worker(convNet), _data(&data), _test(test) {
 }
 
+// Need to setData here (as opposed to the constructor) because the constructor executes in
+// the original CPU thread, which is not the one with GPU access.
 void TrainingWorker::run() {
-    // Need to setData here (as opposed to the constructor) because the constructor executes in
-    // the original CPU thread, which is not the one with GPU access.
     _convNet->setData(*_data);
     ErrorResult& batchErr = *new ErrorResult();
     for (int i = 0; i < _convNet->getDataProvider().getNumMinibatches(); i++) {
@@ -89,8 +89,8 @@ void TrainingWorker::run() {
         }
     }
     cudaThreadSynchronize();
-
-    batchErr /= _convNet->getDataProvider().getNumCases();
+    
+    batchErr /= _data->getNumCases();
     _convNet->getResultQueue().enqueue(new WorkResult(WorkResult::BATCH_DONE, batchErr));
 }
 

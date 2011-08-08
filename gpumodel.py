@@ -24,7 +24,7 @@
 
 import numpy as n
 import os
-from time import time, asctime, localtime
+from time import time, asctime, localtime, strftime
 from numpy.random import randn, rand
 from numpy import s_, dot, tile, zeros, ones, zeros_like, array, ones_like
 from util import *
@@ -65,7 +65,7 @@ class IGPUModel:
         else:
             self.model_state = {}
             if filename_options is not None:
-                self.save_file = model_name + "_" + '_'.join(['%s_%s' % (char, self.options[opt].get_str_value()) for opt, char in filename_options]) + '_' + asctime(localtime()).replace(' ', '_').replace(':', '_')
+                self.save_file = model_name + "_" + '_'.join(['%s_%s' % (char, self.options[opt].get_str_value()) for opt, char in filename_options]) + '_' + strftime('%Y-%m-%d_%H.%M.%S')
             self.model_state["train_outputs"] = []
             self.model_state["test_outputs"] = []
             self.model_state["epoch"] = 1

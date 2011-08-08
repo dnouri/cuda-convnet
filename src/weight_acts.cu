@@ -155,11 +155,11 @@ __global__ void weight_acts_kernel2_color(float* images, float* hidActs, float* 
 
             __syncthreads();
             #pragma unroll
-            for (int c = 0; c < numColors; c++) {
+            for (int p = 0; p < pixelsPerThread; p++) {
                 #pragma unroll
-                for (int p = 0; p < pixelsPerThread; p++) {
+                for (int i = 0; i < preloadCases; i++) {
                     #pragma unroll
-                    for (int i = 0; i < preloadCases; i++) {
+                    for (int c = 0; c < numColors; c++) {
                         prod[c][p] += shImages[threadIdx.y + p * B_Y + c * pixelsPerThread * B_Y][i] * shHidActs[threadIdx.x][i];
                     }
                 }
@@ -326,9 +326,9 @@ __global__ void weight_acts_kernel2_manycolor(float* images, float* hidActs, flo
             #pragma unroll
             for (int c = 0; c < colorsPerThread; c++) {
                 #pragma unroll
-                for (int p = 0; p < pixelsPerThread; p++) {
+                for (int i = 0; i < preloadCases; i++) {
                     #pragma unroll
-                    for (int i = 0; i < preloadCases; i++) {
+                    for (int p = 0; p < pixelsPerThread; p++) {
                         prod[c][p] += shImages[threadIdx.y + p * B_Y + c * pixelsPerThread * B_Y][i] * shHidActs[threadIdx.x][i];
                     }
                 }
@@ -470,7 +470,6 @@ void convWeightActs(NVMatrix& images, NVMatrix& hidActs, NVMatrix& targets,
             } else {
                 if (checkCaseBounds) {
                     if (numFilters % 32 == 0) {
-                        
                         cudaFuncSetCacheConfig(weight_acts_kernel2_manycolor<4,32,2,4,32, false, true>, cudaFuncCachePreferShared);
                         weight_acts_kernel2_manycolor<4,32,2,4,32,false, true><<<blocks, threads>>>(images.getDevData(), hidActs.getDevData(), targets.getDevData(),
                                                                                        numImages, numFilters, numModulesX, imgSize, filterSize,

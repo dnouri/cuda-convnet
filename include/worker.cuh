@@ -46,7 +46,7 @@ public:
     WorkResult(WorkResult::RESULTS resultType);
     virtual ~WorkResult();
     ErrorResult& getResults() const;
-    WorkResult::RESULTS getResultType();
+    WorkResult::RESULTS getResultType() const;
 };
 
 class Worker {
