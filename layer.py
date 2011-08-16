@@ -150,6 +150,9 @@ class LayerParser:
 
 # Any layer that takes an input (i.e. non-data layer)
 class LayerWithInputParser(LayerParser):
+    def __init__(self, num_inputs=-1):
+        self.num_inputs = num_inputs
+        
     def parse(self, name, mcp, prev_layers, model):
         dic = LayerParser.parse(self, name, mcp, prev_layers, model)
         
@@ -160,6 +163,9 @@ class LayerWithInputParser(LayerParser):
                 raise LayerParsingError("Layer '%s': input '%s' not defined" % (name, inp))
         dic['inputs'] = [prev_names.index(inp) for inp in dic['inputs']]
         dic['numInputs'] = [prev_layers[i]['numOutputs'] for i in dic['inputs']]
+        
+        if self.num_inputs > 0 and len(dic['numInputs']) != self.num_inputs:
+            raise LayerParsingError("Layer '%s': number of inputs must be %d", name, self.num_inputs) 
         
         return dic
 
@@ -204,6 +210,9 @@ class FCLayerParser(LayerWithInputParser):
         return dic
 
 class ConvLayerParser(LayerWithInputParser):
+    def __init__(self):
+        LayerWithInputParser.__init__(self, num_inputs=1)
+    
     def requires_params(self):
         return True
     
@@ -216,8 +225,7 @@ class ConvLayerParser(LayerWithInputParser):
     
     def parse(self, name, mcp, prev_layers, model):
         dic = LayerWithInputParser.parse(self, name, mcp, prev_layers, model)
-        if len(dic['numInputs']) != 1:
-            raise LayerParsingError("Layer '%s': number of inputs must be 1", name) 
+        
         dic['channels'] = mcp.getint(name, 'channels')
         dic['imgPixels'] = dic['numInputs'][0] / dic['channels']
         dic['imgSize'] = int(n.sqrt(dic['imgPixels']))
@@ -268,19 +276,21 @@ class DataLayerParser(LayerParser):
         return dic
 
 class SoftmaxLayerParser(LayerWithInputParser):
+    def __init__(self):
+        LayerWithInputParser.__init__(self, num_inputs=1)
+        
     def parse(self, name, mcp, prev_layers, model):
         dic = LayerWithInputParser.parse(self, name, mcp, prev_layers, model)
-        if len(dic['numInputs']) != 1:
-            raise LayerParsingError("Layer '%s': Number of inputs must be 1", name)
         dic['numOutputs'] = prev_layers[dic['inputs'][0]]['numOutputs']
         print "Initialized softmax layer '%s', producing %d outputs" % (name, dic['numOutputs'])
         return dic
 
 class PoolLayerParser(LayerWithInputParser):
+    def __init__(self):
+        LayerWithInputParser.__init__(self, num_inputs=1)
+        
     def parse(self, name, mcp, prev_layers, model):
         dic = LayerWithInputParser.parse(self, name, mcp, prev_layers, model)
-        if len(dic['numInputs']) != 1:
-            raise LayerParsingError("Layer '%s': number of inputs must be 1", name) 
         dic['channels'] = mcp.getint(name, 'channels')
         dic['sizeX'] = mcp.getint(name, 'sizeX')
         dic['start'] = mcp.getint(name, 'start')
@@ -314,12 +324,11 @@ class PoolLayerParser(LayerWithInputParser):
     
 class NormLayerParser(LayerWithInputParser):
     def __init__(self, norm_type):
+        LayerWithInputParser.__init__(self, num_inputs=1)
         self.norm_type = norm_type
         
     def parse(self, name, mcp, prev_layers, model):
         dic = LayerWithInputParser.parse(self, name, mcp, prev_layers, model)
-        if len(dic['numInputs']) != 1:
-            raise LayerParsingError("Layer '%s': number of inputs must be 1", name) 
         dic['channels'] = mcp.getint(name, 'channels')
         dic['sizeX'] = mcp.getint(name, 'sizeX')
         dic['pow'] = mcp.getfloat(name, 'pow')
@@ -341,6 +350,9 @@ class NormLayerParser(LayerWithInputParser):
         return dic
 
 class CostParser(LayerWithInputParser):
+    def __init__(self, num_inputs=-1):
+        LayerWithInputParser.__init__(self, num_inputs=num_inputs)
+        
     def requires_params(self):
         return True    
     
@@ -348,11 +360,11 @@ class CostParser(LayerWithInputParser):
         dic['coeff'] = mcp.getfloat(name, 'coeff')
             
 class LogregCostParser(CostParser):
+    def __init__(self):
+        LayerWithInputParser.__init__(self, num_inputs=2)
+        
     def parse(self, name, mcp, prev_layers, model):
         dic = CostParser.parse(self, name, mcp, prev_layers, model)
-        
-        if len(dic['numInputs']) != 2: # the inputs are [labels, predicted probabilities]
-            raise LayerParsingError("Layer '%s': Number of inputs must be 2: labels and predicted probabilities", name)
         if dic['numInputs'][0] != 1: # first input must be labels
             raise LayerParsingError("Layer '%s': Dimensionality of first input must be 1", name)
         
