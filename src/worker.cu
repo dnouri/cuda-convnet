@@ -80,11 +80,11 @@ void TrainingWorker::run() {
     _convNet->setData(*_data);
     ErrorResult& batchErr = *new ErrorResult();
     for (int i = 0; i < _convNet->getDataProvider().getNumMinibatches(); i++) {
-        _convNet->fprop(i);
+        _convNet->fprop(i, _test ? PASS_TEST : PASS_TRAIN);
         Worker::incError(_convNet->getError(), batchErr);
         
         if (!_test) {
-            _convNet->bprop();
+            _convNet->bprop(_test ? PASS_TEST : PASS_TRAIN);
             _convNet->updateWeights();
         }
     }
@@ -145,7 +145,7 @@ void MultiviewTestWorker::run() {
         for (int v = 0; v < _numViews; v++) {
             GPUData& mini = dp.getDataSlice(v * numCasesReal + i * dp.getMinibatchSize(),
                                             min((v + 1) * numCasesReal, v * numCasesReal + (i + 1) * dp.getMinibatchSize()));
-            _convNet->fprop(mini);
+            _convNet->fprop(mini, PASS_TEST);
             if (v == 0) {
                 logregLayer.getPrev()[1]->getActs().copy(softmaxActs);
             } else {
@@ -157,7 +157,7 @@ void MultiviewTestWorker::run() {
         logregInput.push_back(&logregLayer.getPrev()[0]->getActs());
         logregInput.push_back(&softmaxActs);
         
-        logregLayer.fprop(logregInput);
+        logregLayer.fprop(logregInput, PASS_TEST);
         
         Worker::incError(_convNet->getError(), batchErr);
     }

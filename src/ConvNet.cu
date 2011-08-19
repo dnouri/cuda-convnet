@@ -181,33 +181,33 @@ int ConvNet::getNumLayers() {
     return _layers.size();
 }
 
-void ConvNet::bprop() {
+void ConvNet::bprop(PASS_TYPE passType) {
     for (int i = 0; i < _costs.size(); i++) {
-        _costs[i]->bprop();
+        _costs[i]->bprop(passType);
     }
     reset();
 }
 
-void ConvNet::fprop() {
+void ConvNet::fprop(PASS_TYPE passType) {
     assert(_data != NULL);
     reset();
     for (int i = 0; i < _data->getSize(); i++) {
-        _dataLayers[i]->fprop(_data->getData());
+        _dataLayers[i]->fprop(_data->getData(), passType);
     }
 }
 
-void ConvNet::fprop(GPUData& data) {
+void ConvNet::fprop(GPUData& data, PASS_TYPE passType) {
     if (&data != _data) {
         delete _data;
     }
     _data = &data;
-    fprop();
+    fprop(passType);
 }
 
-void ConvNet::fprop(int miniIdx) {
+void ConvNet::fprop(int miniIdx, PASS_TYPE passType) {
     delete _data;
     _data = &_dp->getMinibatch(miniIdx);
-    fprop();
+    fprop(passType);
 }
 
 void ConvNet::setData(CPUData& data) {
@@ -229,12 +229,11 @@ double ConvNet::getCostFunctionValue() {
  * Gradient checking stuff
  */
 void ConvNet::checkGradients() {
-    Layer::_checkingGrads = true;
     _numFailures = 0;
     _numTests = 0;
-    fprop(0);
+    fprop(0, PASS_GC);
     _baseErr = getCostFunctionValue();
-    bprop();
+    bprop(PASS_GC);
     
     for (vector<Layer*>::iterator it = _layers.begin(); it != _layers.end(); ++it) {
         (*it)->checkGradients(this);
@@ -246,7 +245,6 @@ void ConvNet::checkGradients() {
     } else {
         cout << "ALL " << _numTests << " TESTS PASSED" << endl;
     }
-    Layer::_checkingGrads = false;
 }
 
 /*
@@ -267,7 +265,7 @@ bool ConvNet::checkGradientsW(const string& name, float eps, Weights& weights) {
             weightsCPU(i,j) += eps;
             weights.getW().copyFromHost(weightsCPU);
             weightsCPU(i,j) = v;
-            fprop();
+            fprop(PASS_GC);
             double err = getCostFunctionValue();
             numGrads(i,j) = (err - _baseErr) / (_data->getNumCases() * eps);
             if (isnan(numGrads(i,j)) || isinf(numGrads(i,j))) {

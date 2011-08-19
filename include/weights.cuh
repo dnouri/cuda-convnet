@@ -203,27 +203,6 @@ public:
         assert(_initialized);
         return _weightList.size();
     }
-    
-    void copyToCPU() {
-        assert(_initialized);
-        for (int i = 0; i < _weightList.size(); i++) {
-            _weightList.at(i)->copyToCPU();
-        }
-    }
-    
-    void copyToGPU() {
-        assert(_initialized);
-        for (int i = 0; i < _weightList.size(); i++) {
-            _weightList.at(i)->copyToGPU();
-        }
-    }
-    
-    void update(int numCases) {
-        assert(_initialized);
-        for (int i = 0; i < _weightList.size(); i++) {
-            _weightList.at(i)->update(numCases);
-        }
-    }
 };
 
 

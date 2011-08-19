@@ -87,14 +87,13 @@ public:
     void reset();
     int getNumLayers();
     
-    void bprop();
-    void fprop();
-    void fprop(int miniIdx);
-    void fprop(GPUData& data);
+    void bprop(PASS_TYPE passType);
+    void fprop(PASS_TYPE passType);
+    void fprop(int miniIdx, PASS_TYPE passType);
+    void fprop(GPUData& data, PASS_TYPE passType);
 
     bool checkGradientsW(const std::string& name, float eps, Weights& weights); 
     void checkGradients();
-    bool isCheckingGrads();
     ErrorResult& getError();
     double getCostFunctionValue();
 };

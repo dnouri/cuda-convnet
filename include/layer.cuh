@@ -60,20 +60,20 @@ protected:
     bool _gradConsumer, _gradProducer, _trans;
     int _numGradProducersNext;
     std::string _name, _type;
-    void fpropNext();
+    void fpropNext(PASS_TYPE passType);
     virtual void truncBwdActs(); 
-    virtual void fpropActs(NVMatrixV& v) = 0;
-    virtual void bpropCommon(NVMatrix& v) {
+    virtual void fpropActs(NVMatrixV& v, PASS_TYPE passType) = 0;
+    virtual void bpropCommon(NVMatrix& v, PASS_TYPE passType) {
         // do nothing by default
     }
-    virtual void bpropActs(NVMatrix& v, int inpIdx) {
+    virtual void bpropActs(NVMatrix& v, int inpIdx, PASS_TYPE passType) {
         assert(!_gradProducer); // only do nothing if not grad producer
     }
-    virtual void bpropWeights(NVMatrix& v) {
+    virtual void bpropWeights(NVMatrix& v, PASS_TYPE passType) {
         // do nothing if this layer has no weights
     }
-public:
-    static bool _saveActGrads, _saveActs, _checkingGrads;
+public:    
+    static bool _saveActGrads, _saveActs;
     
     Layer(PyObject* paramsDict, bool gradConsumer, bool gradProducer, bool trans);
     
@@ -85,11 +85,11 @@ public:
         // do nothing if this layer has no weights
     }
     
-    virtual void fprop();
-    void fprop(NVMatrix& v);
-    virtual void fprop(NVMatrixV& v);
-    virtual void bprop();
-    void bprop(NVMatrix& v);
+    virtual void fprop(PASS_TYPE passType);
+    void fprop(NVMatrix& v, PASS_TYPE passType);
+    virtual void fprop(NVMatrixV& v, PASS_TYPE passType);
+    virtual void bprop(PASS_TYPE passType);
+    void bprop(NVMatrix& v, PASS_TYPE passType);
     void reset();
     int incRcvdBInputs();
     int getRcvdFInputs();
@@ -114,29 +114,39 @@ public:
     }
 };
 
-class FCLayer : public Layer {
+class WeightLayer : public Layer {
+protected:
+    vector<Weights*> _vWeights;
+    
+    void addWeights(Weights& w);
+    void addWeights(WeightList& wl);
+public:
+    WeightLayer(PyObject* paramsDict, bool gradConsumer, bool gradProducer, bool trans);
+    void updateWeights(int numCases);
+    virtual void copyToCPU();
+    virtual void copyToGPU();
+};
+
+class FCLayer : public WeightLayer {
 private:
     WeightList _weights;
     Weights _biases;
     Neuron* _neuron;
 protected:
-    void fpropActs(NVMatrixV& v);
-    void bpropCommon(NVMatrix& v);
-    void bpropActs(NVMatrix& v, int inpIdx);
-    void bpropWeights(NVMatrix& v);
+    void fpropActs(NVMatrixV& v, PASS_TYPE passType);
+    void bpropCommon(NVMatrix& v, PASS_TYPE passType);
+    void bpropActs(NVMatrix& v, int inpIdx, PASS_TYPE passType);
+    void bpropWeights(NVMatrix& v, PASS_TYPE passType);
 public:
     FCLayer(PyObject* paramsDict);
- 
-    void updateWeights(int numCases);  
-    void copyToCPU();
-    void copyToGPU();
+    
     void checkGradients(ConvNet* convNet);
 };
 
 class SoftmaxLayer : public Layer {
 protected:
-    void fpropActs(NVMatrixV& v);
-    void bpropActs(NVMatrix& v, int inpIdx);
+    void fpropActs(NVMatrixV& v, PASS_TYPE passType);
+    void bpropActs(NVMatrix& v, int inpIdx, PASS_TYPE passType);
 public:
     SoftmaxLayer(PyObject* paramsDict);
 };
@@ -145,15 +155,15 @@ class DataLayer : public Layer {
 private:
     int _dataIdx;
 protected:
-    void fpropActs(NVMatrixV& data);
+    void fpropActs(NVMatrixV& data, PASS_TYPE passType);
 public:
     DataLayer(PyObject* paramsDict);
     
-    void fprop();
-    void fprop(NVMatrixV& data);
+    void fprop(PASS_TYPE passType);
+    void fprop(NVMatrixV& data, PASS_TYPE passType);
 };
 
-class ConvLayer : public Layer {
+class ConvLayer : public WeightLayer {
 private:
     Weights _weights, _biases;
     Neuron* _neuron;
@@ -164,17 +174,14 @@ private:
     bool _sharedBiases;
     NVMatrix _weightGradsTmp;
 protected:
-    void fpropActs(NVMatrixV& v);
-    void bpropCommon(NVMatrix& v);
-    void bpropActs(NVMatrix& v, int inpIdx);
-    void bpropWeights(NVMatrix& v);
+    void fpropActs(NVMatrixV& v, PASS_TYPE passType);
+    void bpropCommon(NVMatrix& v, PASS_TYPE passType);
+    void bpropActs(NVMatrix& v, int inpIdx, PASS_TYPE passType);
+    void bpropWeights(NVMatrix& v, PASS_TYPE passType);
     void truncBwdActs();
 public:
     ConvLayer(PyObject* paramsDict);
 
-    void updateWeights(int numCases);  
-    void copyToCPU();
-    void copyToGPU();
     void checkGradients(ConvNet* convNet);
 }; 
 
@@ -184,8 +191,8 @@ private:
     int _imgSize;
     string _pool;
 protected:
-    void fpropActs(NVMatrixV& v);
-    void bpropActs(NVMatrix& v, int inpIdx);
+    void fpropActs(NVMatrixV& v, PASS_TYPE passType);
+    void bpropActs(NVMatrix& v, int inpIdx, PASS_TYPE passType);
 public:
     PoolLayer(PyObject* paramsDict);
 }; 
@@ -196,8 +203,8 @@ protected:
     float _scale, _pow;
     NVMatrix _denoms;
 
-    void fpropActs(NVMatrixV& v);
-    void bpropActs(NVMatrix& v, int inpIdx);
+    void fpropActs(NVMatrixV& v, PASS_TYPE passType);
+    void bpropActs(NVMatrix& v, int inpIdx, PASS_TYPE passType);
     void truncBwdActs();
 public:
     ResponseNormLayer(PyObject* paramsDict);
@@ -208,8 +215,8 @@ protected:
     int _imgSize;
     NVMatrix _meanDiffs;
     
-    void fpropActs(NVMatrixV& v);
-    void bpropActs(NVMatrix& v, int inpIdx);
+    void fpropActs(NVMatrixV& v, PASS_TYPE passType);
+    void bpropActs(NVMatrix& v, int inpIdx, PASS_TYPE passType);
     void truncBwdActs();
 public:
     ContrastNormLayer(PyObject* paramsDict);
@@ -221,7 +228,7 @@ protected:
     doublev _err;
 public:
     CostLayer(PyObject* paramsDict, bool gradConsumer, bool gradProducer, bool trans);
-    void bprop(); // This is what's called by other layers
+    void bprop(PASS_TYPE passType); 
     virtual doublev& getError();
     float getCoeff();
     
@@ -234,8 +241,8 @@ public:
  */
 class LogregCostLayer : public CostLayer {
 protected:
-    void fpropActs(NVMatrixV& v);
-    void bpropActs(NVMatrix& v, int inpIdx);
+    void fpropActs(NVMatrixV& v, PASS_TYPE passType);
+    void bpropActs(NVMatrix& v, int inpIdx, PASS_TYPE passType);
 public:
     LogregCostLayer(PyObject* paramsDict);
 };
