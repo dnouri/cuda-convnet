@@ -86,6 +86,7 @@ def print_usage():
     print "[-c <num channels>] -- number of channels in given layer name (for fully-connected layers only)"
     print "[-i <input idx>] -- input index for which to draw filters (for fully-connected layers only)"
     print "[-o] -- don't combine channels into RGB when there are exactly 3 of them"
+    print "\nSee http://code.google.com/p/cuda-convnet/wiki/ViewingNet for more thorough documentation, with usage examples."
 
 if __name__ == "__main__":
     if len(sys.argv) == 1:
