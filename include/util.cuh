@@ -36,11 +36,16 @@
 #include <nvmatrix.cuh>
 #include <matrix.h>
 
+/*
+ * The types of passes that the convnet supports. Used in the fprop and bprop functions in
+ * ConvNet class. Most of the layers ignore the pass type, but some make use of it.
+ */
 enum PASS_TYPE {PASS_TRAIN, PASS_TEST, PASS_GC};
 
 // For gradient checking
 #define GC_SUPPRESS_PASSES     true
 #define GC_REL_ERR_THRESH      0.02
+
 /*
  * Store entire data matrix on GPU if its size does not exceed this many MB.
  * Otherwise store only one minibatch at a time.
