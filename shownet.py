@@ -36,8 +36,9 @@ MAX_FILTERS = FILTERS_PER_ROW * 16
 
 def draw_filters(filters, filter_start, fignum, _title, num_filters, combine_chans):
     num_colors = filters.shape[0]
+    f_per_row = int(ceil(FILTERS_PER_ROW / float(1 if combine_chans else num_colors)))
     filter_end = min(filter_start+MAX_FILTERS, num_filters)
-    filter_rows = int(ceil(float(filter_end - filter_start) / FILTERS_PER_ROW))
+    filter_rows = int(ceil(float(filter_end - filter_start) / f_per_row))
 
     filter_pixels = filters.shape[1]
     filter_size = int(sqrt(filters.shape[1]))
@@ -45,14 +46,14 @@ def draw_filters(filters, filter_start, fignum, _title, num_filters, combine_cha
     fig.text(.5, .95, '%s %dx%d filters %d-%d' % (_title, filter_size, filter_size, filter_start, filter_end-1), horizontalalignment='center') 
     num_filters = filter_end - filter_start
     if not combine_chans: # separate channels
-        bigpic = n.zeros((filter_size * filter_rows + filter_rows + 1, filter_size*num_colors * FILTERS_PER_ROW + FILTERS_PER_ROW + 1), dtype=n.single)
+        bigpic = n.zeros((filter_size * filter_rows + filter_rows + 1, filter_size*num_colors * f_per_row + f_per_row + 1), dtype=n.single)
     else: # color
-        bigpic = n.zeros((3, filter_size * filter_rows + filter_rows + 1, filter_size * FILTERS_PER_ROW + FILTERS_PER_ROW + 1), dtype=n.single)
+        bigpic = n.zeros((3, filter_size * filter_rows + filter_rows + 1, filter_size * f_per_row + f_per_row + 1), dtype=n.single)
     subplot_number=0
     for m in xrange(filter_start,filter_end):
         filter = filters[:,:,m]
         subplot_number += 1
-        y, x = (m - filter_start) / FILTERS_PER_ROW, (m - filter_start) % FILTERS_PER_ROW
+        y, x = (m - filter_start) / f_per_row, (m - filter_start) % f_per_row
         if not combine_chans:
             for c in xrange(num_colors):
                 filter_pic = filter[c,:].reshape((filter_size,filter_size))
