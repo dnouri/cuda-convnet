@@ -26,10 +26,15 @@ import numpy
 import sys
 from getopt import getopt
 from util import *
-from pylab import *
 from math import sqrt, ceil, floor
 import os
 from gpumodel import *
+
+try:
+    from pylab import *
+except:
+    print "This script requires the matplotlib python library (Ubuntu/Fedora package name python-matplotlib). Please install it."
+    sys.exit(1)
 
 FILTERS_PER_ROW = 16
 MAX_FILTERS = FILTERS_PER_ROW * 16
@@ -50,7 +55,7 @@ def draw_filters(filters, filter_start, fignum, _title, num_filters, combine_cha
     else: # color
         bigpic = n.zeros((3, filter_size * filter_rows + filter_rows + 1, filter_size * f_per_row + f_per_row + 1), dtype=n.single)
     subplot_number=0
-    for m in xrange(filter_start,filter_end):
+    for m in xrange(filter_start,filter_end ):
         filter = filters[:,:,m]
         subplot_number += 1
         y, x = (m - filter_start) / f_per_row, (m - filter_start) % f_per_row
@@ -140,7 +145,7 @@ if __name__ == "__main__":
             channels = int(options["-c"])
         else:
             num_filters = layer['numFilters']
-            channels = int(options["-c"]) if "-c" in options else layer['channels']
+            channels = layer['channels']
         combine_chans = "-o" not in options and channels == 3
         filters = filters.reshape(channels, filters.shape[0]/channels, filters.shape[1])
         filters -= filters.min()
