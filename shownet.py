@@ -28,7 +28,7 @@ from getopt import getopt
 from util import *
 from math import sqrt, ceil, floor
 import os
-from gpumodel import *
+from gpumodel import IGPUModel
 
 try:
     from pylab import *
@@ -50,14 +50,13 @@ def draw_filters(filters, filter_start, fignum, _title, num_filters, combine_cha
     fig = figure(fignum)
     fig.text(.5, .95, '%s %dx%d filters %d-%d' % (_title, filter_size, filter_size, filter_start, filter_end-1), horizontalalignment='center') 
     num_filters = filter_end - filter_start
-    if not combine_chans: # separate channels
+    if not combine_chans:
         bigpic = n.zeros((filter_size * filter_rows + filter_rows + 1, filter_size*num_colors * f_per_row + f_per_row + 1), dtype=n.single)
-    else: # color
+    else:
         bigpic = n.zeros((3, filter_size * filter_rows + filter_rows + 1, filter_size * f_per_row + f_per_row + 1), dtype=n.single)
-    subplot_number=0
+
     for m in xrange(filter_start,filter_end ):
         filter = filters[:,:,m]
-        subplot_number += 1
         y, x = (m - filter_start) / f_per_row, (m - filter_start) % f_per_row
         if not combine_chans:
             for c in xrange(num_colors):
