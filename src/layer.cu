@@ -481,7 +481,6 @@ void PoolLayer::fpropActs(NVMatrixV& v, PASS_TYPE passType) {
 
 void PoolLayer::bpropActs(NVMatrix& v, int inpIdx, PASS_TYPE passType) {
     float scaleTargets = _prev[inpIdx]->getRcvdBInputs() == 0 ? 0 : 1;
-
     if (_pool == "max") {
         convLocalMaxUndo(_prev[inpIdx]->getActs(), v, _acts, _prev[inpIdx]->getActGrads(), _sizeX, _start, _stride, _outputsX, scaleTargets, 1);
     } else if (_pool == "avg") {
