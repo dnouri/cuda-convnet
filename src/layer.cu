@@ -118,7 +118,7 @@ void Layer::bprop(NVMatrix& v, PASS_TYPE passType) {
     if (_gradProducer) {
         for (int i = 0; i < _prev.size(); i++) {
             if (_prev[i]->isGradConsumer()) {
-                bpropActs(v, i, passType);
+                bpropActs(v, i, _prev[i]->getRcvdBInputs() > 0 ? 1 : 0, passType);
                 _prev[i]->incRcvdBInputs();
             }
         }    
@@ -273,9 +273,9 @@ void FCLayer::bpropCommon(NVMatrix& v, PASS_TYPE passType) {
     _neuron->computeInputGrads(v);
 }
 
-void FCLayer::bpropActs(NVMatrix& v, int inpIdx, PASS_TYPE passType) {
+void FCLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType) {
     NVMatrix& weights_T = _weights[inpIdx].getW().getTranspose();
-    if (_prev[inpIdx]->getRcvdBInputs() == 0) {
+    if (scaleTargets == 0) {
         v.rightMult(weights_T, _prev[inpIdx]->getActGrads());
     } else {
         _prev[inpIdx]->getActGrads().addProduct(v, weights_T);
@@ -375,8 +375,7 @@ void ConvLayer::bpropWeights(NVMatrix& v, PASS_TYPE passType) {
     }
 }
 
-void ConvLayer::bpropActs(NVMatrix& v, int inpIdx, PASS_TYPE passType) {
-    float scaleTargets = _prev[inpIdx]->getRcvdBInputs() == 0 ? 0 : 1;
+void ConvLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType) {
     convImgActs(v, *_weights, _prev[inpIdx]->getActGrads(), _imgSize, _padding, _stride, _channels, scaleTargets, 1);
 }
 
@@ -400,14 +399,14 @@ void ConvLayer::checkGradients(ConvNet* convNet) {
 SoftmaxLayer::SoftmaxLayer(PyObject* paramsDict) : Layer(paramsDict, true, true, true) {
 }
 
-void SoftmaxLayer::bpropActs(NVMatrix& v, int inpIdx, PASS_TYPE passType) {
+void SoftmaxLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType) {
     bool doLogregGrad = _next.size() == 1 && _next[0]->getType() == "cost.logreg";
     if (doLogregGrad) {
         NVMatrix& labels = _next[0]->getPrev()[0]->getActs();
         float gradCoeff = dynamic_cast<CostLayer*>(_next[0])->getCoeff();
-        computeLogregSoftmaxGrads(labels, _acts, _prev[inpIdx]->getActGrads(), _prev[inpIdx]->getRcvdBInputs() > 0, gradCoeff);
+        computeLogregSoftmaxGrads(labels, _acts, _prev[inpIdx]->getActGrads(), scaleTargets == 1, gradCoeff);
     } else {
-        computeSoftmaxGrads(_acts, v, _prev[inpIdx]->getActGrads(), _prev[inpIdx]->getRcvdBInputs() > 0);
+        computeSoftmaxGrads(_acts, v, _prev[inpIdx]->getActGrads(), scaleTargets == 1);
     }
 }
 
@@ -456,36 +455,56 @@ void DataLayer::fprop(NVMatrixV& data, PASS_TYPE passType) {
  * PoolLayer
  * =====================
  */
-PoolLayer::PoolLayer(PyObject* paramsDict) : Layer(paramsDict, true, true, false) {
+PoolLayer::PoolLayer(PyObject* paramsDict, bool gradConsumer, bool gradProducer, bool trans) : Layer(paramsDict, gradConsumer, gradProducer, trans) {
     _channels = pyDictGetInt(paramsDict, "channels");
     _sizeX = pyDictGetInt(paramsDict, "sizeX");
     _start = pyDictGetInt(paramsDict, "start");
     _stride = pyDictGetInt(paramsDict, "stride");
     _outputsX = pyDictGetInt(paramsDict, "outputsX");
     _imgSize = pyDictGetInt(paramsDict, "imgSize");
-    
     _pool = pyDictGetString(paramsDict, "pool");
-    if (_pool != "max" && _pool != "avg") {
-        throw string("Unknown pooling type ") + _pool;
-    }
 }
 
-void PoolLayer::fpropActs(NVMatrixV& v, PASS_TYPE passType) {
-    NVMatrix& images = *v[0];
+PoolLayer& PoolLayer::makePoolLayer(PyObject* paramsDict) {
+    string _pool = pyDictGetString(paramsDict, "pool");
     if (_pool == "max") {
-        convLocalPool(images, _acts, _channels, _sizeX, _start, _stride, _outputsX, MaxPooler());
-    } else if (_pool == "avg") {
-        convLocalPool(images, _acts, _channels, _sizeX, _start, _stride, _outputsX, AvgPooler(_sizeX*_sizeX));
+        return *new MaxPoolLayer(paramsDict);
+    } else if(_pool == "avg") {
+        return *new AvgPoolLayer(paramsDict);
     }
+    throw string("Unknown pooling layer type ") + _pool;
 }
 
-void PoolLayer::bpropActs(NVMatrix& v, int inpIdx, PASS_TYPE passType) {
-    float scaleTargets = _prev[inpIdx]->getRcvdBInputs() == 0 ? 0 : 1;
-    if (_pool == "max") {
-        convLocalMaxUndo(_prev[inpIdx]->getActs(), v, _acts, _prev[inpIdx]->getActGrads(), _sizeX, _start, _stride, _outputsX, scaleTargets, 1);
-    } else if (_pool == "avg") {
-        convLocalAvgUndo(v, _prev[inpIdx]->getActGrads(), _sizeX, _start, _stride, _outputsX, _imgSize, scaleTargets, 1);
-    }
+/* 
+ * =====================
+ * AvgPoolLayer
+ * =====================
+ */
+AvgPoolLayer::AvgPoolLayer(PyObject* paramsDict) : PoolLayer(paramsDict, true, true, false) {
+}
+
+void AvgPoolLayer::fpropActs(NVMatrixV& v, PASS_TYPE passType) {
+    convLocalPool(*v[0], _acts, _channels, _sizeX, _start, _stride, _outputsX, AvgPooler(_sizeX*_sizeX));
+}
+
+void AvgPoolLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType) {
+    convLocalAvgUndo(v, _prev[inpIdx]->getActGrads(), _sizeX, _start, _stride, _outputsX, _imgSize, scaleTargets, 1);
+}
+
+/* 
+ * =====================
+ * MaxPoolLayer
+ * =====================
+ */
+MaxPoolLayer::MaxPoolLayer(PyObject* paramsDict) : PoolLayer(paramsDict, true, true, false) {
+}
+
+void MaxPoolLayer::fpropActs(NVMatrixV& v, PASS_TYPE passType) {
+    convLocalPool(*v[0], _acts, _channels, _sizeX, _start, _stride, _outputsX, MaxPooler());
+}
+
+void MaxPoolLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType) {
+    convLocalMaxUndo(_prev[inpIdx]->getActs(), v, _acts, _prev[inpIdx]->getActGrads(), _sizeX, _start, _stride, _outputsX, scaleTargets, 1);
 }
 
 /* 
@@ -506,8 +525,7 @@ void ResponseNormLayer::fpropActs(NVMatrixV& v, PASS_TYPE passType) {
     convResponseNorm(images, _denoms, _acts, _channels, _sizeX, _scale, _pow);
 }
 
-void ResponseNormLayer::bpropActs(NVMatrix& v, int inpIdx, PASS_TYPE passType) {
-    float scaleTargets = _prev[inpIdx]->getRcvdBInputs() == 0 ? 0 : 1;
+void ResponseNormLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType) {
     convResponseNormUndo(v, _denoms, _prev[inpIdx]->getActs(), _acts, _prev[inpIdx]->getActGrads(), _channels, _sizeX, _scale, _pow, scaleTargets, 1);
 }
 
@@ -534,8 +552,7 @@ void ContrastNormLayer::fpropActs(NVMatrixV& v, PASS_TYPE passType) {
     convContrastNorm(images, _meanDiffs, _denoms, _acts, _channels, _sizeX, _scale, _pow);
 }
 
-void ContrastNormLayer::bpropActs(NVMatrix& v, int inpIdx, PASS_TYPE passType) {
-    float scaleTargets = _prev[inpIdx]->getRcvdBInputs() == 0 ? 0 : 1;
+void ContrastNormLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType) {
     convContrastNormUndo(v, _denoms, _meanDiffs, _acts, _prev[inpIdx]->getActGrads(), _channels, _sizeX, _scale, _pow, scaleTargets, 1);
 }
 
@@ -601,7 +618,7 @@ void LogregCostLayer::fpropActs(NVMatrixV& v, PASS_TYPE passType) {
     _err.push_back(numCases - correctProbs.sum());
 }
 
-void LogregCostLayer::bpropActs(NVMatrix& v, int inpIdx, PASS_TYPE passType) {
+void LogregCostLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType) {
     NVMatrix& labels = _prev[0]->getActs();
     NVMatrix& probs = _prev[inpIdx]->getActs();
     NVMatrix& target = _prev[inpIdx]->getActGrads();
@@ -609,6 +626,6 @@ void LogregCostLayer::bpropActs(NVMatrix& v, int inpIdx, PASS_TYPE passType) {
     // the entire gradient computation to avoid multiplying and dividing by a near-zero quantity.
     bool doWork = _prev[inpIdx]->getNext().size() > 1 || _prev[inpIdx]->getType() != "softmax";
     if (doWork) {
-        computeLogregGrads(labels, probs, target, _prev[inpIdx]->getRcvdBInputs() > 0, _coeff);
+        computeLogregGrads(labels, probs, target, scaleTargets == 1, _coeff);
     }
 }

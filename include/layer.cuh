@@ -66,7 +66,7 @@ protected:
     virtual void bpropCommon(NVMatrix& v, PASS_TYPE passType) {
         // do nothing by default
     }
-    virtual void bpropActs(NVMatrix& v, int inpIdx, PASS_TYPE passType) {
+    virtual void bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType) {
         assert(!_gradProducer); // only do nothing if not grad producer
     }
     virtual void bpropWeights(NVMatrix& v, PASS_TYPE passType) {
@@ -135,7 +135,7 @@ private:
 protected:
     void fpropActs(NVMatrixV& v, PASS_TYPE passType);
     void bpropCommon(NVMatrix& v, PASS_TYPE passType);
-    void bpropActs(NVMatrix& v, int inpIdx, PASS_TYPE passType);
+    void bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType);
     void bpropWeights(NVMatrix& v, PASS_TYPE passType);
 public:
     FCLayer(PyObject* paramsDict);
@@ -146,7 +146,7 @@ public:
 class SoftmaxLayer : public Layer {
 protected:
     void fpropActs(NVMatrixV& v, PASS_TYPE passType);
-    void bpropActs(NVMatrix& v, int inpIdx, PASS_TYPE passType);
+    void bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType);
 public:
     SoftmaxLayer(PyObject* paramsDict);
 };
@@ -176,7 +176,7 @@ private:
 protected:
     void fpropActs(NVMatrixV& v, PASS_TYPE passType);
     void bpropCommon(NVMatrix& v, PASS_TYPE passType);
-    void bpropActs(NVMatrix& v, int inpIdx, PASS_TYPE passType);
+    void bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType);
     void bpropWeights(NVMatrix& v, PASS_TYPE passType);
     void truncBwdActs();
 public:
@@ -186,15 +186,30 @@ public:
 }; 
 
 class PoolLayer : public Layer {
-private:
+protected:
     int _channels, _sizeX, _start, _stride, _outputsX;
     int _imgSize;
     string _pool;
+public:
+    PoolLayer(PyObject* paramsDict, bool gradConsumer, bool gradProducer, bool trans);
+    
+    static PoolLayer& makePoolLayer(PyObject* paramsDict);
+}; 
+
+class AvgPoolLayer : public PoolLayer {
 protected:
     void fpropActs(NVMatrixV& v, PASS_TYPE passType);
-    void bpropActs(NVMatrix& v, int inpIdx, PASS_TYPE passType);
+    void bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType);
 public:
-    PoolLayer(PyObject* paramsDict);
+    AvgPoolLayer(PyObject* paramsDict);
+}; 
+
+class MaxPoolLayer : public PoolLayer {
+protected:
+    void fpropActs(NVMatrixV& v, PASS_TYPE passType);
+    void bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType);
+public:
+    MaxPoolLayer(PyObject* paramsDict);
 }; 
 
 class ResponseNormLayer : public Layer {
@@ -204,7 +219,7 @@ protected:
     NVMatrix _denoms;
 
     void fpropActs(NVMatrixV& v, PASS_TYPE passType);
-    void bpropActs(NVMatrix& v, int inpIdx, PASS_TYPE passType);
+    void bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType);
     void truncBwdActs();
 public:
     ResponseNormLayer(PyObject* paramsDict);
@@ -216,7 +231,7 @@ protected:
     NVMatrix _meanDiffs;
     
     void fpropActs(NVMatrixV& v, PASS_TYPE passType);
-    void bpropActs(NVMatrix& v, int inpIdx, PASS_TYPE passType);
+    void bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType);
     void truncBwdActs();
 public:
     ContrastNormLayer(PyObject* paramsDict);
@@ -242,7 +257,7 @@ public:
 class LogregCostLayer : public CostLayer {
 protected:
     void fpropActs(NVMatrixV& v, PASS_TYPE passType);
-    void bpropActs(NVMatrix& v, int inpIdx, PASS_TYPE passType);
+    void bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType);
 public:
     LogregCostLayer(PyObject* paramsDict);
 };
