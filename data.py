@@ -47,7 +47,6 @@ class DataProvider:
         self.test = test
         self.batch_range_idx = batch_range.index(init_batchnum)
 
-
     def get_next_batch(self):
         if self.data_dic is None or len(self.batch_range) > 1:
             self.data_dic = self.get_batch(self.curr_batchnum)
@@ -79,8 +78,6 @@ class DataProvider:
                     break
         else:
             dic = unpickle(self.get_data_file_name(batch_num))
-        #if self.data_mean is not None:
-            #dic['data'] -= self.data_mean
         return dic
     
     def get_data_dims(self):
@@ -138,8 +135,7 @@ class DataProvider:
         
     @staticmethod
     def get_num_batches(srcdir):
-        m = re.compile('^data_batch_\d+$')
-        return len([f for f in os.listdir(srcdir) if m.match(f)])  
+        return len(DataProvider.get_batch_nums(srcdir))
     
 class DummyDataProvider(DataProvider):
     def __init__(self, data_dim):
@@ -194,14 +190,13 @@ class MemoryDataProvider(DataProvider):
 
         return epoch, batchnum, self.data_dic[batchnum - self.batch_range[0]]
 
-
 class LabeledDataProvider(DataProvider):   
     def get_num_categories(self):
         return len(self.batch_meta['label_names'])
     
-class LabeledMemoryDataProvider(DataProvider):
+class LabeledMemoryDataProvider(LabeledDataProvider):
     def __init__(self, data_dir, batch_range, init_epoch=1, init_batchnum=None, dp_params={}, test=False):
-        DataProvider.__init__(self, data_dir, batch_range, init_epoch, init_batchnum, dp_params, test)
+        LabeledDataProvider.__init__(self, data_dir, batch_range, init_epoch, init_batchnum, dp_params, test)
         self.data_dic = []
         for i in batch_range:
             self.data_dic += [unpickle(self.get_data_file_name(i))]
@@ -212,9 +207,6 @@ class LabeledMemoryDataProvider(DataProvider):
         self.advance_batch()
         bidx = batchnum - self.batch_range[0]
         return epoch, batchnum, self.data_dic[bidx]
-
-    def get_num_categories(self):
-        return len(self.batch_meta['label_names'])
     
 dp_types = {"default": "The default data provider; loads one batch into memory at a time",
             "memory": "Loads the entire dataset into memory",

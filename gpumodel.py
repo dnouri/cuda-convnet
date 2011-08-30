@@ -35,6 +35,7 @@ from data import DataProvider, dp_types
 import sys
 import shutil
 import platform
+from os import linesep as NL
 
 class ModelStateException(Exception):
     pass
@@ -201,7 +202,7 @@ class IGPUModel:
 
     def print_test_results(self):
         batch_error = self.test_outputs[-1][0]
-        print "\n\t\tTest error: %.6f" % batch_error,
+        print "%s\t\tTest error: %.6f" % (NL, batch_error),
 
     def print_test_status(self):
         status = (len(self.test_outputs) == 1 or self.test_outputs[-1][0] < self.test_outputs[-2][0]) and "ok" or "WORSE"

@@ -521,8 +521,7 @@ ResponseNormLayer::ResponseNormLayer(PyObject* paramsDict) : Layer(paramsDict, t
 }
 
 void ResponseNormLayer::fpropActs(NVMatrixV& v, PASS_TYPE passType) {
-    NVMatrix& images = *v[0];
-    convResponseNorm(images, _denoms, _acts, _channels, _sizeX, _scale, _pow);
+    convResponseNorm(*v[0], _denoms, _acts, _channels, _sizeX, _scale, _pow);
 }
 
 void ResponseNormLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType) {

@@ -31,7 +31,8 @@ from gpumodel import *
 import sys
 import math as m
 from layer import LayerParser, LayerParsingError
-from convdp import *   
+from convdp import *
+from os import linesep as NL
 
 class GPUModel(IGPUModel):
     def __init__(self, model_name, op, load_dic, dp_params={}):
@@ -107,10 +108,10 @@ class GPUModel(IGPUModel):
         for i,l in enumerate(self.layers): # This is kind of hacky but will do for now.
             if 'weights' in l:
                 if type(l['weights']) == n.ndarray:
-                    print "\nLayer '%s' weights: %e [%e]" % (l['name'], n.mean(n.abs(l['weights'])), n.mean(n.abs(l['weightsInc']))),
+                    print "%sLayer '%s' weights: %e [%e]" % (NL, l['name'], n.mean(n.abs(l['weights'])), n.mean(n.abs(l['weightsInc']))),
                 elif type(l['weights']) == list:
                     print ""
-                    print "\n".join("Layer '%s' weights[%d]: %e [%e]" % (l['name'], i, n.mean(n.abs(w)), n.mean(n.abs(wi))) for i,(w,wi) in enumerate(zip(l['weights'],l['weightsInc']))),
+                    print NL.join("Layer '%s' weights[%d]: %e [%e]" % (l['name'], i, n.mean(n.abs(w)), n.mean(n.abs(wi))) for i,(w,wi) in enumerate(zip(l['weights'],l['weightsInc']))),
         print ""
         
     def conditional_save(self):
