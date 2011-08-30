@@ -34,8 +34,8 @@ class CIFARDataProvider(LabeledMemoryDataProvider):
         data_mean = self.batch_meta['data_mean']
         
         if 'processed' not in datadic:
-            datadic['data'] = n.require((datadic['data'].astype(n.single) - data_mean), dtype=n.single, requirements='C')# / 255
-            datadic['labels'] = datadic['labels'].reshape((1, datadic['data'].shape[1]))
+            datadic['data'] = n.require((datadic['data'] - data_mean), dtype=n.double, requirements='C')# / 255
+            datadic['labels'] = n.require(datadic['labels'].reshape((1, datadic['data'].shape[1])), dtype=n.single)
                 
             datadic['processed'] = True
 

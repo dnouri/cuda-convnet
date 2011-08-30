@@ -67,8 +67,11 @@ class GPUModel(IGPUModel):
             self.op.set_value('test_batch_range', '0')
             self.op.set_value('data_path', '')
             
-    # Not necessary here
+    # Make sure the data provider returned data in proper format
     def parse_batch_data(self, batch_data, train=True):
+        data, labels = batch_data[2][0], batch_data[2][1]
+        if data.dtype != n.single or labels.dtype != n.single:
+            raise DataProviderException("Data provider must return both data and labels as single-precision floats.")
         return batch_data
 
     def start_batch(self, batch_data, train=True):
