@@ -31,7 +31,7 @@ from gpumodel import *
 import sys
 import math as m
 from layer import LayerParser, LayerParsingError
-from convdp import *
+from convdata import *
 from os import linesep as NL
 
 class GPUModel(IGPUModel):
@@ -69,9 +69,8 @@ class GPUModel(IGPUModel):
             
     # Make sure the data provider returned data in proper format
     def parse_batch_data(self, batch_data, train=True):
-        data, labels = batch_data[2][0], batch_data[2][1]
-        if data.dtype != n.single or labels.dtype != n.single:
-            raise DataProviderException("Data provider must return both data and labels as single-precision floats.")
+        if max(d.dtype != n.single for d in batch_data[2]):
+            raise DataProviderException("Data provider must return all data matrices as single-precision floats.")
         return batch_data
 
     def start_batch(self, batch_data, train=True):
@@ -155,7 +154,7 @@ if __name__ == "__main__":
     
     DataProvider.register_data_provider('cifar', 'CIFAR', CIFARDataProvider)
     DataProvider.register_data_provider('dummy-cn-n', 'Dummy ConvNet', DummyConvNetDataProvider)
-    DataProvider.register_data_provider('cifar-cropped', 'Cropped CIFAR data provider', CroppedCIFARDataProvider)
+    DataProvider.register_data_provider('cifar-cropped', 'Cropped CIFAR', CroppedCIFARDataProvider)
     
     op, load_dic = IGPUModel.parse_options(op)
     model = GPUModel("ConvNet", op, load_dic)
