@@ -230,7 +230,7 @@ class ConvLayerParser(LayerWithInputParser):
         dic['imgPixels'] = dic['numInputs'][0] / dic['channels']
         dic['imgSize'] = int(n.sqrt(dic['imgPixels']))
         if dic['numInputs'][0] % dic['imgPixels'] != 0 or dic['imgSize'] * dic['imgSize'] != dic['imgPixels']:
-            raise LayerParsingError("Layer '%s': has %-d dimensional input, not interpretable as %d-channel images" % (name, dic['numInputs'][0], dic['channels']))
+            raise LayerParsingError("Layer '%s': has %-d dimensional input, not interpretable as square %d-channel images" % (name, dic['numInputs'][0], dic['channels']))
         if dic['channels'] > 3 and dic['channels'] % 4 != 0:
             raise LayerParsingError("Layer '%s': number of channels must be smaller than 4 or divisible by 4" % name)
         
@@ -366,7 +366,12 @@ class LogregCostParser(CostParser):
     def parse(self, name, mcp, prev_layers, model):
         dic = CostParser.parse(self, name, mcp, prev_layers, model)
         if dic['numInputs'][0] != 1: # first input must be labels
-            raise LayerParsingError("Layer '%s': Dimensionality of first input must be 1", name)
+            raise LayerParsingError("Layer '%s': Dimensionality of first input must be 1" % name)
+        if prev_layers[dic['inputs'][1]]['type'] != 'softmax':
+            raise LayerParsingError("Layer '%s': Second input must be softmax layer" % name)
+        if dic['numInputs'][1] != model.train_data_provider.get_num_classes():
+            raise LayerParsingError("Layer '%s': Softmax input '%s' must produce %d outputs, because that is the number of classes in the dataset" \
+                                    % (name, prev_layers[dic['inputs'][1]]['name'], model.train_data_provider.get_num_classes()))
         
         print "Initialized logistic regression cost '%s'" % name
         return dic

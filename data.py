@@ -191,7 +191,7 @@ class MemoryDataProvider(DataProvider):
         return epoch, batchnum, self.data_dic[batchnum - self.batch_range[0]]
 
 class LabeledDataProvider(DataProvider):   
-    def get_num_categories(self):
+    def get_num_classes(self):
         return len(self.batch_meta['label_names'])
     
 class LabeledMemoryDataProvider(LabeledDataProvider):
