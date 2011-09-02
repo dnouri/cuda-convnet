@@ -30,14 +30,53 @@ import numpy as n
 import numpy.random as nr
 from math import ceil
 from ordereddict import OrderedDict
+from os import linesep as NL
+from options import OptionsParser
+import re
+
+class LayerParsingError(Exception):
+    pass
 
 def make_weights(numRows, numCols, init, order='C'):
     weights = n.array(init * nr.randn(numRows, numCols), dtype=n.single, order=order)
     weights_inc = n.zeros_like(weights)
     return weights, weights_inc
 
-class LayerParsingError(Exception):
-    pass
+
+
+# A neuron that doesn't take parameters
+class NeuronParser:
+    def __init__(self, type, func_str):
+        self.type = type
+        self.func_str = func_str
+        
+    def parse(self, type):
+        if type == self.type:
+            return {'type': self.type,
+                    'params': {}}
+        return None
+    
+# A neuron that takes parameters
+class ParamNeuronParser(NeuronParser):
+    neuron_regex = re.compile(r'^\s*(\w+)\s*\(\s*(\w+(\s*,\w+)*)\s*\)\s*$')
+    def __init__(self, type, func_str):
+        NeuronParser.__init__(self, type, func_str)
+        m = self.neuron_regex.match(type)
+        self.base_type = m.group(1)
+        self.param_names = m.group(2).split(',')
+        assert len(set(self.param_names)) == len(self.param_names)
+        
+    def parse(self, type):
+        m = re.match(r'^%s\s*\(([0-9,\. ]*)\)\s*$' % self.base_type, type)
+        if m:
+            try:
+                param_vals = [float(v.strip()) for v in m.group(1).split(',')]
+                if len(param_vals) == len(self.param_names):
+                    return {'type': self.base_type,
+                            'params': dict(zip(self.param_names, param_vals))}
+            except TypeError:
+                pass
+        return None
 
 # Subclass that throws more convnet-specific exceptions than the default
 class MyConfigParser(cfg.SafeConfigParser):
@@ -93,8 +132,27 @@ class LayerParser:
 
         return dic
     
-    @classmethod
-    def verify_int_range(cls, v, layer_name, param_name, _min, _max):
+    @staticmethod
+    def parse_neuron(layer_name, neuron_str):
+        neurons = [NeuronParser('ident', 'f(x) = x'),
+                   NeuronParser('logistic', 'f(x) = 1 / (1 + e^-x)'),
+                   NeuronParser('abs', 'f(x) = max(-x,x)'),
+                   NeuronParser('relu', 'f(x) = max(0, x)'),
+                   ParamNeuronParser('tanh(a,b)', 'f(x) = a*tanh(b*x)')]
+        for n in neurons:
+            p = n.parse(neuron_str)
+            if p:
+                return p
+        colnames = ['Neuron type', 'Function']
+        m = max(len(colnames[0]), OptionsParser._longest_value(neurons, key=lambda x:x.type)) + 2
+        ntypes = [OptionsParser._bold(colnames[0].ljust(m))] + [n.type.ljust(m) for n in neurons]
+        fnames = [OptionsParser._bold(colnames[1])] + [n.func_str for n in neurons]
+        usage_lines = NL.join(ntype + fname for ntype,fname in zip(ntypes, fnames))
+        
+        raise LayerParsingError("Layer '%s': unable to parse neuron type '%s'. Valid neuron types: %sWhere neurons have parameters, they must be floats." % (layer_name, neuron_str, NL + usage_lines + NL))
+    
+    @staticmethod
+    def verify_int_range(v, layer_name, param_name, _min, _max):
         if _min is not None and _max is not None and (v < _min or v > _max):
             raise LayerParsingError("Layer '%s': parameter '%s' must be in the range %d-%d" % (layer_name, param_name, _min, _max))
         elif _min is not None and v < _min:
@@ -193,7 +251,7 @@ class FCLayerParser(LayerWithInputParser):
         dic = LayerWithInputParser.parse(self, name, mcp, prev_layers, model)
 
         dic['numOutputs'] = mcp.getint(name, 'numOutputs')
-        dic['neuron'] = mcp.get(name, 'neuron')
+        dic['neuron'] = LayerParser.parse_neuron(name, mcp.get(name, 'neuron'))
         dic['initW'] = mcp.getFloatList(name, 'initW')
         
         LayerParser.verify_int_range(dic['numOutputs'], name, 'numOutputs', 1, None)
@@ -254,7 +312,7 @@ class ConvLayerParser(LayerWithInputParser):
         LayerParser.verify_int_range(dic['imgSize'], name, 'imgSize', 1, None)
         
         dic['padding'] = -dic['padding']
-        dic['neuron'] = mcp.get(name, 'neuron')
+        dic['neuron'] = LayerParser.parse_neuron(name, mcp.get(name, 'neuron'))
         dic['initW'] = mcp.getfloat(name, 'initW')
         
         num_biases = dic['numFilters'] if dic['sharedBiases'] else dic['modules']*dic['numFilters']

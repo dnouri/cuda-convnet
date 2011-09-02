@@ -199,20 +199,20 @@ class OptionsParser:
             if o.default is None:
                 excs = ', '.join(sorted([o2.prefixed_letter for o2 in self.options.values() if o2.excuses == self.EXCLUDE_ALL or o.name in o2.excuses]))
             reqs = ', '.join(sorted([o2.prefixed_letter for o2 in self.options.values() if o2.name in o.requires]))
-            usg = (OptionsParser.__bold(o.prefixed_letter) + " <%s>" % o.parser.get_type_str(), o.desc, ("[%s]" % o.get_str_value(get_default_str=True)) if not o.default is None else None, excs, reqs)
+            usg = (OptionsParser._bold(o.prefixed_letter) + " <%s>" % o.parser.get_type_str(), o.desc, ("[%s]" % o.get_str_value(get_default_str=True)) if not o.default is None else None, excs, reqs)
             if o.default is None:
                 usage_strings += [usg]
             else:
                 usage_strings.insert(num_def, usg)
                 num_def += 1
                 
-        col_widths = [self.__longest_value(usage_strings, key=lambda x:x[i]) for i in range(len(usage_strings[0]) - 1)]
+        col_widths = [self._longest_value(usage_strings, key=lambda x:x[i]) for i in range(len(usage_strings[0]) - 1)]
 
         col_names = ["    Option", "Description", "Default"]
         if print_constraints:
             col_names += ["Excused by", "Requires"]
         for i, s in enumerate(col_names):
-            print self.__bold(s.ljust(col_widths[i])),
+            print self._bold(s.ljust(col_widths[i])),
 
         print ""
         for l, d, de, ex, req in usage_strings:
@@ -227,19 +227,19 @@ class OptionsParser:
                 print ""
                 
     def print_values(self):
-        longest_desc = self.__longest_value(self.options.values(), key=lambda x:x.desc)
-        longest_def_value = self.__longest_value([v for v in self.options.values() if not v.value_given and not v.default is None],
+        longest_desc = self._longest_value(self.options.values(), key=lambda x:x.desc)
+        longest_def_value = self._longest_value([v for v in self.options.values() if not v.value_given and not v.default is None],
                                                  key=lambda x:x.get_str_value())
         for o in self.get_options_list(sort_order=self.SORT_DESC):
             print "%s: %s %s" % (o.desc.ljust(longest_desc), o.get_str_value().ljust(longest_def_value), (not o.value_given and not o.default is None) and "[DEFAULT]" or "")
     
-    @classmethod
-    def __longest_value(cls, values, key=lambda x:x):
+    @staticmethod
+    def _longest_value(values, key=lambda x:x):
         mylen = lambda x: 0 if x is None else len(x)
         return mylen(key(max(values, key=lambda x:mylen(key(x)))))
 
     @staticmethod
-    def __bold(str):
+    def _bold(str):
         return TERM_BOLD_START + str + TERM_BOLD_END
 
 class OptionException(Exception):

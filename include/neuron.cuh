@@ -38,10 +38,11 @@ public:
     }
 };
 
+// Computes max(0,x)
 class ReluOperator {
 public:    
-    __device__ inline float operator()(float a) const {
-        return a < 0 ? 0 : a;
+    __device__ inline float operator()(float x) const {
+        return x < 0 ? 0 : x;
     }
 };
 
@@ -59,6 +60,30 @@ public:
     }
 };
 
+// Computes a*tanh(b*x)
+class TanhOperator {
+private:
+    float _a, _b;
+public:
+    TanhOperator(float a, float b) : _a(a), _b(b) {
+    }
+    __device__ inline float operator()(float x) const {
+        return _a * tanhf(_b * x);
+    }
+};
+
+class TanhGradientOperator {
+private:
+    float _a, _b;
+public:
+    TanhGradientOperator(float a, float b) : _a(a), _b(b) {
+    }
+    __device__ inline float operator()(float unitActGrads, float unitInputs) const  {
+        const float t = tanhf(_b * unitInputs);
+        return unitActGrads * _a * _b * (1 - t * t);
+    }
+};
+
 /*
  * y == x
  */
@@ -71,7 +96,7 @@ public:
     Neuron();
     virtual void activate(NVMatrix& input);
     virtual void computeInputGrads(NVMatrix& actGrads);
-    static Neuron& makeNeuron(std::string& type);
+    static Neuron& makeNeuron(PyObject* neuronDict);
 };
 
 /*
@@ -102,6 +127,20 @@ protected:
 class AbsNeuron : public Neuron {
 private:
     NVMatrix _input; // Abs neuron must remember input for gradient computation
+protected:
+    void _activate(NVMatrix& input);
+    void _computeInputGrads(NVMatrix& actGrads);
+};
+
+/*
+ * y == a*tanh(b*x)
+ */
+class TanhNeuron : public Neuron {
+public:
+    TanhNeuron(float a, float b);
+private:
+    NVMatrix _input;
+    float _a, _b;
 protected:
     void _activate(NVMatrix& input);
     void _computeInputGrads(NVMatrix& actGrads);

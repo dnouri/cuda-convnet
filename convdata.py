@@ -111,6 +111,6 @@ class DummyConvNetDataProvider(LabeledDummyDataProvider):
         dic['labels'] = n.require(dic['labels'].T, requirements='C')
         
         return epoch, batchnum, [dic['data'], dic['labels']]
-
+    
     def get_data_dims(self, idx=0):
         return self.batch_meta['num_vis'] if idx == 0 else 1

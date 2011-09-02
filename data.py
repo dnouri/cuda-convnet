@@ -154,26 +154,26 @@ class DummyDataProvider(DataProvider):
 
     
 class LabeledDummyDataProvider(DummyDataProvider):
-    def __init__(self, data_dim, num_labels=10, num_cases=512):
+    def __init__(self, data_dim, num_classes=10, num_cases=512):
         #self.data_dim = data_dim
         self.batch_range = [1]
         self.batch_meta = {'num_vis': data_dim,
-                           'label_names': [str(x) for x in range(num_labels)],
+                           'label_names': [str(x) for x in range(num_classes)],
                            'data_in_rows':True}
         self.num_cases = num_cases
-        self.num_labels = num_labels
+        self.num_classes = num_classes
         self.curr_epoch = 1
         self.curr_batchnum = 1
         self.batch_range_idx=0
         
-    def get_num_categories(self):
-        return len(self.batch_meta['label_names'])
+    def get_num_classes(self):
+        return self.num_classes
     
     def get_next_batch(self):
         epoch,  batchnum = self.curr_epoch, self.curr_batchnum
         self.advance_batch()
         data = rand(self.num_cases, self.get_data_dims()).astype(n.single) # <--changed to rand
-        labels = n.require(n.c_[random_integers(0,self.num_labels-1,self.num_cases)], requirements='C', dtype=n.single)
+        labels = n.require(n.c_[random_integers(0,self.num_classes-1,self.num_cases)], requirements='C', dtype=n.single)
 
         return self.curr_epoch, self.curr_batchnum, {'data':data, 'labels':labels}
 

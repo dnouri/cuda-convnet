@@ -252,8 +252,7 @@ FCLayer::FCLayer(PyObject* paramsDict) : WeightLayer(paramsDict, true, true, tru
     _weights.initialize(*hWeights, *hWeightsInc, *epsW, *wc, *momW, false);
     _biases.initialize(*hBiases, *hBiasesInc, epsB, 0, momB, true);
 
-    string neuronType = pyDictGetString(paramsDict, "neuron");
-    _neuron = &Neuron::makeNeuron(neuronType);
+    _neuron = &Neuron::makeNeuron(PyDict_GetItemString(paramsDict, "neuron"));
     
     addWeights(_weights);
     addWeights(_biases);
@@ -334,8 +333,7 @@ ConvLayer::ConvLayer(PyObject* paramsDict) : WeightLayer(paramsDict, true, true,
     _weights.initialize(*hWeights, *hWeightsInc, epsW, wc, momW, true);
     _biases.initialize(*hBiases, *hBiasesInc, epsB, 0, momB, true);
 
-    string neuronType = pyDictGetString(paramsDict, "neuron");
-    _neuron = &Neuron::makeNeuron(neuronType);
+    _neuron = &Neuron::makeNeuron(PyDict_GetItemString(paramsDict, "neuron"));
     
     addWeights(_weights);
     addWeights(_biases);

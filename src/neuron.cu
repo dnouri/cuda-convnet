@@ -25,6 +25,7 @@
  */
 
 #include "../include/neuron.cuh"
+#include "../include/util.cuh"
 
 using namespace std;
 
@@ -52,7 +53,10 @@ void Neuron::computeInputGrads(NVMatrix& actGrads) {
     _computeInputGrads(actGrads);
 }
 
-Neuron& Neuron::makeNeuron(string& type) {
+Neuron& Neuron::makeNeuron(PyObject* neuronDict) {
+    string type = pyDictGetString(neuronDict, "type");
+    PyObject* neuronParamsDict = PyDict_GetItemString(neuronDict, "params");
+    
     if (type == "relu") {
         return *new ReluNeuron();
     }
@@ -64,10 +68,17 @@ Neuron& Neuron::makeNeuron(string& type) {
     if (type == "logistic") {
         return *new LogisticNeuron();
     }
+    
+    if (type == "tanh") {
+        float a = pyDictGetFloat(neuronParamsDict, "a");
+        float b = pyDictGetFloat(neuronParamsDict, "b");
+        return *new TanhNeuron(a, b);
+    }
 
     if (type == "ident") {
         return *new Neuron();
     }
+    
     throw string("Unknown neuron type: ") + type;
 }
 
@@ -114,5 +125,23 @@ void AbsNeuron::_activate(NVMatrix& input) {
 
 void AbsNeuron::_computeInputGrads(NVMatrix& actGrads) {
     actGrads._eltwiseBinaryOp(_input, AbsGradientOperator());
+    _input.truncate(); // Forget input to conserve memory
+}
+
+/* 
+ * =======================
+ * TanhNeuron
+ * =======================
+ */
+TanhNeuron::TanhNeuron(float a, float b) : Neuron(), _a(a), _b(b) {
+}
+
+void TanhNeuron::_activate(NVMatrix& input) {
+    input.copy(_input);
+    input._eltwiseUnaryOp(TanhOperator(_a, _b));
+}
+
+void TanhNeuron::_computeInputGrads(NVMatrix& actGrads) {
+    actGrads._eltwiseBinaryOp(_input, TanhGradientOperator(_a, _b));
     _input.truncate(); // Forget input to conserve memory
 }
