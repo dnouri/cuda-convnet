@@ -443,8 +443,9 @@ layer_parsers = {'data': DataLayerParser(),
 # All the neuron parsers
 # This isn't a name --> parser mapping as the layer parsers above because neurons don't have fixed names.
 # A user may write tanh[0.5,0.25], etc.
-neuron_parsers = [NeuronParser('ident', 'f(x) = x'),
-                  NeuronParser('logistic', 'f(x) = 1 / (1 + e^-x)'),
-                  NeuronParser('abs', 'f(x) = max(-x,x)'),
-                  NeuronParser('relu', 'f(x) = max(0, x)'),
-                  ParamNeuronParser('tanh[a,b]', 'f(x) = a*tanh(b*x)')]
+neuron_parsers = sorted([NeuronParser('ident', 'f(x) = x'),
+                         NeuronParser('logistic', 'f(x) = 1 / (1 + e^-x)'),
+                         NeuronParser('abs', 'f(x) = max(-x,x)'),
+                         NeuronParser('relu', 'f(x) = max(0, x)'),
+                         NeuronParser('softrelu', 'f(x) = log(1 + e^x)'),
+                         ParamNeuronParser('tanh[a,b]', 'f(x) = a*tanh(b*x)')], key=lambda x:x.type)

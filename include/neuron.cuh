@@ -38,18 +38,18 @@ public:
     }
 };
 
+class AbsGradientOperator {
+public:
+    __device__ inline float operator()(float unitActGrads, float unitInputs) const  {
+        return unitActGrads * (unitInputs > 0 ? 1 : -1); 
+    }
+};
+
 // Computes max(0,x)
 class ReluOperator {
 public:    
     __device__ inline float operator()(float x) const {
         return x < 0 ? 0 : x;
-    }
-};
-
-class AbsGradientOperator {
-public:
-    __device__ inline float operator()(float unitActGrads, float unitInputs) const  {
-        return unitActGrads * (unitInputs > 0 ? 1 : -1); 
     }
 };
 
@@ -59,6 +59,7 @@ public:
         return unitActGrads * (unitActs > 0); 
     }
 };
+
 
 // Computes a*tanh(b*x)
 class TanhOperator {
@@ -81,6 +82,25 @@ public:
     __device__ inline float operator()(float unitActGrads, float unitInputs) const  {
         const float t = tanhf(_b * unitInputs);
         return unitActGrads * _a * _b * (1 - t * t);
+    }
+};
+
+// Computes log(1 + e^x)
+class SoftReluOperator {
+public:    
+    __device__ inline float operator()(float x) const {
+        return x > 4 ? x : __logf(1 + __expf(x));
+    }
+};
+
+class SoftReluGradientOperator {
+public:
+    __device__ inline float operator()(float unitActGrads, float unitInputs) const  {
+        if (unitInputs > 4) {
+            return unitActGrads;
+        }
+        const float f = __expf(unitInputs);
+        return unitActGrads * __fdividef(f, 1 + f); 
     }
 };
 
@@ -141,6 +161,17 @@ public:
 private:
     NVMatrix _input;
     float _a, _b;
+protected:
+    void _activate(NVMatrix& input);
+    void _computeInputGrads(NVMatrix& actGrads);
+};
+
+/*
+ * y == log(1 + e^x)
+ */
+class SoftReluNeuron : public Neuron {
+private:
+    NVMatrix _input;
 protected:
     void _activate(NVMatrix& input);
     void _computeInputGrads(NVMatrix& actGrads);

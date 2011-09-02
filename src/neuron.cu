@@ -60,6 +60,10 @@ Neuron& Neuron::makeNeuron(PyObject* neuronDict) {
     if (type == "relu") {
         return *new ReluNeuron();
     }
+    
+    if (type == "softrelu") {
+        return *new SoftReluNeuron();
+    }
 
     if (type == "abs") {
         return *new AbsNeuron();
@@ -115,7 +119,7 @@ void ReluNeuron::_computeInputGrads(NVMatrix& actGrads) {
  * AbsNeuron
  * =======================
  * 
- * Mainly here to demonstrate how to write a neuron that requires memory
+ * Mainly here (originally) to demonstrate how to write a neuron that requires memory
  * of the input to compute its gradient.
  */
 void AbsNeuron::_activate(NVMatrix& input) {
@@ -143,5 +147,20 @@ void TanhNeuron::_activate(NVMatrix& input) {
 
 void TanhNeuron::_computeInputGrads(NVMatrix& actGrads) {
     actGrads._eltwiseBinaryOp(_input, TanhGradientOperator(_a, _b));
+    _input.truncate(); // Forget input to conserve memory
+}
+
+/* 
+ * =======================
+ * SoftReluNeuron
+ * =======================
+ */
+void SoftReluNeuron::_activate(NVMatrix& input) {
+    input.copy(_input);
+    input._eltwiseUnaryOp(SoftReluOperator());
+}
+
+void SoftReluNeuron::_computeInputGrads(NVMatrix& actGrads) {
+    actGrads._eltwiseBinaryOp(_input, SoftReluGradientOperator());
     _input.truncate(); // Forget input to conserve memory
 }
