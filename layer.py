@@ -40,18 +40,18 @@ class LayerParsingError(Exception):
 # A neuron that doesn't take parameters
 class NeuronParser:
     def __init__(self, type, func_str):
-        self.type = type.lower()
+        self.type = type
         self.func_str = func_str
         
     def parse(self, type):
-        if type.lower() == self.type:
+        if type == self.type:
             return {'type': self.type,
                     'params': {}}
         return None
     
 # A neuron that takes parameters
 class ParamNeuronParser(NeuronParser):
-    neuron_regex = re.compile(r'^\s*(\w+)\s*\[\s*(\w+(\s*,\w+)*)\s*\]\s*$', flags=re.IGNORECASE)
+    neuron_regex = re.compile(r'^\s*(\w+)\s*\[\s*(\w+(\s*,\w+)*)\s*\]\s*$')
     def __init__(self, type, func_str):
         NeuronParser.__init__(self, type, func_str)
         m = self.neuron_regex.match(type)
@@ -60,7 +60,7 @@ class ParamNeuronParser(NeuronParser):
         assert len(set(self.param_names)) == len(self.param_names)
         
     def parse(self, type):
-        m = re.match(r'^%s\s*\[([0-9,\. ]*)\]\s*$' % self.base_type, type, flags=re.IGNORECASE)
+        m = re.match(r'^%s\s*\[([0-9,\. ]*)\]\s*$' % self.base_type, type)
         if m:
             try:
                 param_vals = [float(v.strip()) for v in m.group(1).split(',')]
