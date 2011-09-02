@@ -51,7 +51,7 @@ class NeuronParser:
     
 # A neuron that takes parameters
 class ParamNeuronParser(NeuronParser):
-    neuron_regex = re.compile(r'^\s*(\w+)\s*\(\s*(\w+(\s*,\w+)*)\s*\)\s*$')
+    neuron_regex = re.compile(r'^\s*(\w+)\s*\[\s*(\w+(\s*,\w+)*)\s*\]\s*$')
     def __init__(self, type, func_str):
         NeuronParser.__init__(self, type, func_str)
         m = self.neuron_regex.match(type)
@@ -60,7 +60,7 @@ class ParamNeuronParser(NeuronParser):
         assert len(set(self.param_names)) == len(self.param_names)
         
     def parse(self, type):
-        m = re.match(r'^%s\s*\(([0-9,\. ]*)\)\s*$' % self.base_type, type)
+        m = re.match(r'^%s\s*\[([0-9,\. ]*)\]\s*$' % self.base_type, type)
         if m:
             try:
                 param_vals = [float(v.strip()) for v in m.group(1).split(',')]
@@ -132,9 +132,9 @@ class LayerParser:
             if p:
                 return p
         colnames = ['Neuron type', 'Function']
-        m = max(len(colnames[0]), OptionsParser._longest_value(neurons, key=lambda x:x.type)) + 2
-        ntypes = [OptionsParser._bold(colnames[0].ljust(m))] + [n.type.ljust(m) for n in neurons]
-        fnames = [OptionsParser._bold(colnames[1])] + [n.func_str for n in neurons]
+        m = max(len(colnames[0]), OptionsParser._longest_value(neuron_parsers, key=lambda x:x.type)) + 2
+        ntypes = [OptionsParser._bold(colnames[0].ljust(m))] + [n.type.ljust(m) for n in neuron_parsers]
+        fnames = [OptionsParser._bold(colnames[1])] + [n.func_str for n in neuron_parsers]
         usage_lines = NL.join(ntype + fname for ntype,fname in zip(ntypes, fnames))
         
         raise LayerParsingError("Layer '%s': unable to parse neuron type '%s'. Valid neuron types: %sWhere neurons have parameters, they must be floats." % (layer_name, neuron_str, NL + usage_lines + NL))
@@ -445,4 +445,4 @@ neuron_parsers = [NeuronParser('ident', 'f(x) = x'),
                   NeuronParser('logistic', 'f(x) = 1 / (1 + e^-x)'),
                   NeuronParser('abs', 'f(x) = max(-x,x)'),
                   NeuronParser('relu', 'f(x) = max(0, x)'),
-                  ParamNeuronParser('tanh(a,b)', 'f(x) = a*tanh(b*x)')]
+                  ParamNeuronParser('tanh[a,b]', 'f(x) = a*tanh(b*x)')]
