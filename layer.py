@@ -37,13 +37,6 @@ import re
 class LayerParsingError(Exception):
     pass
 
-def make_weights(numRows, numCols, init, order='C'):
-    weights = n.array(init * nr.randn(numRows, numCols), dtype=n.single, order=order)
-    weights_inc = n.zeros_like(weights)
-    return weights, weights_inc
-
-
-
 # A neuron that doesn't take parameters
 class NeuronParser:
     def __init__(self, type, func_str):
@@ -134,12 +127,7 @@ class LayerParser:
     
     @staticmethod
     def parse_neuron(layer_name, neuron_str):
-        neurons = [NeuronParser('ident', 'f(x) = x'),
-                   NeuronParser('logistic', 'f(x) = 1 / (1 + e^-x)'),
-                   NeuronParser('abs', 'f(x) = max(-x,x)'),
-                   NeuronParser('relu', 'f(x) = max(0, x)'),
-                   ParamNeuronParser('tanh(a,b)', 'f(x) = a*tanh(b*x)')]
-        for n in neurons:
+        for n in neuron_parsers:
             p = n.parse(neuron_str)
             if p:
                 return p
@@ -150,6 +138,12 @@ class LayerParser:
         usage_lines = NL.join(ntype + fname for ntype,fname in zip(ntypes, fnames))
         
         raise LayerParsingError("Layer '%s': unable to parse neuron type '%s'. Valid neuron types: %sWhere neurons have parameters, they must be floats." % (layer_name, neuron_str, NL + usage_lines + NL))
+    
+    @staticmethod
+    def make_weights(numRows, numCols, init, order='C'):
+        weights = n.array(init * nr.randn(numRows, numCols), dtype=n.single, order=order)
+        weights_inc = n.zeros_like(weights)
+        return weights, weights_inc    
     
     @staticmethod
     def verify_int_range(v, layer_name, param_name, _min, _max):
@@ -257,8 +251,8 @@ class FCLayerParser(LayerWithInputParser):
         LayerParser.verify_int_range(dic['numOutputs'], name, 'numOutputs', 1, None)
         FCLayerParser.verify_num_params(dic, 'initW')
         
-        weights = [make_weights(numIn, dic['numOutputs'], init, order='F') for numIn,init in zip(dic['numInputs'], dic['initW'])]
-        biases = make_weights(1, dic['numOutputs'], 0, order='F')
+        weights = [LayerParser.make_weights(numIn, dic['numOutputs'], init, order='F') for numIn,init in zip(dic['numInputs'], dic['initW'])]
+        biases = LayerParser.make_weights(1, dic['numOutputs'], 0, order='F')
         dic['weights'] = [w[0] for w in weights]
         dic['weightsInc'] = [w[1] for w in weights]
         dic['biases'] = biases[0]
@@ -316,9 +310,9 @@ class ConvLayerParser(LayerWithInputParser):
         dic['initW'] = mcp.getfloat(name, 'initW')
         
         num_biases = dic['numFilters'] if dic['sharedBiases'] else dic['modules']*dic['numFilters']
-        dic['weights'], dic['weightsInc'] = make_weights(dic['filterPixels']*dic['channels'], \
-                                                         dic['numFilters'], dic['initW'], order='C')
-        dic['biases'], dic['biasesInc'] = make_weights(num_biases, 1, 0, order='C')
+        dic['weights'], dic['weightsInc'] = LayerParser.make_weights(dic['filterPixels']*dic['channels'], \
+                                                                     dic['numFilters'], dic['initW'], order='C')
+        dic['biases'], dic['biasesInc'] = LayerParser.make_weights(num_biases, 1, 0, order='C')
         
         print "Initialized convolutional layer '%s', producing %dx%d %d-channel output" % (name, dic['modulesX'], dic['modulesX'], dic['numFilters'])
         
@@ -433,7 +427,8 @@ class LogregCostParser(CostParser):
         
         print "Initialized logistic regression cost '%s'" % name
         return dic
-    
+
+# All the layer parsers
 layer_parsers = {'data': DataLayerParser(),
                  'fc': FCLayerParser(),
                  'conv': ConvLayerParser(),
@@ -442,3 +437,12 @@ layer_parsers = {'data': DataLayerParser(),
                  'rnorm': NormLayerParser('response'),
                  'cnorm': NormLayerParser('contrast'),
                  'cost.logreg': LogregCostParser()}
+ 
+# All the neuron parsers
+# This isn't a name --> parser mapping as the layer parsers above because neurons don't have fixed names.
+# A user may write tanh(0.5,0.25), etc.
+neuron_parsers = [NeuronParser('ident', 'f(x) = x'),
+                  NeuronParser('logistic', 'f(x) = 1 / (1 + e^-x)'),
+                  NeuronParser('abs', 'f(x) = max(-x,x)'),
+                  NeuronParser('relu', 'f(x) = max(0, x)'),
+                  ParamNeuronParser('tanh(a,b)', 'f(x) = a*tanh(b*x)')]
