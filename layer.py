@@ -40,18 +40,18 @@ class LayerParsingError(Exception):
 # A neuron that doesn't take parameters
 class NeuronParser:
     def __init__(self, type, func_str):
-        self.type = type
+        self.type = type.lower()
         self.func_str = func_str
         
     def parse(self, type):
-        if type == self.type:
+        if type.lower() == self.type:
             return {'type': self.type,
                     'params': {}}
         return None
     
 # A neuron that takes parameters
 class ParamNeuronParser(NeuronParser):
-    neuron_regex = re.compile(r'^\s*(\w+)\s*\[\s*(\w+(\s*,\w+)*)\s*\]\s*$')
+    neuron_regex = re.compile(r'^\s*(\w+)\s*\[\s*(\w+(\s*,\w+)*)\s*\]\s*$', flags=re.IGNORECASE)
     def __init__(self, type, func_str):
         NeuronParser.__init__(self, type, func_str)
         m = self.neuron_regex.match(type)
@@ -60,7 +60,7 @@ class ParamNeuronParser(NeuronParser):
         assert len(set(self.param_names)) == len(self.param_names)
         
     def parse(self, type):
-        m = re.match(r'^%s\s*\[([0-9,\. ]*)\]\s*$' % self.base_type, type)
+        m = re.match(r'^%s\s*\[([0-9,\. ]*)\]\s*$' % self.base_type, type, flags=re.IGNORECASE)
         if m:
             try:
                 param_vals = [float(v.strip()) for v in m.group(1).split(',')]
@@ -129,8 +129,10 @@ class LayerParser:
     def parse_neuron(layer_name, neuron_str):
         for n in neuron_parsers:
             p = n.parse(neuron_str)
-            if p:
+            if p: # Successfully parsed neuron, return it
                 return p
+        # Could not parse neuron
+        # Print available neuron types
         colnames = ['Neuron type', 'Function']
         m = max(len(colnames[0]), OptionsParser._longest_value(neuron_parsers, key=lambda x:x.type)) + 2
         ntypes = [OptionsParser._bold(colnames[0].ljust(m))] + [n.type.ljust(m) for n in neuron_parsers]
@@ -440,7 +442,7 @@ layer_parsers = {'data': DataLayerParser(),
  
 # All the neuron parsers
 # This isn't a name --> parser mapping as the layer parsers above because neurons don't have fixed names.
-# A user may write tanh(0.5,0.25), etc.
+# A user may write tanh[0.5,0.25], etc.
 neuron_parsers = [NeuronParser('ident', 'f(x) = x'),
                   NeuronParser('logistic', 'f(x) = 1 / (1 + e^-x)'),
                   NeuronParser('abs', 'f(x) = max(-x,x)'),
