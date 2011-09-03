@@ -73,10 +73,12 @@ Neuron& Neuron::makeNeuron(PyObject* neuronDict) {
         return *new LogisticNeuron();
     }
     
-    if (type == "tanh") {
+    if (type == "tanh" || type == "abstanh") {
         float a = pyDictGetFloat(neuronParamsDict, "a");
         float b = pyDictGetFloat(neuronParamsDict, "b");
-        return *new TanhNeuron(a, b);
+        
+        return *(type == "tanh" ? dynamic_cast<Neuron*>(new TanhNeuron(a, b)) 
+                                : dynamic_cast<Neuron*>(new AbsTanhNeuron(a, b)));
     }
 
     if (type == "ident") {
@@ -141,12 +143,32 @@ TanhNeuron::TanhNeuron(float a, float b) : Neuron(), _a(a), _b(b) {
 }
 
 void TanhNeuron::_activate(NVMatrix& input) {
-    input.copy(_input);
     input._eltwiseUnaryOp(TanhOperator(_a, _b));
+    _acts = &input;
 }
 
 void TanhNeuron::_computeInputGrads(NVMatrix& actGrads) {
-    actGrads._eltwiseBinaryOp(_input, TanhGradientOperator(_a, _b));
+    actGrads._eltwiseBinaryOp(*_acts, TanhGradientOperator(_a, _b));
+}
+
+/* 
+ * =======================
+ * AbsTanhNeuron
+ * =======================
+ */
+AbsTanhNeuron::AbsTanhNeuron(float a, float b) : Neuron(), _a(a), _b(b) {
+    assert(_b >= 0);
+}
+
+void AbsTanhNeuron::_activate(NVMatrix& input) {
+    input.copy(_input);
+    input._eltwiseUnaryOp(AbsTanhOperator(_a, _b));
+    _acts = &input;
+}
+
+void AbsTanhNeuron::_computeInputGrads(NVMatrix& actGrads) {
+    actGrads._eltwiseBinaryOp(_input, MultBySignOperator());
+    actGrads._eltwiseBinaryOp(*_acts, TanhNeuron::TanhGradientOperator(_a, _b));
     _input.truncate(); // Forget input to conserve memory
 }
 

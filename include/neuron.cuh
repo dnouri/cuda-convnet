@@ -31,79 +31,6 @@
 #include <nvmatrix.cuh>
 #include <cutil_inline.h>
 
-class LogisticGradientOperator {
-public:
-    __device__ inline float operator()(float unitActGrads, float unitActs) const  {
-        return unitActGrads * unitActs * (1 - unitActs); 
-    }
-};
-
-class AbsGradientOperator {
-public:
-    __device__ inline float operator()(float unitActGrads, float unitInputs) const  {
-        return unitActGrads * (unitInputs > 0 ? 1 : -1); 
-    }
-};
-
-// Computes max(0,x)
-class ReluOperator {
-public:    
-    __device__ inline float operator()(float x) const {
-        return x < 0 ? 0 : x;
-    }
-};
-
-class ReluGradientOperator {
-public:
-    __device__ inline float operator()(float unitActGrads, float unitActs) const  {
-        return unitActGrads * (unitActs > 0); 
-    }
-};
-
-
-// Computes a*tanh(b*x)
-class TanhOperator {
-private:
-    float _a, _b;
-public:
-    TanhOperator(float a, float b) : _a(a), _b(b) {
-    }
-    __device__ inline float operator()(float x) const {
-        return _a * tanhf(_b * x);
-    }
-};
-
-class TanhGradientOperator {
-private:
-    float _a, _b;
-public:
-    TanhGradientOperator(float a, float b) : _a(a), _b(b) {
-    }
-    __device__ inline float operator()(float unitActGrads, float unitInputs) const  {
-        const float t = tanhf(_b * unitInputs);
-        return unitActGrads * _a * _b * (1 - t * t);
-    }
-};
-
-// Computes log(1 + e^x)
-class SoftReluOperator {
-public:    
-    __device__ inline float operator()(float x) const {
-        return x > 4 ? x : __logf(1 + __expf(x));
-    }
-};
-
-class SoftReluGradientOperator {
-public:
-    __device__ inline float operator()(float unitActGrads, float unitInputs) const  {
-        if (unitInputs > 4) {
-            return unitActGrads;
-        }
-        const float f = __expf(unitInputs);
-        return unitActGrads * __fdividef(f, 1 + f); 
-    }
-};
-
 /*
  * y == x
  */
@@ -123,9 +50,16 @@ public:
  * y == 1 / (1 + e^-x)
  */
 class LogisticNeuron : public Neuron {
-private:
-    NVMatrix* _acts; // Logistic neuron must remember activities for gradient computation
+public:
+    class LogisticGradientOperator {
+    public:
+        __device__ inline float operator()(float unitActGrads, float unitActs) const  {
+            return unitActGrads * unitActs * (1 - unitActs); 
+        }
+    };
 protected:
+    NVMatrix* _acts; // Logistic neuron must remember activities for gradient computation
+
     void _activate(NVMatrix& input);
     void _computeInputGrads(NVMatrix& actGrads);
 };
@@ -134,9 +68,23 @@ protected:
  * y == max(0, x)
  */
 class ReluNeuron : public Neuron {
-private:
-    NVMatrix* _acts; // Relu neuron must remember activities for gradient computation
+public:
+    class ReluOperator {
+    public:    
+        __device__ inline float operator()(float x) const {
+            return x < 0 ? 0 : x;
+        }
+    };
+
+    class ReluGradientOperator {
+    public:
+        __device__ inline float operator()(float unitActGrads, float unitActs) const  {
+            return unitActGrads * (unitActs > 0); 
+        }
+    };
 protected:
+    NVMatrix* _acts; // Relu neuron must remember activities for gradient computation
+
     void _activate(NVMatrix& input);
     void _computeInputGrads(NVMatrix& actGrads);
 };
@@ -145,9 +93,16 @@ protected:
  * y == abs(x)
  */
 class AbsNeuron : public Neuron {
-private:
-    NVMatrix _input; // Abs neuron must remember input for gradient computation
+public:
+    class AbsGradientOperator {
+    public:
+        __device__ inline float operator()(float unitActGrads, float unitInputs) const  {
+            return unitActGrads * (unitInputs > 0 ? 1 : -1); 
+        }
+    };
 protected:
+    NVMatrix _input; // Abs neuron must remember input for gradient computation
+
     void _activate(NVMatrix& input);
     void _computeInputGrads(NVMatrix& actGrads);
 };
@@ -157,11 +112,69 @@ protected:
  */
 class TanhNeuron : public Neuron {
 public:
+    class TanhOperator {
+    private:
+        float _a, _n2b;
+    public:
+        TanhOperator(float a, float b) : _a(a), _n2b(-2*b) {
+        }
+        __device__ inline float operator()(float x) const {
+            return _a * (__fdividef(2, 1 + __expf(x * _n2b)) - 1);
+        }
+    };
+
+    class TanhGradientOperator {
+    private:
+        float _n4ab, _a;
+    public:
+        TanhGradientOperator(float a, float b) : _n4ab(-4*a*b), _a(a) {
+        }
+        __device__ inline float operator()(float unitActGrads, float unitActs) const  {
+            const float t = (1 - __fdividef(unitActs, _a)) / 2;
+            return unitActGrads * _n4ab * (t * (t - 1));
+        }
+    };
+    
     TanhNeuron(float a, float b);
-private:
-    NVMatrix _input;
-    float _a, _b;
 protected:
+    NVMatrix* _acts;
+    float _a, _b;
+
+    void _activate(NVMatrix& input);
+    void _computeInputGrads(NVMatrix& actGrads);
+};
+
+/*
+ * y == a*abs(tanh(b*x))
+ * b assumed to be positive, since abs(tanh(bx)) = abs(tanh(-bx))
+ */
+class AbsTanhNeuron : public Neuron {
+public:
+    
+    // Computes x * sign(y)
+    class MultBySignOperator {
+    public:
+        __device__ inline float operator()(float x, float y) const {
+            return x * (y > 0 ? 1 : -1);
+        }
+    };
+    // Computes a*abs(tanh(b*x))
+    class AbsTanhOperator {
+    private:
+        float _a, _n2b;
+    public:
+        AbsTanhOperator(float a, float b) : _a(a), _n2b(-2*b) {
+        }
+        __device__ inline float operator()(float x) const {
+            return _a * (__fdividef(2, 1 + __expf(x * _n2b)) - 1) * (x > 0 ? 1 : -1);
+        }
+    };
+    
+    AbsTanhNeuron(float a, float b);
+protected:
+    NVMatrix _input, *_acts;
+    float _a, _b;
+
     void _activate(NVMatrix& input);
     void _computeInputGrads(NVMatrix& actGrads);
 };
@@ -170,9 +183,29 @@ protected:
  * y == log(1 + e^x)
  */
 class SoftReluNeuron : public Neuron {
-private:
-    NVMatrix _input;
+public:
+    class SoftReluOperator {
+    public:    
+        __device__ inline float operator()(float x) const {
+            // This piece-wise implementation has better numerical stability than
+            // simply computing log(1 + e^x).
+            return x > 4 ? x : __logf(1 + __expf(x));
+        }
+    };
+
+    class SoftReluGradientOperator {
+    public:
+        __device__ inline float operator()(float unitActGrads, float unitInputs) const  {
+            if (unitInputs > 4) {
+                return unitActGrads;
+            }
+            const float f = __expf(unitInputs);
+            return unitActGrads * __fdividef(f, 1 + f); 
+        }
+    };
 protected:
+    NVMatrix _input;
+
     void _activate(NVMatrix& input);
     void _computeInputGrads(NVMatrix& actGrads);
 };

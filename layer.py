@@ -60,7 +60,7 @@ class ParamNeuronParser(NeuronParser):
         assert len(set(self.param_names)) == len(self.param_names)
         
     def parse(self, type):
-        m = re.match(r'^%s\s*\[([0-9,\. ]*)\]\s*$' % self.base_type, type)
+        m = re.match(r'^%s\s*\[([\d,\.\s\-]*)\]\s*$' % self.base_type, type)
         if m:
             try:
                 param_vals = [float(v.strip()) for v in m.group(1).split(',')]
@@ -70,6 +70,18 @@ class ParamNeuronParser(NeuronParser):
             except TypeError:
                 pass
         return None
+
+class AbsTanhNeuronParser(ParamNeuronParser):
+    def __init__(self):
+        ParamNeuronParser.__init__(self, 'abstanh[a,b]', 'f(x) = a * abs(tanh(b * x))')
+        
+    def parse(self, type):
+        dic = ParamNeuronParser.parse(self, type)
+        # Make b positive, since abs(tanh(bx)) = abs(tanh(-bx)) and the C++ code
+        # assumes b is positive.
+        if dic:
+            dic['params']['b'] = abs(dic['params']['b'])
+        return dic
 
 # Subclass that throws more convnet-specific exceptions than the default
 class MyConfigParser(cfg.SafeConfigParser):
@@ -445,7 +457,8 @@ layer_parsers = {'data': DataLayerParser(),
 # A user may write tanh[0.5,0.25], etc.
 neuron_parsers = sorted([NeuronParser('ident', 'f(x) = x'),
                          NeuronParser('logistic', 'f(x) = 1 / (1 + e^-x)'),
-                         NeuronParser('abs', 'f(x) = max(-x,x)'),
+                         NeuronParser('abs', 'f(x) = abs(x)'),
                          NeuronParser('relu', 'f(x) = max(0, x)'),
                          NeuronParser('softrelu', 'f(x) = log(1 + e^x)'),
-                         ParamNeuronParser('tanh[a,b]', 'f(x) = a*tanh(b*x)')], key=lambda x:x.type)
+                         ParamNeuronParser('tanh[a,b]', 'f(x) = a * tanh(b * x)'),
+                         AbsTanhNeuronParser()], key=lambda x:x.type)
