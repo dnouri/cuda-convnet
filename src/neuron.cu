@@ -167,7 +167,7 @@ void AbsTanhNeuron::_activate(NVMatrix& input) {
 }
 
 void AbsTanhNeuron::_computeInputGrads(NVMatrix& actGrads) {
-    actGrads._eltwiseBinaryOp(_input, MultBySignOperator());
+    actGrads._eltwiseBinaryOp(_input, AbsNeuron::AbsGradientOperator());
     actGrads._eltwiseBinaryOp(*_acts, TanhNeuron::TanhGradientOperator(_a, _b));
     _input.truncate(); // Forget input to conserve memory
 }

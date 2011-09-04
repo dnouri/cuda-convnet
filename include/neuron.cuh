@@ -53,7 +53,7 @@ class LogisticNeuron : public Neuron {
 public:
     class LogisticGradientOperator {
     public:
-        __device__ inline float operator()(float unitActGrads, float unitActs) const  {
+        __device__ float operator()(float unitActGrads, float unitActs) const  {
             return unitActGrads * unitActs * (1 - unitActs); 
         }
     };
@@ -71,14 +71,14 @@ class ReluNeuron : public Neuron {
 public:
     class ReluOperator {
     public:    
-        __device__ inline float operator()(float x) const {
+        __device__ float operator()(float x) const {
             return x < 0 ? 0 : x;
         }
     };
 
     class ReluGradientOperator {
     public:
-        __device__ inline float operator()(float unitActGrads, float unitActs) const  {
+        __device__ float operator()(float unitActGrads, float unitActs) const  {
             return unitActGrads * (unitActs > 0); 
         }
     };
@@ -96,7 +96,7 @@ class AbsNeuron : public Neuron {
 public:
     class AbsGradientOperator {
     public:
-        __device__ inline float operator()(float unitActGrads, float unitInputs) const  {
+        __device__ float operator()(float unitActGrads, float unitInputs) const  {
             return unitActGrads * (unitInputs > 0 ? 1 : -1); 
         }
     };
@@ -118,7 +118,7 @@ public:
     public:
         TanhOperator(float a, float b) : _a(a), _n2b(-2*b) {
         }
-        __device__ inline float operator()(float x) const {
+        virtual __device__ float operator()(float x) const {
             return _a * (__fdividef(2, 1 + __expf(x * _n2b)) - 1);
         }
     };
@@ -129,7 +129,7 @@ public:
     public:
         TanhGradientOperator(float a, float b) : _n4ab(-4*a*b), _a(a) {
         }
-        __device__ inline float operator()(float unitActGrads, float unitActs) const  {
+        __device__ float operator()(float unitActGrads, float unitActs) const  {
             const float t = (1 - __fdividef(unitActs, _a)) / 2;
             return unitActGrads * _n4ab * (t * (t - 1));
         }
@@ -150,23 +150,13 @@ protected:
  */
 class AbsTanhNeuron : public Neuron {
 public:
-    
-    // Computes x * sign(y)
-    class MultBySignOperator {
-    public:
-        __device__ inline float operator()(float x, float y) const {
-            return x * (y > 0 ? 1 : -1);
-        }
-    };
     // Computes a*abs(tanh(b*x))
-    class AbsTanhOperator {
-    private:
-        float _a, _n2b;
+    class AbsTanhOperator : public TanhNeuron::TanhOperator {
     public:
-        AbsTanhOperator(float a, float b) : _a(a), _n2b(-2*b) {
+        AbsTanhOperator(float a, float b) : TanhNeuron::TanhOperator(a, b) {
         }
-        __device__ inline float operator()(float x) const {
-            return _a * (__fdividef(2, 1 + __expf(x * _n2b)) - 1) * (x > 0 ? 1 : -1);
+        __device__ float operator()(float x) const {
+            return TanhNeuron::TanhOperator::operator ()(x) * (x > 0 ? 1 : -1);
         }
     };
     
@@ -186,7 +176,7 @@ class SoftReluNeuron : public Neuron {
 public:
     class SoftReluOperator {
     public:    
-        __device__ inline float operator()(float x) const {
+        __device__ float operator()(float x) const {
             // This piece-wise implementation has better numerical stability than
             // simply computing log(1 + e^x).
             return x > 4 ? x : __logf(1 + __expf(x));
@@ -195,7 +185,7 @@ public:
 
     class SoftReluGradientOperator {
     public:
-        __device__ inline float operator()(float unitActGrads, float unitInputs) const  {
+        __device__ float operator()(float unitActGrads, float unitInputs) const  {
             if (unitInputs > 4) {
                 return unitActGrads;
             }

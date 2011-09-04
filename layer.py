@@ -60,7 +60,7 @@ class ParamNeuronParser(NeuronParser):
         assert len(set(self.param_names)) == len(self.param_names)
         
     def parse(self, type):
-        m = re.match(r'^%s\s*\[([\d,\.\s\-]*)\]\s*$' % self.base_type, type)
+        m = re.match(r'^%s\s*\[([\d,\.\s\-e]*)\]\s*$' % self.base_type, type)
         if m:
             try:
                 param_vals = [float(v.strip()) for v in m.group(1).split(',')]
