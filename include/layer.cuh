@@ -38,13 +38,13 @@
 
 #include "ConvNet.cuh"
 #include "data.cuh"
-#include "error.cuh"
+#include "cost.cuh"
 #include "weights.cuh"
 #include "neuron.cuh"
 #include "util.cuh"
 #include "layer_kernels.cuh"
 
-class ErrorResult;
+class CostResult;
 class ConvNet;
 class CostLayer;
 class DataLayer;
@@ -56,7 +56,7 @@ class Layer {
 protected:
     std::vector<Layer*> _prev, _next;
     int _rcvdFInputs, _rcvdBInputs;
-    NVMatrix _acts, _actGrads;
+    NVMatrix _acts, _actGrads; // Activities and activity gradients in this layer
     bool _gradConsumer, _gradProducer, _trans;
     int _numGradProducersNext;
     std::string _name, _type;
@@ -252,7 +252,7 @@ public:
 
 /*
  * input 0: labels
- * input 1: logistic regression outputs
+ * input 1: softmax outputs
  */
 class LogregCostLayer : public CostLayer {
 protected:

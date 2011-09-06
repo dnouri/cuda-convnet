@@ -36,7 +36,7 @@
 #include <queue.h>
 #include "../include/worker.cuh"
 #include "../include/util.cuh"
-#include "../include/error.cuh"
+#include "../include/cost.cuh"
 
 #include "../include/pyConvNet.cuh"
 #include "../include/ConvNet.cuh"
@@ -151,10 +151,10 @@ PyObject* finishBatch(PyObject *self, PyObject *args) {
     assert(res != NULL);
     assert(res->getResultType() == WorkResult::BATCH_DONE);
     
-    ErrorResult& err = res->getResults();
+    CostResult& cost = res->getResults();
     PyObject* dict = PyDict_New();
-    ErrorMap& errMap = err.getErrorMap();
-    for (ErrorMap::const_iterator it = errMap.begin(); it != errMap.end(); ++it) {
+    CostMap& costMap = cost.getCostMap();
+    for (CostMap::const_iterator it = costMap.begin(); it != costMap.end(); ++it) {
         PyObject* v = PyList_New(0);
         for (vector<double>::const_iterator iv = it->second->begin(); iv != it->second->end(); ++iv) {
             PyObject* f = PyFloat_FromDouble(*iv);
@@ -162,7 +162,7 @@ PyObject* finishBatch(PyObject *self, PyObject *args) {
         }
         PyDict_SetItemString(dict, it->first.c_str(), v);
     }
-    delete res; // Deletes err too
+    delete res; // Deletes cost too
     return dict;
 }
 
@@ -180,7 +180,7 @@ PyObject* checkGradients(PyObject *self, PyObject *args) {
     WorkResult* res = model->getResultQueue().dequeue();
     assert(res != NULL);
     assert(res->getResultType() == WorkResult::BATCH_DONE);
-    delete res; // Deletes err too
+    delete res;
     return Py_BuildValue("i", 0);
 }
 

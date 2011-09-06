@@ -94,7 +94,7 @@ public:
 
     bool checkGradientsW(const std::string& name, float eps, Weights& weights); 
     void checkGradients();
-    ErrorResult& getError();
+    CostResult& getError();
     double getCostFunctionValue();
 };
 

@@ -214,12 +214,12 @@ void ConvNet::setData(CPUData& data) {
     _dp->setData(data);
 }
 
-ErrorResult& ConvNet::getError() {
-    return *new ErrorResult(_costs);
+CostResult& ConvNet::getError() {
+    return *new CostResult(_costs);
 }
 
 double ConvNet::getCostFunctionValue() {
-    ErrorResult& err = getError();
+    CostResult& err = getError();
     double val = err.getCost();
     delete &err;
     return val;

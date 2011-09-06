@@ -35,19 +35,25 @@
 
 class CostLayer;
 
-class ErrorResult {
+/*
+ * Wrapper for dictionary mapping cost name to vector of returned values.
+ */
+class CostResult {
 private:
-    ErrorMap _errMap;
+    CostMap _errMap;
     std::map<std::string,double> _costCoeffs;
 public:
-    ErrorResult();
-    ErrorResult(std::vector<CostLayer*>& costs);
+    CostResult();
+    CostResult(std::vector<CostLayer*>& costs);
     doublev*& operator [](const std::string s);
-    ErrorMap& getErrorMap();
+    CostMap& getCostMap();
+    /*
+     * Returns sum of first values returned by all the costs, weighted by the cost coefficients.
+     */
     double getCost();
-    ErrorResult& operator += (ErrorResult& er);
-    ErrorResult& operator /= (const double v);
-    virtual ~ErrorResult();
+    CostResult& operator += (CostResult& er);
+    CostResult& operator /= (const double v);
+    virtual ~CostResult();
 };
 
 

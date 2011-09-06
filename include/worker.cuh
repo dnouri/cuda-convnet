@@ -28,24 +28,24 @@
 #define	WORKER_CUH
 
 #include "ConvNet.cuh"
-#include "error.cuh"
+#include "cost.cuh"
 #include "util.cuh"
 #include "data.cuh"
 
 class ConvNet;
-class ErrorResult;
+class CostResult;
 
 class WorkResult {
 public:
     enum RESULTS {BATCH_DONE, SYNC_DONE};
 protected:
     WorkResult::RESULTS _resultType;
-    ErrorResult* _results;
+    CostResult* _results;
 public:
-    WorkResult(WorkResult::RESULTS resultType, ErrorResult& results);
+    WorkResult(WorkResult::RESULTS resultType, CostResult& results);
     WorkResult(WorkResult::RESULTS resultType);
     virtual ~WorkResult();
-    ErrorResult& getResults() const;
+    CostResult& getResults() const;
     WorkResult::RESULTS getResultType() const;
 };
 
@@ -55,7 +55,7 @@ protected:
 public:
     Worker(ConvNet& convNet);
     virtual void run() = 0;
-    static void incError(ErrorResult& src, ErrorResult& tgt);
+    static void incError(CostResult& src, CostResult& tgt);
 };
 
 class TrainingWorker : public Worker {

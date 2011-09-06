@@ -43,8 +43,8 @@
 enum PASS_TYPE {PASS_TRAIN, PASS_TEST, PASS_GC};
 
 // For gradient checking
-#define GC_SUPPRESS_PASSES     true
-#define GC_REL_ERR_THRESH      0.02
+#define GC_SUPPRESS_PASSES          true
+#define GC_REL_ERR_THRESH           0.02
 
 /*
  * Store entire data matrix on GPU if its size does not exceed this many MB.
@@ -54,7 +54,7 @@ enum PASS_TYPE {PASS_TRAIN, PASS_TEST, PASS_GC};
 
 typedef std::vector<Matrix*> MatrixV;
 typedef std::vector<NVMatrix*> NVMatrixV;
-typedef std::map<std::string,std::vector<double>*> ErrorMap;
+typedef std::map<std::string,std::vector<double>*> CostMap;
 typedef std::vector<double> doublev;
 typedef std::vector<float> floatv;
 typedef std::vector<int> intv;
