@@ -565,7 +565,7 @@ void CostLayer::bprop(PASS_TYPE passType) {
     }
 }
 
-doublev& CostLayer::getError() {
+doublev& CostLayer::getCost() {
     doublev& v = *new doublev();
     v.insert(v.begin(), _err.begin(), _err.end());
     return v;

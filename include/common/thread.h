@@ -33,8 +33,7 @@
 
 /*
  * Abstract joinable thread class.
- * The only thing the implementer has to fill in is the run method and a constructor
- * that calls the Thread constructor.
+ * The only thing the implementer has to fill in is the run method.
  */
 class Thread {
 private:
@@ -43,14 +42,13 @@ private:
     bool _joinable, _startable;
 
     static void* start_pthread_func(void *obj) {
-        void* retval = reinterpret_cast<Thread *> (obj)->run();
+        void* retval = reinterpret_cast<Thread*>(obj)->run();
         pthread_exit(retval);
     }
 protected:
     virtual void* run() = 0;
 public:
-    Thread(bool joinable) :
-        _joinable(joinable), _startable(true) {
+    Thread(bool joinable) : _joinable(joinable), _startable(true) {
         pthread_attr_init(&_pthread_attr);
         pthread_attr_setdetachstate(&_pthread_attr, joinable ? PTHREAD_CREATE_JOINABLE : PTHREAD_CREATE_DETACHED);
     }
@@ -62,7 +60,7 @@ public:
         assert(_startable);
         _startable = false;
         int n;
-        if ((n = pthread_create(&_threadID, &_pthread_attr, &Thread::start_pthread_func, (void*) this))) {
+        if ((n = pthread_create(&_threadID, &_pthread_attr, &Thread::start_pthread_func, (void*)this))) {
             errno = n;
             perror("pthread_create error");
         }
@@ -82,7 +80,7 @@ public:
         join(NULL);
     }
 
-    inline pthread_t getThreadID() const {
+    pthread_t getThreadID() const {
         return _threadID;
     }
 };

@@ -244,7 +244,7 @@ protected:
 public:
     CostLayer(PyObject* paramsDict, bool gradConsumer, bool gradProducer, bool trans);
     void bprop(PASS_TYPE passType); 
-    virtual doublev& getError();
+    virtual doublev& getCost();
     float getCoeff();
     
     static CostLayer& makeCostLayer(string& type, PyObject* paramsDict);

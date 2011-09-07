@@ -40,8 +40,8 @@ Cost::Cost() {
 
 Cost::Cost(vector<CostLayer*>& costs) {
     for (vector<CostLayer*>::iterator it = costs.begin(); it != costs.end(); ++it) {
-        _costMap[(*it)->getName()] = &(*it)->getError();
-        _costCoeffs[(*it)->getName()] = (*it)->getCoeff();
+        _costMap[(*it)->getName()] = &(*it)->getCost();
+        _costCoeffMap[(*it)->getName()] = (*it)->getCoeff();
     }
 }
 
@@ -56,7 +56,7 @@ CostMap& Cost::getCostMap() {
 double Cost::getValue() {
     double val = 0;
     for (CostMap::iterator it = _costMap.begin(); it != _costMap.end(); ++it) {
-        val += _costCoeffs[it->first] * it->second->at(0);
+        val += _costCoeffMap[it->first] * it->second->at(0);
     }
     return val;
 }

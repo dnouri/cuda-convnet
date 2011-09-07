@@ -42,7 +42,7 @@ class CostLayer;
 class Cost {
 private:
     CostMap _costMap;
-    std::map<std::string,double> _costCoeffs;
+    std::map<std::string,double> _costCoeffMap;
 public:
     Cost();
     Cost(std::vector<CostLayer*>& costs);
