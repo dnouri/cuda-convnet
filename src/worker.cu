@@ -25,7 +25,7 @@
  */
 
 #include <algorithm>
-#include "../include/worker.cuh"
+#include <worker.cuh>
 
 using namespace std;
 

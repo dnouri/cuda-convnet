@@ -26,7 +26,7 @@
 
 #include <assert.h>
 
-#include "../include/layer_kernels.cuh"
+#include <layer_kernels.cuh>
 
 /*
  * E = -log(y_t)

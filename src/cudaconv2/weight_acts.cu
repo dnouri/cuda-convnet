@@ -24,8 +24,7 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "../include/CudaConv2.cuh"
-
+#include <cudaconv2.cuh>
 
 /*
  * Each block computes weight gradients for B_Y * pixelsPerThread pixels and B_X filters

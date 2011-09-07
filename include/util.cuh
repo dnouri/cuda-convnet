@@ -64,6 +64,7 @@ intv* getIntV(PyObject* pyList);
 MatrixV* getMatrixV(PyObject* pyList);
 
 int pyDictGetInt(PyObject* dict, const char* key);
+intv* pyDictGetIntV(PyObject* dict, const char* key);
 std::string pyDictGetString(PyObject* dict, const char* key);
 float pyDictGetFloat(PyObject* dict, const char* key);
 floatv* pyDictGetFloatV(PyObject* dict, const char* key);

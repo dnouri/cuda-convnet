@@ -26,25 +26,25 @@
 
 #include <stdio.h>
 #include <cuda_runtime.h>
-#include "../include/nvmatrix_kernel.cuh"
+#include <nvmatrix_kernels.cuh>
 
-__global__ void kTile(const float* src, float* tgt, const int srcWidth, const int srcHeight, const int tgtWidth, const int tgtHeight) {
+__global__ void kTile(const float* src, float* tgt, const uint srcWidth, const uint srcHeight, const uint tgtWidth, const uint tgtHeight) {
     const int idx = blockIdx.x * blockDim.x + threadIdx.x;
     const int numThreads = blockDim.x * gridDim.x;
     //    const unsigned int numEls = tgtWidth * tgtHeight;
-    for (unsigned int i = idx; i < tgtWidth * tgtHeight; i += numThreads) {
-        const int y = i / tgtWidth;
-        const int x = i % tgtWidth;
-        const int srcY = y % srcHeight;
-        const int srcX = x % srcWidth;
+    for (uint i = idx; i < tgtWidth * tgtHeight; i += numThreads) {
+        const uint y = i / tgtWidth;
+        const uint x = i % tgtWidth;
+        const uint srcY = y % srcHeight;
+        const uint srcX = x % srcWidth;
         tgt[i] = src[srcY * srcWidth + srcX];
     }
 }
 
-__global__ void kDotProduct_r(float* a, float* b, float* target, const int numCols, const int numElements) {
+__global__ void kDotProduct_r(float* a, float* b, float* target, const uint numCols, const uint numElements) {
     __shared__ float shmem[DP_BLOCKSIZE];
 
-    int eidx = DP_BLOCKSIZE * blockIdx.x + threadIdx.x;
+    uint eidx = DP_BLOCKSIZE * blockIdx.x + threadIdx.x;
     shmem[threadIdx.x] = 0;
     if (eidx < numCols) {
         for (; eidx < numElements; eidx += numCols) {

@@ -25,7 +25,7 @@
  */
 
 #include <algorithm>
-#include "../include/data.cuh"
+#include <data.cuh>
 
 using namespace std;
 

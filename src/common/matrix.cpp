@@ -24,8 +24,8 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "matrix.h"
-#include "matrix_funcs.h"
+#include <matrix.h>
+#include <matrix_funcs.h>
 
 using namespace std;
 

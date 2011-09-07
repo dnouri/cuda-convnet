@@ -34,9 +34,9 @@
 #include <assert.h>
 #include <nvmatrix.cuh>
 #include <matrix.h>
-#include <CudaConv2.cuh>
+#include <cudaconv2.cuh>
 
-#include "ConvNet.cuh"
+#include "convnet.cuh"
 #include "data.cuh"
 #include "cost.cuh"
 #include "weights.cuh"
@@ -116,7 +116,7 @@ public:
 
 class WeightLayer : public Layer {
 protected:
-    vector<Weights*> _vWeights;
+    WeightList _allWeights;
     
     void addWeights(Weights& w);
     void addWeights(WeightList& wl);

@@ -34,16 +34,16 @@
 
 #include <matrix.h>
 #include <queue.h>
-#include "../include/worker.cuh"
-#include "../include/util.cuh"
-#include "../include/cost.cuh"
+#include <worker.cuh>
+#include <util.cuh>
+#include <cost.cuh>
 
-#include "../include/pyConvNet.cuh"
-#include "../include/ConvNet.cuh"
+#include <pyconvnet.cuh>
+#include <convnet.cuh>
 
 #ifdef EXEC
 
-#include "../include/ConvNetTest.cuh"
+#include <ConvNetTest.cuh>
 
 int main(int argc, char** argv) {
     // This line just for compiling and examining profiler output.

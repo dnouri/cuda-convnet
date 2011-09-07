@@ -61,8 +61,8 @@ class GPUModel(IGPUModel):
                 raise ModelStateException("Layer name '%s' given to --logreg-name parameter not defined." % logreg_name)
             
     def fill_excused_options(self):
-        if self.op.get_value('save_path') is None:
-            self.op.set_value('save_path', "")
+        if self.op.get_value('check_grads'):
+            self.op.set_value('save_path', '')
             self.op.set_value('train_batch_range', '0')
             self.op.set_value('test_batch_range', '0')
             self.op.set_value('data_path', '')
@@ -70,7 +70,7 @@ class GPUModel(IGPUModel):
     # Make sure the data provider returned data in proper format
     def parse_batch_data(self, batch_data, train=True):
         if max(d.dtype != n.single for d in batch_data[2]):
-            raise DataProviderException("Data provider must return all data matrices as single-precision floats.")
+            raise DataProviderException("All matrices returned by data provider must consist of single-precision floats.")
         return batch_data
 
     def start_batch(self, batch_data, train=True):

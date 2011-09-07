@@ -30,6 +30,7 @@
 #include <vector>
 #include <map>
 #include <cutil_inline.h>
+
 #include "layer.cuh"
 #include "util.cuh"
 

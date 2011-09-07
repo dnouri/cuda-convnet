@@ -36,18 +36,6 @@
 #define NUM_RND_STREAMS                     (NUM_RND_BLOCKS * NUM_RND_THREADS_PER_BLOCK)
 
 /*
- * Defines for getting the values at the lower and upper 32 bits
- * of a 64-bit number.
- */
-#define LOW_BITS(x)                         ((x) & 0xffffffff)
-#define HIGH_BITS(x)                        ((x) >> 32)
-
-/*
- * Number of iterations to run random number generator upon initialization.
- */
-//#define NUM_RND_BURNIN                      1000
-
-/*
  * Default grid/block sizes for the various functions.
  */
 #define ADD_BLOCK_SIZE                      16
@@ -55,27 +43,14 @@
 #define NUM_TILE_BLOCKS                     4096
 #define NUM_TILE_THREADS_PER_BLOCK          512
 
-//#define NUM_APPLY_BLOCKS                    4096
-//#define NUM_APPLY_THREADS_PER_BLOCK         512
 #define ELTWISE_THREADS_X                   32
 #define ELTWISE_THREADS_Y                   8
-//#define ELTWISE_TRANS_THREADS_X               16
-//#define ELTWISE_TRANS_THREADS                 16
 
-//#define NUM_ADD_VECTOR_BLOCKS               4096
-//#define NUM_ADD_VECTOR_THREADS_PER_BLOCK    512
-
-//#define NUM_SUM_ROWS_THREADS_PER_BLOCK      512 /* THIS HAS TO BE A POWER OF 2! */
 #define NUM_SUM_COLS_THREADS_PER_BLOCK      256
-
-//#define NUM_VECTOR_OP_BLOCKS                4096
-//#define NUM_VECTOR_OP_THREADS_PER_BLOCK     512
 
 #define AGG_SHORT_ROWS_THREADS_X            32
 #define AGG_SHORT_ROWS_THREADS_Y            8
 #define AGG_SHORT_ROWS_LOOPS_Y              32
-//#define AGG_MAX                             0
-//#define AGG_SUM                             1
 
 #define DP_BLOCKSIZE                        512
 #define CPUSUM_MAX                          4096
@@ -93,10 +68,8 @@
 #define MUL24(x,y) ((x) * (y))
 #endif
 
-__global__ void kSeedRandom(unsigned int* randMults, unsigned long long* randWords, unsigned int seed);
-
-__global__ void kTile(const float* src, float* tgt, const int srcWidth, const int srcHeight, const int tgtWidth, const int tgtHeight);
-__global__ void kDotProduct_r(float* a, float* b, float* target, const int numCols, const int numElements);
+__global__ void kTile(const float* src, float* tgt, const uint srcWidth, const uint srcHeight, const uint tgtWidth, const uint tgtHeight);
+__global__ void kDotProduct_r(float* a, float* b, float* target, const uint numCols, const uint numElements);
 __global__ void kSetupCurand(curandState *state, unsigned long long seed);
 
 /*

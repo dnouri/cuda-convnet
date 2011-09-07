@@ -25,8 +25,8 @@
  */
 
 #include <iostream>
-#include "../include/layer_kernels.cuh"
-#include "../include/layer.cuh"
+#include <layer_kernels.cuh>
+#include <layer.cuh>
 
 using namespace std;
 
@@ -205,32 +205,16 @@ WeightLayer::WeightLayer(PyObject* paramsDict, bool gradConsumer, bool gradProdu
     Layer(paramsDict, gradConsumer, gradProducer, trans) {
 }
 
-void WeightLayer::addWeights(Weights& w) {
-    _vWeights.push_back(&w);
-}
-
-void WeightLayer::addWeights(WeightList& wl) {
-    for (int i = 0; i < wl.getSize(); i++) {
-        addWeights(wl[i]);
-    }
-}
-
 void WeightLayer::updateWeights(int numCases) {
-    for (vector<Weights*>::iterator i = _vWeights.begin(); i != _vWeights.end(); ++i) {
-        (*i)->update(numCases);
-    }
+    _allWeights.update(numCases);
 }
 
 void WeightLayer::copyToCPU() {
-    for (vector<Weights*>::iterator i = _vWeights.begin(); i != _vWeights.end(); ++i) {
-        (*i)->copyToCPU();
-    }
+    _allWeights.copyToCPU();
 }
 
 void WeightLayer::copyToGPU() {
-    for (vector<Weights*>::iterator i = _vWeights.begin(); i != _vWeights.end(); ++i) {
-        (*i)->copyToGPU();
-    }
+    _allWeights.copyToGPU();
 }
 
 /* 
@@ -254,8 +238,8 @@ FCLayer::FCLayer(PyObject* paramsDict) : WeightLayer(paramsDict, true, true, tru
 
     _neuron = &Neuron::makeNeuron(PyDict_GetItemString(paramsDict, "neuron"));
     
-    addWeights(_weights);
-    addWeights(_biases);
+    _allWeights.addWeights(_weights);
+    _allWeights.addWeights(_biases);
 }
 
 void FCLayer::fpropActs(NVMatrixV& v, PASS_TYPE passType) {
@@ -335,8 +319,8 @@ ConvLayer::ConvLayer(PyObject* paramsDict) : WeightLayer(paramsDict, true, true,
 
     _neuron = &Neuron::makeNeuron(PyDict_GetItemString(paramsDict, "neuron"));
     
-    addWeights(_weights);
-    addWeights(_biases);
+    _allWeights.addWeights(_weights);
+    _allWeights.addWeights(_biases);
 }
 
 void ConvLayer::fpropActs(NVMatrixV& v, PASS_TYPE passType) {

@@ -33,7 +33,7 @@
 #include <iostream>
 #include <algorithm>
 #include <typeinfo>
-#include "../include/nvmatrix.cuh"
+#include <nvmatrix.cuh>
 
 //unsigned int NVMatrix::hostRndMults[NUM_RND_STREAMS];
 bool NVMatrix::rndInitialized = false;

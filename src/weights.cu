@@ -24,6 +24,6 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "../include/weights.cuh"
+#include <weights.cuh>
 
 bool Weights::_autoCopyToGPU = false;

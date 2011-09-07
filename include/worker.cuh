@@ -27,7 +27,7 @@
 #ifndef WORKER_CUH
 #define	WORKER_CUH
 
-#include "ConvNet.cuh"
+#include "convnet.cuh"
 #include "cost.cuh"
 #include "util.cuh"
 #include "data.cuh"

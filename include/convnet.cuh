@@ -27,6 +27,7 @@
 #ifndef CONVNET3
 #define	CONVNET3
 
+#include <vector>
 #include <string>
 #include <cutil_inline.h>
 #include <time.h>
@@ -36,11 +37,11 @@
 #include <thread.h>
 #include <math.h>
 
-#include "../include/layer.cuh"
-#include "../include/util.cuh"
-#include "../include/data.cuh"
-#include "../include/worker.cuh"
-#include "../include/weights.cuh"
+#include "layer.cuh"
+#include "util.cuh"
+#include "data.cuh"
+#include "worker.cuh"
+#include "weights.cuh"
 
 class Worker;
 class WorkResult;

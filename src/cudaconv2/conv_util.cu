@@ -26,9 +26,9 @@
 
 #include <iostream>
 #include <assert.h>
-#include <nvmatrix_kernel.cuh>
+#include <nvmatrix_kernels.cuh>
 #include <nvmatrix.cuh>
-#include "../include/conv_util.cuh"
+#include <conv_util.cuh>
 
 using namespace std;
 

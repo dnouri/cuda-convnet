@@ -24,8 +24,8 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "../include/neuron.cuh"
-#include "../include/util.cuh"
+#include <neuron.cuh>
+#include <util.cuh>
 
 using namespace std;
 

@@ -25,7 +25,7 @@
  */
 
 #include <iostream>
-#include "../include/cost.cuh"
+#include <cost.cuh>
 
 using namespace std;
 

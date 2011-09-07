@@ -24,7 +24,7 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "../include/CudaConv2.cuh"
+#include <cudaconv2.cuh>
 
 /*
  * Block size: 16x16.

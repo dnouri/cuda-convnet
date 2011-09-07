@@ -27,7 +27,7 @@
 #include <vector>
 #include <iostream> 
 #include <string>
-#include "../include/ConvNet.cuh"
+#include <convnet.cuh>
 
 using namespace std;
 
@@ -43,12 +43,12 @@ ConvNet::ConvNet(PyListObject* layerParams, int minibatchSize, int deviceID) : T
     
         for (int i = 0; i < numLayers; i++) {
             PyObject* paramsDict = PyList_GET_ITEM(layerParams, i);
-            string layerType = string(PyString_AS_STRING(PyDict_GetItemString(paramsDict, "type")));
+            string layerType = pyDictGetString(paramsDict, "type");
             
             Layer* l = initLayer(layerType, paramsDict);
             if (l != NULL) {
                 // Connect backward links in graph for this layer
-                intv* inputLayers = getIntV(PyDict_GetItemString(paramsDict, "inputs"));
+                intv* inputLayers = pyDictGetIntV(paramsDict, "inputs");
                 if (inputLayers != NULL) {
                     for (int i = 0; i < inputLayers->size(); i++) {
                         l->addPrev(&getLayer(inputLayers->at(i)));

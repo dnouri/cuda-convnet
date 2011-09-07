@@ -40,7 +40,7 @@
 #include <curand_kernel.h>
 
 #include <matrix.h>
-#include "../include/nvmatrix_kernel.cuh"
+#include "nvmatrix_kernels.cuh"
 
 #ifdef WARNINGS
 #define WARN(msg) printf("WARN: File %s, line %d: %s\n", __FILE__, __LINE__, msg);

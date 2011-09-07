@@ -24,7 +24,7 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "../include/util.cuh"
+#include <util.cuh>
 
 using namespace std;
 
@@ -63,6 +63,10 @@ MatrixV* getMatrixV(PyObject* pyList) {
 
 int pyDictGetInt(PyObject* dict, const char* key) {
     return PyInt_AS_LONG(PyDict_GetItemString(dict, key));
+}
+
+intv* pyDictGetIntV(PyObject* dict, const char* key) {
+    return getIntV(PyDict_GetItemString(dict, key));
 }
 
 string pyDictGetString(PyObject* dict, const char* key) {

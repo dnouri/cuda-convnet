@@ -26,7 +26,7 @@
 
 #include <cutil_inline.h>
 #include <nvmatrix.cuh>
-#include "../include/CudaConv2.cuh"
+#include <cudaconv2.cuh>
 
 /*
  * Block size B_YxB_X. Each block applies B_Y * filtersPerThread filters to B_X * imgsPerThread images.

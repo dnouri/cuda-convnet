@@ -156,7 +156,7 @@ public:
         return _wc;
     }
     
-    bool isUseGrads() {
+    bool isUseGrads() { // is good grammar
         return _useGrads;
     }
 };
@@ -177,17 +177,14 @@ public:
         }
     }
     
-    WeightList(MatrixV& hWeights, MatrixV& hWeightsInc, floatv& epsW, floatv& wc, floatv& mom, bool useGrads) {
-        _initialized = false;
+    WeightList(MatrixV& hWeights, MatrixV& hWeightsInc, floatv& epsW, floatv& wc, floatv& mom, bool useGrads) : _initialized(false) {
         initialize(hWeights, hWeightsInc, epsW, wc, mom, useGrads);
     }
     
-    WeightList() {
-        _initialized = false;
+    WeightList() : _initialized(false) {
     }
     
     void initialize(MatrixV& hWeights, MatrixV& hWeightsInc, floatv& epsW, floatv& wc, floatv& mom, bool useGrads) {
-        assert(!_initialized);
         for (int i = 0; i < hWeights.size(); i++) {
             _weightList.push_back(new Weights(*hWeights[i], *hWeightsInc[i], epsW[i], wc[i], mom[i], useGrads));
         }
@@ -199,11 +196,42 @@ public:
         delete &mom;
     }
     
+    void addWeights(Weights& w) {
+        _weightList.push_back(&w);
+        _initialized = true;
+    }
+    
+    void addWeights(WeightList& wl) {
+        for (int i = 0; i < wl.getSize(); i++) {
+            addWeights(wl[i]);
+        }
+    }
+    
+    void update(int numCases) {
+        assert(_initialized);
+        for (int i = 0; i < getSize(); i++) {
+            _weightList[i]->update(numCases);
+        }
+    }
+
+    void copyToCPU() {
+        assert(_initialized);
+        for (int i = 0; i < getSize(); i++) {
+            _weightList[i]->copyToCPU();
+        }
+    }
+
+    void copyToGPU() {
+        assert(_initialized);
+        for (int i = 0; i < getSize(); i++) {
+            _weightList[i]->copyToGPU();
+        }
+    }
+    
     long unsigned int getSize() {
         assert(_initialized);
         return _weightList.size();
     }
 };
-
 
 #endif	/* WEIGHTS_CUH */
