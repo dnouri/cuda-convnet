@@ -44,7 +44,7 @@
 #include "util.cuh"
 #include "layer_kernels.cuh"
 
-class CostResult;
+class Cost;
 class ConvNet;
 class CostLayer;
 class DataLayer;

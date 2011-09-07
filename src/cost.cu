@@ -31,44 +31,44 @@ using namespace std;
 
 /* 
  * =====================
- * CostResult
+ * Cost
  * =====================
  */
 
-CostResult::CostResult() {
+Cost::Cost() {
 }
 
-CostResult::CostResult(vector<CostLayer*>& costs) {
+Cost::Cost(vector<CostLayer*>& costs) {
     for (vector<CostLayer*>::iterator it = costs.begin(); it != costs.end(); ++it) {
-        _errMap[(*it)->getName()] = &(*it)->getError();
+        _costMap[(*it)->getName()] = &(*it)->getError();
         _costCoeffs[(*it)->getName()] = (*it)->getCoeff();
     }
 }
 
-doublev*& CostResult::operator [](const string s) {
-    return _errMap[s];
+doublev*& Cost::operator [](const string s) {
+    return _costMap[s];
 }
 
-CostMap& CostResult::getCostMap() {
-    return _errMap;
+CostMap& Cost::getCostMap() {
+    return _costMap;
 }
 
-double CostResult::getCost() {
+double Cost::getValue() {
     double val = 0;
-    for (CostMap::iterator it = _errMap.begin(); it != _errMap.end(); ++it) {
+    for (CostMap::iterator it = _costMap.begin(); it != _costMap.end(); ++it) {
         val += _costCoeffs[it->first] * it->second->at(0);
     }
     return val;
 }
 
-CostResult& CostResult::operator += (CostResult& er) {
+Cost& Cost::operator += (Cost& er) {
     CostMap& otherMap = er.getCostMap();
     for (CostMap::const_iterator it = otherMap.begin(); it != otherMap.end(); ++it) {
-        if (_errMap.count(it->first) == 0) {
-            _errMap[it->first] = new doublev();
+        if (_costMap.count(it->first) == 0) {
+            _costMap[it->first] = new doublev();
         }
         
-        vector<double>& myVec = *_errMap[it->first];
+        vector<double>& myVec = *_costMap[it->first];
         vector<double>& otherVec = *otherMap[it->first];
         for (int i = 0; i < otherVec.size(); i++) {
             if (myVec.size() <= i) {
@@ -80,8 +80,8 @@ CostResult& CostResult::operator += (CostResult& er) {
     return *this;
 }
 
-CostResult& CostResult::operator /= (const double v) {
-    for (CostMap::const_iterator it = _errMap.begin(); it != _errMap.end(); ++it) {
+Cost& Cost::operator /= (const double v) {
+    for (CostMap::const_iterator it = _costMap.begin(); it != _costMap.end(); ++it) {
         for (doublev::iterator it2 = it->second->begin(); it2 != it->second->end(); ++it2) {
             *it2 /= v;
         }
@@ -89,8 +89,8 @@ CostResult& CostResult::operator /= (const double v) {
     return *this;
 }
 
-CostResult::~CostResult() {
-    for (CostMap::const_iterator it = _errMap.begin(); it != _errMap.end(); ++it) {
+Cost::~Cost() {
+    for (CostMap::const_iterator it = _costMap.begin(); it != _costMap.end(); ++it) {
         delete it->second;
     }
 }

@@ -214,14 +214,22 @@ void ConvNet::setData(CPUData& data) {
     _dp->setData(data);
 }
 
-CostResult& ConvNet::getError() {
-    return *new CostResult(_costs);
+Cost& ConvNet::getCost() {
+    return *new Cost(_costs);
 }
 
-double ConvNet::getCostFunctionValue() {
-    CostResult& err = getError();
-    double val = err.getCost();
-    delete &err;
+// Same as getCost() but adds results to given cost and returns it
+Cost& ConvNet::getCost(Cost& cost) {
+    Cost& newCost = getCost();
+    cost += newCost;
+    delete &newCost;
+    return cost;
+}
+
+double ConvNet::getCostValue() {
+    Cost& cost = getCost();
+    double val = cost.getValue();
+    delete &cost;
     return val;
 }
 
@@ -232,7 +240,7 @@ void ConvNet::checkGradients() {
     _numFailures = 0;
     _numTests = 0;
     fprop(0, PASS_GC);
-    _baseErr = getCostFunctionValue();
+    _baseErr = getCostValue();
     bprop(PASS_GC);
     
     for (vector<Layer*>::iterator it = _layers.begin(); it != _layers.end(); ++it) {
@@ -266,7 +274,7 @@ bool ConvNet::checkGradientsW(const string& name, float eps, Weights& weights) {
             weights.getW().copyFromHost(weightsCPU);
             weightsCPU(i,j) = v;
             fprop(PASS_GC);
-            double err = getCostFunctionValue();
+            double err = getCostValue();
             numGrads(i,j) = (err - _baseErr) / (_data->getNumCases() * eps);
             if (isnan(numGrads(i,j)) || isinf(numGrads(i,j))) {
                 cout << "Numerical computation produced nan or inf when checking '" << name << "': " << numGrads(i,j) << endl;

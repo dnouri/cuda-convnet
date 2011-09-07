@@ -33,19 +33,19 @@
 #include "data.cuh"
 
 class ConvNet;
-class CostResult;
+class Cost;
 
 class WorkResult {
 public:
     enum RESULTS {BATCH_DONE, SYNC_DONE};
 protected:
     WorkResult::RESULTS _resultType;
-    CostResult* _results;
+    Cost* _results;
 public:
-    WorkResult(WorkResult::RESULTS resultType, CostResult& results);
+    WorkResult(WorkResult::RESULTS resultType, Cost& results);
     WorkResult(WorkResult::RESULTS resultType);
     virtual ~WorkResult();
-    CostResult& getResults() const;
+    Cost& getResults() const;
     WorkResult::RESULTS getResultType() const;
 };
 
@@ -55,7 +55,6 @@ protected:
 public:
     Worker(ConvNet& convNet);
     virtual void run() = 0;
-    static void incError(CostResult& src, CostResult& tgt);
 };
 
 class TrainingWorker : public Worker {

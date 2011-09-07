@@ -94,8 +94,9 @@ public:
 
     bool checkGradientsW(const std::string& name, float eps, Weights& weights); 
     void checkGradients();
-    CostResult& getError();
-    double getCostFunctionValue();
+    Cost& getCost();
+    Cost& getCost(Cost& cost);
+    double getCostValue();
 };
 
 #endif	/* CONVNET3 */

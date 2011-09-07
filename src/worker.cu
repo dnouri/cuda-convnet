@@ -34,7 +34,7 @@ using namespace std;
  * WorkResult
  * ====================
  */
-WorkResult::WorkResult(WorkResult::RESULTS resultType, CostResult& results) : _resultType(resultType), _results(&results) {
+WorkResult::WorkResult(WorkResult::RESULTS resultType, Cost& results) : _resultType(resultType), _results(&results) {
 }
 
 WorkResult::WorkResult(WorkResult::RESULTS resultType) : _resultType(resultType), _results(NULL) {
@@ -44,7 +44,7 @@ WorkResult::~WorkResult() {
     delete _results; // delete NULL is ok
 }
 
-CostResult& WorkResult::getResults() const {
+Cost& WorkResult::getResults() const {
     return *_results;
 }
 
@@ -60,11 +60,6 @@ WorkResult::RESULTS WorkResult::getResultType() const {
 Worker::Worker(ConvNet& convNet) : _convNet(&convNet) {
 }
 
-void Worker::incError(CostResult& src, CostResult& tgt) {
-    tgt += src;
-    delete &src;
-}
-
 /* 
  * ====================
  * TrainingWorker
@@ -78,10 +73,10 @@ TrainingWorker::TrainingWorker(ConvNet& convNet, CPUData& data, bool test)
 // the original CPU thread, which is not the one with GPU access.
 void TrainingWorker::run() {
     _convNet->setData(*_data);
-    CostResult& batchCost = *new CostResult();
+    Cost& batchCost = *new Cost();
     for (int i = 0; i < _convNet->getDataProvider().getNumMinibatches(); i++) {
         _convNet->fprop(i, _test ? PASS_TEST : PASS_TRAIN);
-        Worker::incError(_convNet->getError(), batchCost);
+        _convNet->getCost(batchCost);
         
         if (!_test) {
             _convNet->bprop(PASS_TRAIN);
@@ -136,7 +131,7 @@ void MultiviewTestWorker::run() {
     _convNet->setData(*_data);
     DataProvider& dp = _convNet->getDataProvider();
     Layer& logregLayer = _convNet->getLayer(_logregIdx);
-    CostResult& batchCost = *new CostResult();
+    Cost& batchCost = *new Cost();
     
     int numCasesReal = dp.getNumCases() / _numViews;
     int numMiniReal = DIVUP(numCasesReal, dp.getMinibatchSize());
@@ -159,7 +154,7 @@ void MultiviewTestWorker::run() {
         
         logregLayer.fprop(logregInput, PASS_TEST);
         
-        Worker::incError(_convNet->getError(), batchCost);
+        _convNet->getCost(batchCost);
     }
     cudaThreadSynchronize();
 

@@ -151,7 +151,7 @@ PyObject* finishBatch(PyObject *self, PyObject *args) {
     assert(res != NULL);
     assert(res->getResultType() == WorkResult::BATCH_DONE);
     
-    CostResult& cost = res->getResults();
+    Cost& cost = res->getResults();
     PyObject* dict = PyDict_New();
     CostMap& costMap = cost.getCostMap();
     for (CostMap::const_iterator it = costMap.begin(); it != costMap.end(); ++it) {
