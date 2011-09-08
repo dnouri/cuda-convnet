@@ -240,7 +240,7 @@ public:
 class CostLayer : public Layer {
 protected:
     float _coeff;
-    doublev _err;
+    doublev _costv;
 public:
     CostLayer(PyObject* paramsDict, bool gradConsumer, bool gradProducer, bool trans);
     void bprop(PASS_TYPE passType); 

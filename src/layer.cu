@@ -567,11 +567,10 @@ void CostLayer::bprop(PASS_TYPE passType) {
 
 doublev& CostLayer::getCost() {
     doublev& v = *new doublev();
-    v.insert(v.begin(), _err.begin(), _err.end());
+    v.insert(v.begin(), _costv.begin(), _costv.end());
     return v;
 }
 
-// TODO: make this a factory object
 CostLayer& CostLayer::makeCostLayer(string& type, PyObject* paramsDict) {
     if (type == "cost.logreg") {
         return *new LogregCostLayer(paramsDict);
@@ -588,15 +587,15 @@ LogregCostLayer::LogregCostLayer(PyObject* paramsDict) : CostLayer(paramsDict, t
 }
 
 void LogregCostLayer::fpropActs(NVMatrixV& v, PASS_TYPE passType) {
-    _err.clear();
     NVMatrix& labels = *v[0];
     NVMatrix& probs = *v[1];
     int numCases = labels.getNumElements();
     
     NVMatrix& trueLabelLogProbs = _acts, correctProbs;
     computeLogregCost(labels, probs, trueLabelLogProbs, correctProbs);
-    _err.push_back(-trueLabelLogProbs.sum());
-    _err.push_back(numCases - correctProbs.sum());
+    _costv.clear();
+    _costv.push_back(-trueLabelLogProbs.sum());
+    _costv.push_back(numCases - correctProbs.sum());
 }
 
 void LogregCostLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType) {
