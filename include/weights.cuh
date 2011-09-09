@@ -41,11 +41,11 @@ using namespace std;
 class Weights {
 private:
     Matrix* _hWeights, *_hWeightsInc;
-    NVMatrix _weights, _weightsInc, _weightsGrads;
+    NVMatrix _weights, _weightsInc, _weightsGrad;
     
     float _epsW, _wc, _mom;
     
-    bool _initialized, _onGPU, _useGrads;
+    bool _initialized, _onGPU, _useGrad;
     static bool _autoCopyToGPU;
  
 public:
@@ -53,12 +53,12 @@ public:
         return getW();
     }
     
-    Weights(Matrix& hWeights, Matrix& hWeightsInc, float epsW, float wc, float mom, bool useGrads) {
+    Weights(Matrix& hWeights, Matrix& hWeightsInc, float epsW, float wc, float mom, bool useGrad) {
         _initialized = false;
-        initialize(hWeights, hWeightsInc, epsW, wc, mom, useGrads);
+        initialize(hWeights, hWeightsInc, epsW, wc, mom, useGrad);
     }
     
-    Weights() : _initialized(false), _onGPU(false), _useGrads(true) {
+    Weights() : _initialized(false), _onGPU(false), _useGrad(true) {
     }
     
     ~Weights() {
@@ -66,7 +66,7 @@ public:
         delete _hWeightsInc;
     }
     
-    void initialize(Matrix& hWeights, Matrix& hWeightsInc, float epsW, float wc, float mom, bool useGrads) {
+    void initialize(Matrix& hWeights, Matrix& hWeightsInc, float epsW, float wc, float mom, bool useGrad) {
         assert(!_initialized);
         this->_hWeights = &hWeights;
         this->_hWeightsInc = &hWeightsInc;
@@ -74,7 +74,7 @@ public:
         this->_wc = wc;
         this->_mom = mom;
         this->_onGPU = false;
-        this->_useGrads = useGrads;
+        this->_useGrad = useGrad;
         if (_autoCopyToGPU) {
             copyToGPU();
         }
@@ -95,9 +95,9 @@ public:
         return _weightsInc;
     }
         
-    NVMatrix& getGrads() {
+    NVMatrix& getGrad() {
         assert(_onGPU);
-        return _useGrads ? _weightsGrads : _weightsInc;
+        return _useGrad ? _weightsGrad : _weightsInc;
     }
     
     Matrix& getCPUW() {
@@ -135,8 +135,8 @@ public:
     
     void update(int numCases) {
         assert(_onGPU);
-        if (_useGrads) {
-            _weightsInc.add(_weightsGrads, _mom, _epsW / numCases);
+        if (_useGrad) {
+            _weightsInc.add(_weightsGrad, _mom, _epsW / numCases);
         }
         if (_wc > 0) {
             _weightsInc.add(_weights, -_wc * _epsW);
@@ -157,7 +157,7 @@ public:
     }
     
     bool isUseGrads() { // is good grammar
-        return _useGrads;
+        return _useGrad;
     }
 };
 

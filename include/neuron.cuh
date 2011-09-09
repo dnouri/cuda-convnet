@@ -42,7 +42,7 @@ protected:
 public:
     Neuron();
     virtual void activate(NVMatrix& input);
-    virtual void computeInputGrads(NVMatrix& actGrads);
+    virtual void computeInputGrad(NVMatrix& actGrads);
     static Neuron& makeNeuron(PyObject* neuronDict);
 };
 

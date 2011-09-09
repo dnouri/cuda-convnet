@@ -259,10 +259,10 @@ void ConvNet::checkGradients() {
  * name: weight matrix name
  * eps: finite difference step
  */
-bool ConvNet::checkGradientsW(const string& name, float eps, Weights& weights) {
-    Matrix numGrads(weights.getNumRows(), weights.getNumCols());
-    Matrix diff(numGrads);
-    numGrads.apply(Matrix::ZERO);
+bool ConvNet::checkGradient(const string& name, float eps, Weights& weights) {
+    Matrix numGrad(weights.getNumRows(), weights.getNumCols());
+    Matrix diff(numGrad);
+    numGrad.apply(Matrix::ZERO);
     Matrix weightsCPU;
 
     weights.getW().copyToHost(weightsCPU, true);
@@ -275,9 +275,9 @@ bool ConvNet::checkGradientsW(const string& name, float eps, Weights& weights) {
             weightsCPU(i,j) = v;
             fprop(PASS_GC);
             double err = getCostValue();
-            numGrads(i,j) = (err - _baseErr) / (_data->getNumCases() * eps);
-            if (isnan(numGrads(i,j)) || isinf(numGrads(i,j))) {
-                cout << "Numerical computation produced nan or inf when checking '" << name << "': " << numGrads(i,j) << endl;
+            numGrad(i,j) = (err - _baseErr) / (_data->getNumCases() * eps);
+            if (isnan(numGrad(i,j)) || isinf(numGrad(i,j))) {
+                cout << "Numerical computation produced nan or inf when checking '" << name << "': " << numGrad(i,j) << endl;
                 cout << "Consider reducing the sizes of the weights or finite difference steps." << endl;
                 cout << "Exiting." << endl;
                 exit(1);
@@ -286,12 +286,12 @@ bool ConvNet::checkGradientsW(const string& name, float eps, Weights& weights) {
         }
     }
 
-    Matrix gradsCPU;
-    weights.getGrads().scale(-1.0 / _data->getNumCases());
-    weights.getGrads().copyToHost(gradsCPU, true);
-    float analNorm = gradsCPU.norm();
-    float numNorm = numGrads.norm();
-    numGrads.subtract(gradsCPU, diff);
+    Matrix gradCPU;
+    weights.getGrad().scale(-1.0 / _data->getNumCases());
+    weights.getGrad().copyToHost(gradCPU, true);
+    float analNorm = gradCPU.norm();
+    float numNorm = numGrad.norm();
+    numGrad.subtract(gradCPU, diff);
     float relErr = diff.norm() / analNorm;
     bool fail = relErr >= GC_REL_ERR_THRESH;
     if (fail || !GC_SUPPRESS_PASSES) {
@@ -299,9 +299,9 @@ bool ConvNet::checkGradientsW(const string& name, float eps, Weights& weights) {
         printf("(%s) %s GRADIENT CHECK\n", fail ? "****FAIL****" : "PASS", name.c_str());
         cout << "========================" << endl;
         cout << "Analytic:" << endl;
-        gradsCPU.print(6,4);
+        gradCPU.print(6,4);
         cout << "Numeric:" << endl;
-        numGrads.print(6,4);
+        numGrad.print(6,4);
         printf("Analytic norm: %e\n", analNorm);
         printf("Numeric norm:  %e\n", numNorm);
         printf("Relative error: %e\n", relErr);

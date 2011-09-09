@@ -43,7 +43,7 @@ using namespace std;
  * while increasing memory consumption.
  */
 bool Layer::_saveActs = true;
-bool Layer::_saveActGrads = true;
+bool Layer::_saveActsGrad = true;
 
 Layer::Layer(PyObject* paramsDict, bool gradConsumer, bool gradProducer, bool trans) : 
              _gradConsumer(gradConsumer), _gradProducer(gradProducer), _trans(trans) {
@@ -60,8 +60,8 @@ void Layer::fpropNext(PASS_TYPE passType) {
 }
 
 void Layer::truncBwdActs() {
-    if (!_saveActGrads) { 
-        _actGrads.truncate();
+    if (!_saveActsGrad) { 
+        _actsGrad.truncate();
     }
     if (!_saveActs) {
         _acts.truncate();
@@ -101,7 +101,7 @@ void Layer::fprop(NVMatrixV& v, PASS_TYPE passType) {
 void Layer::bprop(PASS_TYPE passType) {
     if (_rcvdBInputs == _numGradProducersNext) {
         _rcvdBInputs++; // avoid doing bprop computation twice
-        bprop(_actGrads, passType);
+        bprop(_actsGrad, passType);
     }
 }
 
@@ -109,7 +109,7 @@ void Layer::bprop(NVMatrix& v, PASS_TYPE passType) {
     v.transpose(_trans);
     for (int i = 0; i < _prev.size(); i++) {
         _prev[i]->getActs().transpose(_trans);
-        _prev[i]->getActGrads().transpose(_trans);
+        _prev[i]->getActsGrad().transpose(_trans);
     }
     _acts.transpose(_trans);
     
@@ -192,8 +192,8 @@ NVMatrix& Layer::getActs() {
     return _acts;
 }
 
-NVMatrix& Layer::getActGrads() {
-    return _actGrads;
+NVMatrix& Layer::getActsGrad() {
+    return _actsGrad;
 }
 
 /* 
@@ -253,21 +253,21 @@ void FCLayer::fpropActs(NVMatrixV& v, PASS_TYPE passType) {
 }
 
 void FCLayer::bpropCommon(NVMatrix& v, PASS_TYPE passType) {
-    _neuron->computeInputGrads(v);
+    _neuron->computeInputGrad(v);
 }
 
 void FCLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType) {
     NVMatrix& weights_T = _weights[inpIdx].getW().getTranspose();
     if (scaleTargets == 0) {
-        v.rightMult(weights_T, _prev[inpIdx]->getActGrads());
+        v.rightMult(weights_T, _prev[inpIdx]->getActsGrad());
     } else {
-        _prev[inpIdx]->getActGrads().addProduct(v, weights_T);
+        _prev[inpIdx]->getActsGrad().addProduct(v, weights_T);
     }
     delete &weights_T;
 }
 
 void FCLayer::bpropWeights(NVMatrix& v, PASS_TYPE passType) {
-    v.sum(0, _biases.getGrads());
+    v.sum(0, _biases.getGrad());
     for (int i = 0; i < _prev.size(); i++) {
         NVMatrix& prevActs_T = _prev[i]->getActs().getTranspose();
         _weights[i].getInc().addProduct(prevActs_T, v,  (passType != PASS_GC) * _weights[i].getMom(),
@@ -278,9 +278,9 @@ void FCLayer::bpropWeights(NVMatrix& v, PASS_TYPE passType) {
 
 void FCLayer::checkGradients(ConvNet* convNet) {
     for (int i = 0; i < _weights.getSize(); i++) {
-        convNet->checkGradientsW(_name + " weights[" + tostr(i) + "]", 0.1, _weights[i]);
+        convNet->checkGradient(_name + " weights[" + tostr(i) + "]", 0.1, _weights[i]);
     }
-    convNet->checkGradientsW(_name + " biases", 0.01, _biases);
+    convNet->checkGradient(_name + " biases", 0.01, _biases);
 }
 
 /* 
@@ -336,41 +336,41 @@ void ConvLayer::fpropActs(NVMatrixV& v, PASS_TYPE passType) {
 }
 
 void ConvLayer::bpropCommon(NVMatrix& v, PASS_TYPE passType) {
-    _neuron->computeInputGrads(v);
+    _neuron->computeInputGrad(v);
 }
 
 void ConvLayer::bpropWeights(NVMatrix& v, PASS_TYPE passType) {
     if (_sharedBiases) {
         v.reshape(_numFilters, v.getNumElements() / _numFilters);
-        v.sum(1, _biases.getGrads());
+        v.sum(1, _biases.getGrad());
         v.reshape(_numFilters * _modules, v.getNumElements() / (_numFilters * _modules));
     } else {
-        v.sum(1, _biases.getGrads());
+        v.sum(1, _biases.getGrad());
     }
     if (_partialSum > 0 && _partialSum < _modules) {
-        convWeightActs(_prev[0]->getActs(), v, _weightGradsTmp, _modulesX, _filterSize, _padding, _stride, _channels, 0, 1, _partialSum);
-        _weightGradsTmp.reshape(_modules / _partialSum, _channels * _filterPixels * _numFilters);
-        _weightGradsTmp.sum(0, _weights.getGrads());
-        _weights.getGrads().reshape(_channels * _filterPixels, _numFilters);
+        convWeightActs(_prev[0]->getActs(), v, _weightGradTmp, _modulesX, _filterSize, _padding, _stride, _channels, 0, 1, _partialSum);
+        _weightGradTmp.reshape(_modules / _partialSum, _channels * _filterPixels * _numFilters);
+        _weightGradTmp.sum(0, _weights.getGrad());
+        _weights.getGrad().reshape(_channels * _filterPixels, _numFilters);
     } else {
-        convWeightActs(_prev[0]->getActs(), v, _weights.getGrads(), _modulesX, _filterSize, _padding, _stride, _channels);
+        convWeightActs(_prev[0]->getActs(), v, _weights.getGrad(), _modulesX, _filterSize, _padding, _stride, _channels);
     }
 }
 
 void ConvLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType) {
-    convImgActs(v, *_weights, _prev[inpIdx]->getActGrads(), _imgSize, _padding, _stride, _channels, scaleTargets, 1);
+    convImgActs(v, *_weights, _prev[inpIdx]->getActsGrad(), _imgSize, _padding, _stride, _channels, scaleTargets, 1);
 }
 
 void ConvLayer::truncBwdActs() {
     Layer::truncBwdActs();
-    if (!_saveActGrads) {
-        _weightGradsTmp.truncate();
+    if (!_saveActsGrad) {
+        _weightGradTmp.truncate();
     }
 }
 
 void ConvLayer::checkGradients(ConvNet* convNet) {
-    convNet->checkGradientsW(_name + " weights", 0.01, _weights);
-    convNet->checkGradientsW(_name + " biases", 0.02, _biases);
+    convNet->checkGradient(_name + " weights", 0.01, _weights);
+    convNet->checkGradient(_name + " biases", 0.02, _biases);
 }
 
 /* 
@@ -386,9 +386,9 @@ void SoftmaxLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_T
     if (doLogregGrad) {
         NVMatrix& labels = _next[0]->getPrev()[0]->getActs();
         float gradCoeff = dynamic_cast<CostLayer*>(_next[0])->getCoeff();
-        computeLogregSoftmaxGrads(labels, _acts, _prev[inpIdx]->getActGrads(), scaleTargets == 1, gradCoeff);
+        computeLogregSoftmaxGrad(labels, _acts, _prev[inpIdx]->getActsGrad(), scaleTargets == 1, gradCoeff);
     } else {
-        computeSoftmaxGrads(_acts, v, _prev[inpIdx]->getActGrads(), scaleTargets == 1);
+        computeSoftmaxGrad(_acts, v, _prev[inpIdx]->getActsGrad(), scaleTargets == 1);
     }
 }
 
@@ -470,7 +470,7 @@ void AvgPoolLayer::fpropActs(NVMatrixV& v, PASS_TYPE passType) {
 }
 
 void AvgPoolLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType) {
-    convLocalAvgUndo(v, _prev[inpIdx]->getActGrads(), _sizeX, _start, _stride, _outputsX, _imgSize, scaleTargets, 1);
+    convLocalAvgUndo(v, _prev[inpIdx]->getActsGrad(), _sizeX, _start, _stride, _outputsX, _imgSize, scaleTargets, 1);
 }
 
 /* 
@@ -486,7 +486,7 @@ void MaxPoolLayer::fpropActs(NVMatrixV& v, PASS_TYPE passType) {
 }
 
 void MaxPoolLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType) {
-    convLocalMaxUndo(_prev[inpIdx]->getActs(), v, _acts, _prev[inpIdx]->getActGrads(), _sizeX, _start, _stride, _outputsX, scaleTargets, 1);
+    convLocalMaxUndo(_prev[inpIdx]->getActs(), v, _acts, _prev[inpIdx]->getActsGrad(), _sizeX, _start, _stride, _outputsX, scaleTargets, 1);
 }
 
 /* 
@@ -507,7 +507,7 @@ void ResponseNormLayer::fpropActs(NVMatrixV& v, PASS_TYPE passType) {
 }
 
 void ResponseNormLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType) {
-    convResponseNormUndo(v, _denoms, _prev[inpIdx]->getActs(), _acts, _prev[inpIdx]->getActGrads(), _channels, _sizeX, _scale, _pow, scaleTargets, 1);
+    convResponseNormUndo(v, _denoms, _prev[inpIdx]->getActs(), _acts, _prev[inpIdx]->getActsGrad(), _channels, _sizeX, _scale, _pow, scaleTargets, 1);
 }
 
 void ResponseNormLayer::truncBwdActs() {
@@ -534,7 +534,7 @@ void ContrastNormLayer::fpropActs(NVMatrixV& v, PASS_TYPE passType) {
 }
 
 void ContrastNormLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType) {
-    convContrastNormUndo(v, _denoms, _meanDiffs, _acts, _prev[inpIdx]->getActGrads(), _channels, _sizeX, _scale, _pow, scaleTargets, 1);
+    convContrastNormUndo(v, _denoms, _meanDiffs, _acts, _prev[inpIdx]->getActsGrad(), _channels, _sizeX, _scale, _pow, scaleTargets, 1);
 }
 
 void ContrastNormLayer::truncBwdActs() {
@@ -601,11 +601,11 @@ void LogregCostLayer::fpropActs(NVMatrixV& v, PASS_TYPE passType) {
 void LogregCostLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType) {
     NVMatrix& labels = _prev[0]->getActs();
     NVMatrix& probs = _prev[inpIdx]->getActs();
-    NVMatrix& target = _prev[inpIdx]->getActGrads();
+    NVMatrix& target = _prev[inpIdx]->getActsGrad();
     // Numerical stability optimization: if the layer below me is a softmax layer, let it handle
     // the entire gradient computation to avoid multiplying and dividing by a near-zero quantity.
     bool doWork = _prev[inpIdx]->getNext().size() > 1 || _prev[inpIdx]->getType() != "softmax";
     if (doWork) {
-        computeLogregGrads(labels, probs, target, scaleTargets == 1, _coeff);
+        computeLogregGrad(labels, probs, target, scaleTargets == 1, _coeff);
     }
 }

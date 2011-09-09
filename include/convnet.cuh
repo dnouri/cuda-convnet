@@ -93,7 +93,7 @@ public:
     void fprop(int miniIdx, PASS_TYPE passType);
     void fprop(GPUData& data, PASS_TYPE passType);
 
-    bool checkGradientsW(const std::string& name, float eps, Weights& weights); 
+    bool checkGradient(const std::string& name, float eps, Weights& weights); 
     void checkGradients();
     Cost& getCost();
     Cost& getCost(Cost& cost);

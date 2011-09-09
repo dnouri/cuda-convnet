@@ -56,7 +56,7 @@ class Layer {
 protected:
     std::vector<Layer*> _prev, _next;
     int _rcvdFInputs, _rcvdBInputs;
-    NVMatrix _acts, _actGrads; // Activities and activity gradients in this layer
+    NVMatrix _acts, _actsGrad; // Activities and activity gradients in this layer
     bool _gradConsumer, _gradProducer, _trans;
     int _numGradProducersNext;
     std::string _name, _type;
@@ -73,7 +73,7 @@ protected:
         // do nothing if this layer has no weights
     }
 public:    
-    static bool _saveActGrads, _saveActs;
+    static bool _saveActsGrad, _saveActs;
     
     Layer(PyObject* paramsDict, bool gradConsumer, bool gradProducer, bool trans);
     
@@ -103,7 +103,7 @@ public:
     std::vector<Layer*>& getPrev();
     std::vector<Layer*>& getNext();
     NVMatrix& getActs();
-    NVMatrix& getActGrads();
+    NVMatrix& getActsGrad();
     
     virtual void copyToCPU() {
         // do nothing if this layer has no weights
@@ -172,7 +172,7 @@ private:
     int _partialSum;
     int _numFilters;
     bool _sharedBiases;
-    NVMatrix _weightGradsTmp;
+    NVMatrix _weightGradTmp;
 protected:
     void fpropActs(NVMatrixV& v, PASS_TYPE passType);
     void bpropCommon(NVMatrix& v, PASS_TYPE passType);

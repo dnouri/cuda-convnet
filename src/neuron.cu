@@ -48,7 +48,7 @@ void Neuron::activate(NVMatrix& input) {
     _activate(input);
 }
 
-void Neuron::computeInputGrads(NVMatrix& actGrads) {
+void Neuron::computeInputGrad(NVMatrix& actGrads) {
     assert(_activated);
     _computeInputGrads(actGrads);
 }

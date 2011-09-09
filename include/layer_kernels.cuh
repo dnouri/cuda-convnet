@@ -30,19 +30,19 @@
 #include <cutil_inline.h>
 #include <nvmatrix.cuh>
 
-#define LOGREG_GRADS_THREADS_X      32
-#define LOGREG_GRADS_THREADS_Y      4
+#define LOGREG_GRAD_THREADS_X      32
+#define LOGREG_GRAD_THREADS_Y      4
 
 #define LOGREG_ERR_THREADS_X        128
 #define LOGREG_ERR_THREADS_Y        1
 
 void computeLogregCost(NVMatrix& labels, NVMatrix& probs, NVMatrix& labelLogProbs_out, NVMatrix& correctProbs_out);
-void computeLogregGrads(NVMatrix& labels, NVMatrix& probs, NVMatrix& target, bool add, float coeff);
-void computeSoftmaxGrads(NVMatrix& acts, NVMatrix& actGrads, NVMatrix& target, bool add);
+void computeLogregGrad(NVMatrix& labels, NVMatrix& probs, NVMatrix& target, bool add, float coeff);
+void computeSoftmaxGrad(NVMatrix& acts, NVMatrix& actsGrad, NVMatrix& target, bool add);
 
-// Numerical stability optimization: this routine combines computeLogregGrads with computeSoftmaxGrads
+// Numerical stability optimization: this routine combines computeLogregGrad with computeSoftmaxGrad
 // to avoi dividing and then multiplying by quantities that may be near zero.
-void computeLogregSoftmaxGrads(NVMatrix& labels, NVMatrix& probs, NVMatrix& target, bool add, float coeff);
+void computeLogregSoftmaxGrad(NVMatrix& labels, NVMatrix& probs, NVMatrix& target, bool add, float coeff);
 
 #endif	/* LAYER_KERNELS_CUH */
 
