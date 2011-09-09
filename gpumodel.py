@@ -250,7 +250,7 @@ class IGPUModel:
         pickle(checkpoint_file_full_path, dic,compress=self.zip_save)
         
         for f in sorted(os.listdir(checkpoint_dir), key=alphanum_key):
-            if sum(os.path.getsize(os.path.join(checkpoint_dir, f2)) for f2 in os.listdir(checkpoint_dir)) > self.max_filesize_mb*1024*1024 and f !=  checkpoint_file:
+            if sum(os.path.getsize(os.path.join(checkpoint_dir, f2)) for f2 in os.listdir(checkpoint_dir)) > self.max_filesize_mb*1024*1024 and f != checkpoint_file:
                 os.remove(os.path.join(checkpoint_dir, f))
             else:
                 break
@@ -260,7 +260,7 @@ class IGPUModel:
         if os.path.isdir(load_dir):
             return unpickle(os.path.join(load_dir, sorted(os.listdir(load_dir), key=alphanum_key)[-1]))
         return unpickle(load_dir)
-    
+
     @staticmethod
     def get_options_parser():
         op = OptionsParser()
@@ -294,7 +294,7 @@ class IGPUModel:
             self.device_ids = [get_gpu_lock() for i in range(self.op.get_value('num_gpus'))]
         if GPU_LOCK_NO_LOCK in self.device_ids:
             print "Not enough free GPUs!"
-            sys.exit();
+            sys.exit()
         
     @staticmethod
     def parse_options(op):
@@ -312,6 +312,9 @@ class IGPUModel:
             print e
             op.print_usage()
         except OptionException, e:
+            print e
+        except UnpickleError, e:
+            print "Error loading checkpoint:"
             print e
         sys.exit()
         

@@ -38,11 +38,11 @@ class Neuron {
 protected:
     bool _activated;
     virtual void _activate(NVMatrix& input);
-    virtual void _computeInputGrads(NVMatrix& actGrads);
+    virtual void _computeInputGrad(NVMatrix& actGrad);
 public:
     Neuron();
     virtual void activate(NVMatrix& input);
-    virtual void computeInputGrad(NVMatrix& actGrads);
+    virtual void computeInputGrad(NVMatrix& actGrad);
     static Neuron& makeNeuron(PyObject* neuronDict);
 };
 
@@ -53,15 +53,15 @@ class LogisticNeuron : public Neuron {
 public:
     class LogisticGradientOperator {
     public:
-        __device__ float operator()(float unitActGrads, float unitActs) const  {
-            return unitActGrads * unitActs * (1 - unitActs); 
+        __device__ float operator()(float unitActGrad, float unitAct) const  {
+            return unitActGrad * unitAct * (1 - unitAct); 
         }
     };
 protected:
     NVMatrix* _acts; // Logistic neuron must remember activities for gradient computation
 
     void _activate(NVMatrix& input);
-    void _computeInputGrads(NVMatrix& actGrads);
+    void _computeInputGrad(NVMatrix& actGrad);
 };
 
 /*
@@ -78,15 +78,15 @@ public:
 
     class ReluGradientOperator {
     public:
-        __device__ float operator()(float unitActGrads, float unitActs) const  {
-            return unitActGrads * (unitActs > 0); 
+        __device__ float operator()(float unitActGrad, float unitAct) const  {
+            return unitActGrad * (unitAct > 0); 
         }
     };
 protected:
     NVMatrix* _acts; // Relu neuron must remember activities for gradient computation
 
     void _activate(NVMatrix& input);
-    void _computeInputGrads(NVMatrix& actGrads);
+    void _computeInputGrad(NVMatrix& actGrad);
 };
 
 /*
@@ -96,15 +96,15 @@ class AbsNeuron : public Neuron {
 public:
     class AbsGradientOperator {
     public:
-        __device__ float operator()(float unitActGrads, float unitInputs) const  {
-            return unitActGrads * (unitInputs > 0 ? 1 : -1); 
+        __device__ float operator()(float unitActGrad, float unitInput) const  {
+            return unitActGrad * (unitInput > 0 ? 1 : -1); 
         }
     };
 protected:
     NVMatrix _input; // Abs neuron must remember input for gradient computation
 
     void _activate(NVMatrix& input);
-    void _computeInputGrads(NVMatrix& actGrads);
+    void _computeInputGrad(NVMatrix& actGrad);
 };
 
 /*
@@ -129,9 +129,9 @@ public:
     public:
         TanhGradientOperator(float a, float b) : _n4ab(-4*a*b), _a(a) {
         }
-        __device__ float operator()(float unitActGrads, float unitActs) const  {
-            const float t = (1 - __fdividef(unitActs, _a)) / 2;
-            return unitActGrads * _n4ab * (t * (t - 1));
+        __device__ float operator()(float unitActGrad, float unitAct) const  {
+            const float t = (1 - __fdividef(unitAct, _a)) / 2;
+            return unitActGrad * _n4ab * (t * (t - 1));
         }
     };
     
@@ -141,7 +141,7 @@ protected:
     float _a, _b;
 
     void _activate(NVMatrix& input);
-    void _computeInputGrads(NVMatrix& actGrads);
+    void _computeInputGrad(NVMatrix& actGrad);
 };
 
 /*
@@ -166,7 +166,7 @@ protected:
     float _a, _b;
 
     void _activate(NVMatrix& input);
-    void _computeInputGrads(NVMatrix& actGrads);
+    void _computeInputGrad(NVMatrix& actGrad);
 };
 
 /*
@@ -185,19 +185,19 @@ public:
 
     class SoftReluGradientOperator {
     public:
-        __device__ float operator()(float unitActGrads, float unitInputs) const  {
-            if (unitInputs > 4) {
-                return unitActGrads;
+        __device__ float operator()(float unitActGrad, float unitInput) const  {
+            if (unitInput > 4) {
+                return unitActGrad;
             }
-            const float f = __expf(unitInputs);
-            return unitActGrads * __fdividef(f, 1 + f); 
+            const float f = __expf(unitInput);
+            return unitActGrad * __fdividef(f, 1 + f); 
         }
     };
 protected:
     NVMatrix _input;
 
     void _activate(NVMatrix& input);
-    void _computeInputGrads(NVMatrix& actGrads);
+    void _computeInputGrad(NVMatrix& actGrad);
 };
 #endif	/* NEURONS_CUH */
 

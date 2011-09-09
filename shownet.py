@@ -24,7 +24,7 @@
 
 import numpy
 import sys
-from getopt import getopt
+import getopt as opt
 from util import *
 from math import sqrt, ceil, floor
 import os
@@ -38,6 +38,9 @@ except:
 
 FILTERS_PER_ROW = 16
 MAX_FILTERS = FILTERS_PER_ROW * 16
+
+class ShowNetError(Exception):
+    pass
 
 def draw_filters(filters, filter_start, fignum, _title, num_filters, combine_chans):
     num_colors = filters.shape[0]
@@ -92,66 +95,76 @@ if __name__ == "__main__":
         print_usage()
         sys.exit(0)
 
-    (options, args) = getopt(sys.argv[1:], "f:l:e:c:i:o")
-    options = dict(options)
-
-    net_file = options["-f"]
-    err_name = options["-e"] if "-e" in options else None
-    layer_name = options["-l"] if "-l" in options else None
+    try:
+        (options, args) = opt.getopt(sys.argv[1:], "f:l:e:c:i:o")
+        options = dict(options)
     
-    dic = IGPUModel.load_checkpoint(net_file)
+        net_file = options["-f"]
+        err_name = options["-e"] if "-e" in options else None
+        layer_name = options["-l"] if "-l" in options else None
 
-    dic["op"].print_values()
-    dic.update(dic["model_state"])
-    dic.update(dict((v.name, v.value) for v in dic["op"].options.itervalues()))
-
-    # Plot error
-    if err_name:
-        train_errors = [o[err_name][0] for o in dic["train_outputs"]]
-        test_errors = [o[err_name][0] for o in dic["test_outputs"]]
-        testing_freq = dic["testing_freq"]
-
-        numbatches = len(dic["train_batch_range"])
-        test_errors = numpy.row_stack(test_errors)
-        test_errors = numpy.tile(test_errors, (1, testing_freq))
-        test_errors = list(test_errors.flatten())
-        test_errors += [test_errors[-1]] * (len(train_errors) - len(test_errors))
-
-        numepochs = len(train_errors) / float(numbatches)
-        figure(1)
-        x = range(0, len(train_errors))
-        plot(x, train_errors, 'k-', label='Training set')
-        plot(x, test_errors, 'r-', label='Test set')
-        legend()
-        ticklocs = range(numbatches, len(train_errors) - len(train_errors) % numbatches + 1, numbatches)
-        epoch_label_gran = int(ceil(numepochs / 20.)) # aim for about 20 labels
-        epoch_label_gran = int(ceil(float(epoch_label_gran) / 10) * 10) # but round to nearest 10
-        ticklabels = map(lambda x: str((x[1] / numbatches)) if x[0] % epoch_label_gran == epoch_label_gran-1 else '', enumerate(ticklocs))
-
-        xticks(ticklocs, ticklabels)
-        xlabel('Epoch')
-        ylabel(err_name)
-        title(err_name)
+        dic = IGPUModel.load_checkpoint(net_file)
     
-    # Draw some filters
-    if layer_name:
-        layer_names = [l['name'] for l in dic['layers']]
-        layer = dic['layers'][layer_names.index(layer_name)]
-        filters = layer['weights']
-        if type(filters) == list:
-            input_idx = int(options["-i"])
-            filters = filters[input_idx]
-            num_filters = layer['numOutputs']
-            channels = int(options["-c"])
-        else:
-            num_filters = layer['numFilters']
-            channels = layer['channels']
-        combine_chans = "-o" not in options and channels == 3
-        filters = filters.reshape(channels, filters.shape[0]/channels, filters.shape[1])
-        filters -= filters.min()
-        filters /= filters.max()
+        dic["op"].print_values()
+        dic.update(dic["model_state"])
+        dic.update(dict((v.name, v.value) for v in dic["op"].options.itervalues()))
+    
+        # Plot error
+        if err_name:
+            if err_name not in dic['train_outputs'][0]:
+                raise ShowNetError("Cost function with name '%s' not defined by given convnet." % err_name)
+            train_errors = [o[err_name][0] for o in dic["train_outputs"]]
+            test_errors = [o[err_name][0] for o in dic["test_outputs"]]
+            testing_freq = dic["testing_freq"]
+    
+            numbatches = len(dic["train_batch_range"])
+            test_errors = numpy.row_stack(test_errors)
+            test_errors = numpy.tile(test_errors, (1, testing_freq))
+            test_errors = list(test_errors.flatten())
+            test_errors += [test_errors[-1]] * (len(train_errors) - len(test_errors))
+    
+            numepochs = len(train_errors) / float(numbatches)
+            figure(1)
+            x = range(0, len(train_errors))
+            plot(x, train_errors, 'k-', label='Training set')
+            plot(x, test_errors, 'r-', label='Test set')
+            legend()
+            ticklocs = range(numbatches, len(train_errors) - len(train_errors) % numbatches + 1, numbatches)
+            epoch_label_gran = int(ceil(numepochs / 20.)) # aim for about 20 labels
+            epoch_label_gran = int(ceil(float(epoch_label_gran) / 10) * 10) # but round to nearest 10
+            ticklabels = map(lambda x: str((x[1] / numbatches)) if x[0] % epoch_label_gran == epoch_label_gran-1 else '', enumerate(ticklocs))
+    
+            xticks(ticklocs, ticklabels)
+            xlabel('Epoch')
+            ylabel(err_name)
+            title(err_name)
+        
+        # Draw some filters
+        if layer_name:
+            layer_names = [l['name'] for l in dic['layers']]
+            if layer_name not in layer_names:
+                raise ShowNetError("Layer with name '%s' not defined by given convnet." % layer_name)
+            layer = dic['layers'][layer_names.index(layer_name)]
+            filters = layer['weights']
+            if type(filters) == list: # Fully-connected layer
+                input_idx = int(options["-i"])
+                filters = filters[input_idx]
+                num_filters = layer['numOutputs']
+                channels = int(options["-c"])
+            else: # Conv layer
+                num_filters = layer['numFilters']
+                channels = layer['channels']
+            combine_chans = "-o" not in options and channels == 3
 
-        draw_filters(filters, 0, 2, 'Layer %s' % layer_name, num_filters, combine_chans)
-
-    show()
+            filters = filters.reshape(channels, filters.shape[0]/channels, filters.shape[1])
+            filters -= filters.min()
+            filters /= filters.max()
+    
+            draw_filters(filters, 0, 2, 'Layer %s' % layer_name, num_filters, combine_chans)
+    
+        show()
+    except (UnpickleError, ShowNetError, opt.GetoptError), e:
+        print "----------------"
+        print "Error:"
+        print e 
 

@@ -31,6 +31,9 @@ from math import sqrt
 import gzip
 import zipfile
 
+class UnpickleError(Exception):
+    pass
+
 VENDOR_ID_REGEX = re.compile('^vendor_id\s+: (\S+)')
 GPU_LOCK_NO_SCRIPT = -2
 GPU_LOCK_NO_LOCK = -1
@@ -60,6 +63,8 @@ def pickle(filename, data, compress=False):
     fo.close()
     
 def unpickle(filename):
+    if not os.path.exists(filename):
+        raise UnpickleError("Path '%s' does not exist." % filename)
     if ms is not None and ms.file(filename).startswith('gzip'):
         fo = gzip.open(filename, 'rb')
         dict = cPickle.load(fo)
