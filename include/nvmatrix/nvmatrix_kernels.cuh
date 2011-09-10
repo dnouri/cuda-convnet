@@ -68,6 +68,13 @@
 #define MUL24(x,y) ((x) * (y))
 #endif
 
+#define MS_NUM_THREADS           256
+#define WARP_SIZE                32
+#define MS_NUM_WARPS             MS_NUM_THREADS / WARP_SIZE 
+#define MS_LOG_NUM_THREADS       8
+#define LOG_WARP_SIZE            5
+#define MS_LOG_NUM_WARPS         3
+
 __global__ void kTile(const float* src, float* tgt, const uint srcWidth, const uint srcHeight, const uint tgtWidth, const uint tgtHeight);
 __global__ void kDotProduct_r(float* a, float* b, float* target, const uint numCols, const uint numElements);
 __global__ void kSetupCurand(curandState *state, unsigned long long seed);
@@ -584,6 +591,94 @@ __global__ void kAggRows(const float* mat, float* matSum, const uint width, cons
             matSum += gridDim.y * sumWidth;
         }
         __syncthreads();
+        mat += width * gridDim.y;
+    }
+}
+
+template<class Agg>
+__global__ void kAggRows_wholerow(const float* mat, float* matSum, const uint width, const uint height, Agg agg) {
+    const int tidx = threadIdx.x;
+
+    __shared__ float accum[MS_NUM_THREADS];
+    volatile float* vMyAccum = &accum[tidx];
+    float* myAccum = &accum[tidx];
+    
+    matSum += blockIdx.y;
+    mat += width * blockIdx.y;
+
+    for (uint idxY = blockIdx.y; idxY < height; idxY += gridDim.y) {
+        myAccum[0] = agg.getBaseValue();
+        for (uint x = tidx; x < width; x += MS_NUM_THREADS) {
+            myAccum[0] = agg(myAccum[0], mat[x]);
+        }
+        #pragma unroll
+        for (uint i = MS_LOG_NUM_THREADS - 1; i > LOG_WARP_SIZE; i--) {
+            const uint d = 1 << i;
+            __syncthreads();
+            if (tidx < d) {
+                myAccum[0] = agg(myAccum[0], myAccum[d]);
+            }
+        }
+        __syncthreads();
+        if (tidx < WARP_SIZE) {
+            #pragma unroll
+            for (int i = LOG_WARP_SIZE; i >= 0; i--) {
+                const uint d = 1 << i;
+                vMyAccum[0] = agg(vMyAccum[0], vMyAccum[d]);
+            }
+
+            if (tidx == 0) {
+                matSum[0] = vMyAccum[0];
+                matSum += gridDim.y;
+            }
+        }
+        __syncthreads();
+        mat += width * gridDim.y;
+    }
+}
+
+
+template<class Agg>
+__global__ void kAggRows_wholerow_multiscan(const float* mat, float* matSum, const uint width, const uint height, Agg agg) {
+    const uint tidx = threadIdx.x;
+    const uint warpIdx = tidx / WARP_SIZE;
+    const uint tidxInWarp = tidx % WARP_SIZE;
+    
+    __shared__ float accum[(WARP_SIZE + 1) * MS_NUM_WARPS + WARP_SIZE/2];
+    volatile float* myAccum = &accum[warpIdx * (WARP_SIZE + 1) + tidxInWarp];
+    __shared__ float finalAccum[MS_NUM_WARPS + MS_NUM_WARPS / 2];
+    volatile float* myFinalAccum = &finalAccum[tidx];
+    
+    matSum += blockIdx.y;
+    mat += width * blockIdx.y;
+
+    for (uint idxY = blockIdx.y; idxY < height; idxY += gridDim.y) {
+        myAccum[0] = agg.getBaseValue();
+        for (uint x = tidx; x < width; x += MS_NUM_THREADS) {
+            myAccum[0] = agg(myAccum[0], mat[x]);
+        }
+        // Each warp does a reduction that doesn't require synchronizatoin
+        #pragma unroll
+        for (uint i = 0; i < LOG_WARP_SIZE; i++) {
+            const uint d = 1 << i;
+            myAccum[0] = agg(myAccum[0], myAccum[d]);
+        }
+        __syncthreads();
+        // The warps write their results
+        if (tidx < MS_NUM_WARPS) {
+            myFinalAccum[0] = accum[tidx * (WARP_SIZE + 1)];
+            #pragma unroll
+            for (uint i = 0; i < MS_LOG_NUM_WARPS; i++) {
+                const uint d = 1 << i;
+                myFinalAccum[0] = agg(myFinalAccum[0], myFinalAccum[d]);
+            }
+            if (tidx == 0) {
+                matSum[0] = myFinalAccum[0];
+                matSum += gridDim.y;
+            }
+        }
+        __syncthreads();
+
         mat += width * gridDim.y;
     }
 }

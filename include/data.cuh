@@ -47,7 +47,7 @@ public:
     }
 
     ~Data() {
-        for(T_iter it = _data->begin(); it != _data->end(); ++it) {
+        for (T_iter it = _data->begin(); it != _data->end(); ++it) {
             delete *it;
         }
         delete _data;

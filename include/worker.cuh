@@ -29,7 +29,6 @@
 
 #include "convnet.cuh"
 #include "cost.cuh"
-#include "util.cuh"
 #include "data.cuh"
 
 class ConvNet;

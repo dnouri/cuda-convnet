@@ -782,84 +782,91 @@ void NVMatrix::_aggregate(int axis, NVMatrix& target, Agg agg) {
     } else { // row sum
         target.resize(_isTrans ? 1 : _numRows, _isTrans ? _numCols : 1);
         if (width > 1) {
-            NVMatrix *prevSum = this;
-
-            while (prevSum->getLeadingDim() > 1) {
-                int numBlocksX, numBlocksY, numThreadsX, numThreadsY;
-                bool doLinearAgg = height >= 16384;
-                NVMatrix *nvSumAccum;
-                if(doLinearAgg) { // call the special short aggregation functions
-                    numBlocksX = 1;
-                    numBlocksY = DIVUP(height, AGG_SHORT_ROWS_THREADS_Y*AGG_SHORT_ROWS_LOOPS_Y);
-                    numThreadsX = width <= 4 ? 4 : width <= 8 ? 8 : width <= 12 ? 12 : width <= 16 ? 16 : AGG_SHORT_ROWS_THREADS_X;
-                    numThreadsY = AGG_SHORT_ROWS_THREADS_Y;
-                    while(numBlocksY > NUM_BLOCKS_MAX) {
-                        numBlocksY = DIVUP(numBlocksY,2);
-                        numBlocksX *= 2;
-                    }
-                    nvSumAccum = &target;
-                } else {
-                    numThreadsX = width <= 64 ? 32 : (width <= 128 ? 64 : (width <= 256 ? 128 : (width <= 512 ? 256 : 512)));
-                    numThreadsY = 1;
-                    numBlocksX = DIVUP(width, 2*numThreadsX);
-                    numBlocksY = std::min(height, NUM_BLOCKS_MAX);
-                    nvSumAccum = target.getFollowingDim() == height && target.getLeadingDim() == numBlocksX ? &target : new NVMatrix(height, numBlocksX, false);
+            if (height >= 16384) { // linear aggregation
+                int numBlocksX = 1;
+                int numBlocksY = DIVUP(height, AGG_SHORT_ROWS_THREADS_Y*AGG_SHORT_ROWS_LOOPS_Y);
+                int numThreadsX = width <= 4 ? 4 : width <= 8 ? 8 : width <= 12 ? 12 : width <= 16 ? 16 : AGG_SHORT_ROWS_THREADS_X;
+                int numThreadsY = AGG_SHORT_ROWS_THREADS_Y;
+                while (numBlocksY > NUM_BLOCKS_MAX) {
+                    numBlocksY = DIVUP(numBlocksY,2);
+                    numBlocksX *= 2;
                 }
-
                 dim3 grid(numBlocksX, numBlocksY), threads(numThreadsX, numThreadsY);
-                assert(numBlocksX <= NUM_BLOCKS_MAX);
-                assert(numBlocksY <= NUM_BLOCKS_MAX);
-
-                if(doLinearAgg) {
-                    if(width <= 16) {
-                        if(width <= 4) {
-                            kAggShortRows<Agg, 1, 4><<<grid, threads>>>(prevSum->_devData, nvSumAccum->_devData,width, height, agg);
-                        } else if(width <= 8) {
-                            kAggShortRows<Agg, 1, 8><<<grid, threads>>>(prevSum->_devData, nvSumAccum->_devData,width, height, agg);
-                        } else if(width <= 12) {
-                            kAggShortRows<Agg, 1, 12><<<grid, threads>>>(prevSum->_devData, nvSumAccum->_devData,width, height, agg);
-                        } else {
-                            kAggShortRows<Agg, 1, 16><<<grid, threads>>>(prevSum->_devData, nvSumAccum->_devData,width, height, agg);
-                        }
-                    } else if(width <= 32) {
-                        kAggShortRows<Agg, 2, AGG_SHORT_ROWS_THREADS_X><<<grid, threads>>>(prevSum->_devData, nvSumAccum->_devData,width, height, agg);
-                    } else if(width <= 48){
-                        kAggShortRows<Agg, 3, AGG_SHORT_ROWS_THREADS_X><<<grid, threads>>>(prevSum->_devData, nvSumAccum->_devData,width, height, agg);
-                    } else if(width <= 64){
-                        kAggShortRows<Agg, 4, AGG_SHORT_ROWS_THREADS_X><<<grid, threads>>>(prevSum->_devData, nvSumAccum->_devData,width, height, agg);
+                if(width <= 16) {
+                    if(width <= 4) {
+                        kAggShortRows<Agg, 1, 4><<<grid, threads>>>(_devData, target._devData,width, height, agg);
+                    } else if(width <= 8) {
+                        kAggShortRows<Agg, 1, 8><<<grid, threads>>>(_devData, target._devData,width, height, agg);
+                    } else if(width <= 12) {
+                        kAggShortRows<Agg, 1, 12><<<grid, threads>>>(_devData, target._devData,width, height, agg);
                     } else {
-                        kAggShortRows2<Agg><<<grid, threads>>>(prevSum->_devData, nvSumAccum->_devData,width, height, agg);
+                        kAggShortRows<Agg, 1, 16><<<grid, threads>>>(_devData, target._devData,width, height, agg);
                     }
-                } else if(width <= 64) {
-                    kAggRows<Agg, 32><<<grid, threads>>>(prevSum->_devData, nvSumAccum->_devData,
-                                               width, height, nvSumAccum->getLeadingDim(), agg);
-                } else if(width <= 128) {
-                    kAggRows<Agg, 64><<<grid, threads>>>(prevSum->_devData, nvSumAccum->_devData,
-                                               width, height, nvSumAccum->getLeadingDim(), agg);
-                } else if(width <= 256) {
-                    kAggRows<Agg, 128><<<grid, threads>>>(prevSum->_devData, nvSumAccum->_devData,
-                                               width, height, nvSumAccum->getLeadingDim(), agg);
-                } else if(width <= 512) {
-                    kAggRows<Agg, 256><<<grid, threads>>>(prevSum->_devData, nvSumAccum->_devData,
-                                               width, height, nvSumAccum->getLeadingDim(), agg);
+                } else if(width <= 32) {
+                    kAggShortRows<Agg, 2, AGG_SHORT_ROWS_THREADS_X><<<grid, threads>>>(_devData, target._devData,width, height, agg);
+                } else if(width <= 48){
+                    kAggShortRows<Agg, 3, AGG_SHORT_ROWS_THREADS_X><<<grid, threads>>>(_devData, target._devData,width, height, agg);
+                } else if(width <= 64){
+                    kAggShortRows<Agg, 4, AGG_SHORT_ROWS_THREADS_X><<<grid, threads>>>(_devData, target._devData,width, height, agg);
                 } else {
-                    kAggRows<Agg, 512><<<grid, threads>>>(prevSum->_devData, nvSumAccum->_devData,
-                                               width, height, nvSumAccum->getLeadingDim(), agg);
+                    kAggShortRows2<Agg><<<grid, threads>>>(_devData, target._devData,width, height, agg);
                 }
-                cutilCheckMsg("agg rows: Kernel execution failed");
-                cudaThreadSynchronize();
-                width = numBlocksX; // only true in reduction agg, but for linear agg this doesn't matter anyway
+            } else {
+                if (width >= 512) {
+                    dim3 threads(MS_NUM_THREADS);
+                    dim3 blocks(1, std::min(1024, height));
+                    kAggRows_wholerow_multiscan<<<blocks, threads>>>(_devData, target._devData, width, height, agg);
+//                    dim3 threads(MS_NUM_THREADS);
+//                    dim3 blocks(1, std::min(1024, height));
+//                    kAggRows_wholerow<<<blocks, threads>>>(_devData, target._devData, width, height, agg);
+                    
+                } else {
+//                    dim3 threads(MS_NUM_THREADS);
+//                    dim3 blocks(1, std::min(1024, height));
+//                    kAggRows_wholerow<<<blocks, threads>>>(_devData, target._devData, width, height, agg);
+                    NVMatrix *prevSum = this;
+                    while (prevSum->getLeadingDim() > 1) {
+                        int numThreadsX = width <= 64 ? 32 : (width <= 128 ? 64 : (width <= 256 ? 128 : (width <= 512 ? 256 : 512)));
+                        int numThreadsY = 1;
+                        int numBlocksX = DIVUP(width, 2*numThreadsX);
+                        int numBlocksY = std::min(height, NUM_BLOCKS_MAX);
+                        NVMatrix *nvSumAccum = target.getFollowingDim() == height && target.getLeadingDim() == numBlocksX ? &target : new NVMatrix(height, numBlocksX, false);
 
-                if (prevSum != this) {
-                    delete prevSum;
+                        dim3 grid(numBlocksX, numBlocksY), threads(numThreadsX, numThreadsY);
+                        assert(numBlocksX <= NUM_BLOCKS_MAX);
+                        assert(numBlocksY <= NUM_BLOCKS_MAX);
+
+                        if(width <= 64) {
+                            kAggRows<Agg, 32><<<grid, threads>>>(prevSum->_devData, nvSumAccum->_devData,
+                                                       width, height, nvSumAccum->getLeadingDim(), agg);
+                        } else if(width <= 128) {
+                            kAggRows<Agg, 64><<<grid, threads>>>(prevSum->_devData, nvSumAccum->_devData,
+                                                       width, height, nvSumAccum->getLeadingDim(), agg);
+                        } else if(width <= 256) {
+                            kAggRows<Agg, 128><<<grid, threads>>>(prevSum->_devData, nvSumAccum->_devData,
+                                                       width, height, nvSumAccum->getLeadingDim(), agg);
+                        } else if(width <= 512) {
+                            kAggRows<Agg, 256><<<grid, threads>>>(prevSum->_devData, nvSumAccum->_devData,
+                                                       width, height, nvSumAccum->getLeadingDim(), agg);
+                        } else {
+                            kAggRows<Agg, 512><<<grid, threads>>>(prevSum->_devData, nvSumAccum->_devData,
+                                                       width, height, nvSumAccum->getLeadingDim(), agg);
+                        }
+                        cutilCheckMsg("agg rows: Kernel execution failed");
+                        cudaThreadSynchronize();
+                        width = numBlocksX; // only true in reduction agg, but for linear agg this doesn't matter anyway
+
+                        if (prevSum != this) {
+                            delete prevSum;
+                        }
+                        prevSum = nvSumAccum;
+                    }
                 }
-                prevSum = nvSumAccum;
             }
         } else {
             copy(target);
         }
     }
-    cudaThreadSynchronize();
 }
 
 template<class Agg>

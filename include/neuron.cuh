@@ -38,11 +38,11 @@ class Neuron {
 protected:
     bool _activated;
     virtual void _activate(NVMatrix& input);
-    virtual void _computeInputGrad(NVMatrix& actGrad);
+    virtual void _computeInputGrad(NVMatrix& actsGrad);
 public:
     Neuron();
     virtual void activate(NVMatrix& input);
-    virtual void computeInputGrad(NVMatrix& actGrad);
+    virtual void computeInputGrad(NVMatrix& actsGrad);
     static Neuron& makeNeuron(PyObject* neuronDict);
 };
 
@@ -61,7 +61,7 @@ protected:
     NVMatrix* _acts; // Logistic neuron must remember activities for gradient computation
 
     void _activate(NVMatrix& input);
-    void _computeInputGrad(NVMatrix& actGrad);
+    void _computeInputGrad(NVMatrix& actsGrad);
 };
 
 /*
@@ -86,7 +86,7 @@ protected:
     NVMatrix* _acts; // Relu neuron must remember activities for gradient computation
 
     void _activate(NVMatrix& input);
-    void _computeInputGrad(NVMatrix& actGrad);
+    void _computeInputGrad(NVMatrix& actsGrad);
 };
 
 /*
@@ -104,7 +104,7 @@ protected:
     NVMatrix _input; // Abs neuron must remember input for gradient computation
 
     void _activate(NVMatrix& input);
-    void _computeInputGrad(NVMatrix& actGrad);
+    void _computeInputGrad(NVMatrix& actsGrad);
 };
 
 /*
@@ -141,7 +141,7 @@ protected:
     float _a, _b;
 
     void _activate(NVMatrix& input);
-    void _computeInputGrad(NVMatrix& actGrad);
+    void _computeInputGrad(NVMatrix& actsGrad);
 };
 
 /*
@@ -166,7 +166,7 @@ protected:
     float _a, _b;
 
     void _activate(NVMatrix& input);
-    void _computeInputGrad(NVMatrix& actGrad);
+    void _computeInputGrad(NVMatrix& actsGrad);
 };
 
 /*
@@ -197,7 +197,7 @@ protected:
     NVMatrix _input;
 
     void _activate(NVMatrix& input);
-    void _computeInputGrad(NVMatrix& actGrad);
+    void _computeInputGrad(NVMatrix& actsGrad);
 };
 #endif	/* NEURONS_CUH */
 

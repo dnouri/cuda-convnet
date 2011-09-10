@@ -31,14 +31,11 @@
 #include <string>
 #include <cutil_inline.h>
 #include <time.h>
-#include <nvmatrix.cuh>
-#include <matrix.h>
 #include <queue.h>
 #include <thread.h>
 #include <math.h>
 
 #include "layer.cuh"
-#include "util.cuh"
 #include "data.cuh"
 #include "worker.cuh"
 #include "weights.cuh"

@@ -23,10 +23,15 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-
+#include <cutil_inline.h>
 #include <iostream>
+
 #include <layer_kernels.cuh>
 #include <layer.cuh>
+#include <data.cuh>
+#include <util.cuh>
+#include <cudaconv2.cuh>
+#include <matrix.h>
 
 using namespace std;
 

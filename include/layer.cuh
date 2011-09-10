@@ -30,19 +30,13 @@
 #include <string>
 #include <vector>
 #include <map>
-#include <cutil_inline.h>
 #include <assert.h>
 #include <nvmatrix.cuh>
-#include <matrix.h>
-#include <cudaconv2.cuh>
 
 #include "convnet.cuh"
-#include "data.cuh"
 #include "cost.cuh"
 #include "weights.cuh"
 #include "neuron.cuh"
-#include "util.cuh"
-#include "layer_kernels.cuh"
 
 class Cost;
 class ConvNet;
@@ -56,7 +50,7 @@ class Layer {
 protected:
     std::vector<Layer*> _prev, _next;
     int _rcvdFInputs, _rcvdBInputs;
-    NVMatrix _acts, _actsGrad; // Activities and activity gradients in this layer
+    NVMatrix _acts, _actsGrad; // Activities and activity gradient in this layer
     bool _gradConsumer, _gradProducer, _trans;
     int _numGradProducersNext;
     std::string _name, _type;
@@ -64,26 +58,18 @@ protected:
     virtual void truncBwdActs(); 
     virtual void fpropActs(NVMatrixV& v, PASS_TYPE passType) = 0;
     virtual void bpropCommon(NVMatrix& v, PASS_TYPE passType) {
-        // do nothing by default
+        // Do nothing by default
     }
     virtual void bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType) {
-        assert(!_gradProducer); // only do nothing if not grad producer
+        assert(!_gradProducer); // Only do nothing if not grad producer
     }
     virtual void bpropWeights(NVMatrix& v, PASS_TYPE passType) {
-        // do nothing if this layer has no weights
+        // Do nothing if this layer has no weights
     }
 public:    
     static bool _saveActsGrad, _saveActs;
     
     Layer(PyObject* paramsDict, bool gradConsumer, bool gradProducer, bool trans);
-    
-    virtual void updateWeights(int numCases) {
-        // do nothing if this layer has no weights
-    }
-    
-    virtual void checkGradients(ConvNet* convNet) {
-        // do nothing if this layer has no weights
-    }
     
     virtual void fprop(PASS_TYPE passType);
     void fprop(NVMatrix& v, PASS_TYPE passType);
@@ -105,12 +91,14 @@ public:
     NVMatrix& getActs();
     NVMatrix& getActsGrad();
     
-    virtual void copyToCPU() {
-        // do nothing if this layer has no weights
+    // Do nothing if this layer has no weights
+    virtual void updateWeights(int numCases) {
     }
-    
+    virtual void checkGradients(ConvNet* convNet) {
+    }
+    virtual void copyToCPU() {
+    }
     virtual void copyToGPU()  {
-        // do nothing if this layer has no weights
     }
 };
 
@@ -123,8 +111,8 @@ protected:
 public:
     WeightLayer(PyObject* paramsDict, bool gradConsumer, bool gradProducer, bool trans);
     void updateWeights(int numCases);
-    virtual void copyToCPU();
-    virtual void copyToGPU();
+    void copyToCPU();
+    void copyToGPU();
 };
 
 class FCLayer : public WeightLayer {
@@ -251,8 +239,8 @@ public:
 };
 
 /*
- * input 0: labels
- * input 1: softmax outputs
+ * Input 0: labels
+ * Input 1: softmax outputs
  */
 class LogregCostLayer : public CostLayer {
 protected:

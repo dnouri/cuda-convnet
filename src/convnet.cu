@@ -27,7 +27,11 @@
 #include <vector>
 #include <iostream> 
 #include <string>
+
+#include <nvmatrix.cuh>
+#include <matrix.h>
 #include <convnet.cuh>
+#include <util.cuh>
 
 using namespace std;
 

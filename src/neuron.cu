@@ -40,7 +40,7 @@ Neuron::Neuron() : _activated(false) {
 void Neuron::_activate(NVMatrix& input) {
 }
 
-void Neuron::_computeInputGrad(NVMatrix& actGrad) {
+void Neuron::_computeInputGrad(NVMatrix& actsGrad) {
 }
 
 void Neuron::activate(NVMatrix& input) {
@@ -48,9 +48,9 @@ void Neuron::activate(NVMatrix& input) {
     _activate(input);
 }
 
-void Neuron::computeInputGrad(NVMatrix& actGrad) {
+void Neuron::computeInputGrad(NVMatrix& actsGrad) {
     assert(_activated);
-    _computeInputGrad(actGrad);
+    _computeInputGrad(actsGrad);
 }
 
 Neuron& Neuron::makeNeuron(PyObject* neuronDict) {
@@ -98,8 +98,8 @@ void LogisticNeuron::_activate(NVMatrix& input) {
     _acts = &input;
 }
 
-void LogisticNeuron::_computeInputGrad(NVMatrix& actGrad) {
-    actGrad._eltwiseBinaryOp(*_acts, LogisticGradientOperator());
+void LogisticNeuron::_computeInputGrad(NVMatrix& actsGrad) {
+    actsGrad._eltwiseBinaryOp(*_acts, LogisticGradientOperator());
 }
 
 /* 
@@ -112,8 +112,8 @@ void ReluNeuron::_activate(NVMatrix& input) {
     _acts = &input;
 }
 
-void ReluNeuron::_computeInputGrad(NVMatrix& actGrad) {
-    actGrad._eltwiseBinaryOp(*_acts, ReluGradientOperator());
+void ReluNeuron::_computeInputGrad(NVMatrix& actsGrad) {
+    actsGrad._eltwiseBinaryOp(*_acts, ReluGradientOperator());
 }
 
 /* 
@@ -129,8 +129,8 @@ void AbsNeuron::_activate(NVMatrix& input) {
     input.apply(NVMatrix::ABS);
 }
 
-void AbsNeuron::_computeInputGrad(NVMatrix& actGrad) {
-    actGrad._eltwiseBinaryOp(_input, AbsGradientOperator());
+void AbsNeuron::_computeInputGrad(NVMatrix& actsGrad) {
+    actsGrad._eltwiseBinaryOp(_input, AbsGradientOperator());
     _input.truncate(); // Forget input to conserve memory
 }
 
@@ -147,8 +147,8 @@ void TanhNeuron::_activate(NVMatrix& input) {
     _acts = &input;
 }
 
-void TanhNeuron::_computeInputGrad(NVMatrix& actGrad) {
-    actGrad._eltwiseBinaryOp(*_acts, TanhGradientOperator(_a, _b));
+void TanhNeuron::_computeInputGrad(NVMatrix& actsGrad) {
+    actsGrad._eltwiseBinaryOp(*_acts, TanhGradientOperator(_a, _b));
 }
 
 /* 
@@ -166,9 +166,9 @@ void AbsTanhNeuron::_activate(NVMatrix& input) {
     _acts = &input;
 }
 
-void AbsTanhNeuron::_computeInputGrad(NVMatrix& actGrad) {
-    actGrad._eltwiseBinaryOp(_input, AbsNeuron::AbsGradientOperator());
-    actGrad._eltwiseBinaryOp(*_acts, TanhNeuron::TanhGradientOperator(_a, _b));
+void AbsTanhNeuron::_computeInputGrad(NVMatrix& actsGrad) {
+    actsGrad._eltwiseBinaryOp(_input, AbsNeuron::AbsGradientOperator());
+    actsGrad._eltwiseBinaryOp(*_acts, TanhNeuron::TanhGradientOperator(_a, _b));
     _input.truncate(); // Forget input to conserve memory
 }
 
@@ -182,7 +182,7 @@ void SoftReluNeuron::_activate(NVMatrix& input) {
     input._eltwiseUnaryOp(SoftReluOperator());
 }
 
-void SoftReluNeuron::_computeInputGrad(NVMatrix& actGrad) {
-    actGrad._eltwiseBinaryOp(_input, SoftReluGradientOperator());
+void SoftReluNeuron::_computeInputGrad(NVMatrix& actsGrad) {
+    actsGrad._eltwiseBinaryOp(_input, SoftReluGradientOperator());
     _input.truncate(); // Forget input to conserve memory
 }
