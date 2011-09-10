@@ -637,9 +637,8 @@ __global__ void kAggRows_wholerow(const float* mat, float* matSum, const uint wi
     }
 }
 
-
 template<class Agg>
-__global__ void kAggRows_wholerow_multiscan(const float* mat, float* matSum, const uint width, const uint height, Agg agg) {
+__global__ void kAggRows_wholerow_nosync(const float* mat, float* matSum, const uint width, const uint height, Agg agg) {
     const uint tidx = threadIdx.x;
     const uint warpIdx = tidx / WARP_SIZE;
     const uint tidxInWarp = tidx % WARP_SIZE;
