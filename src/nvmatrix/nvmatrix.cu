@@ -813,15 +813,15 @@ void NVMatrix::_aggregate(int axis, NVMatrix& target, Agg agg) {
                 }
             } else {
                 if (width >= 512) {
-                    dim3 threads(MS_NUM_THREADS);
+                    dim3 threads(AWR_NUM_THREADS);
                     dim3 blocks(1, std::min(1024, height));
                     kAggRows_wholerow_nosync<<<blocks, threads>>>(_devData, target._devData, width, height, agg);
-//                    dim3 threads(MS_NUM_THREADS);
+//                    dim3 threads(AWR_NUM_THREADS);
 //                    dim3 blocks(1, std::min(1024, height));
 //                    kAggRows_wholerow<<<blocks, threads>>>(_devData, target._devData, width, height, agg);
                     
                 } else {
-//                    dim3 threads(MS_NUM_THREADS);
+//                    dim3 threads(AWR_NUM_THREADS);
 //                    dim3 blocks(1, std::min(1024, height));
 //                    kAggRows_wholerow<<<blocks, threads>>>(_devData, target._devData, width, height, agg);
                     NVMatrix *prevSum = this;
