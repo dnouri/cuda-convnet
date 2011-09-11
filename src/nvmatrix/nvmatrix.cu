@@ -34,6 +34,7 @@
 #include <algorithm>
 #include <typeinfo>
 #include <nvmatrix.cuh>
+#include <nvmatrix_operators.cuh>
 
 //unsigned int NVMatrix::hostRndMults[NUM_RND_STREAMS];
 bool NVMatrix::rndInitialized = false;
@@ -230,36 +231,6 @@ void NVMatrix::addProduct(const NVMatrix& a, const NVMatrix &b) {
     addProduct(a, b, 1, 1);
 }
 
-void NVMatrix::apply(NVMatrix::FUNCTIONS f, NVMatrix& target) {
-    if (f == NVMatrix::EXP) {
-        _eltwiseUnaryOp(target, ExpOperator());
-    } else if (f == NVMatrix::LOGISTIC1) {
-        _eltwiseUnaryOp(target, LogisticOperator<true>());
-    } else if (f == NVMatrix::LOGISTIC2) {
-        _eltwiseUnaryOp(target, LogisticOperator<false>());
-    } else if (f == NVMatrix::SQUARE) {
-        _eltwiseUnaryOp(target, SquareOperator());
-    } else if (f == NVMatrix::SQRT) {
-        _eltwiseUnaryOp(target, SqrtOperator());
-    } else if (f == NVMatrix::ZERO) {
-        _eltwiseUnaryOp(target, ZeroOperator());
-    } else if (f == NVMatrix::ONE) {
-        _eltwiseUnaryOp(target, OneOperator());
-    }else if(f == NVMatrix::RECIPROCAL) {
-        _eltwiseUnaryOp(target, ReciprocalOperator());
-    } else if(f == NVMatrix::LOG) {
-        _eltwiseUnaryOp(target, LogOperator());
-    } else if(f == NVMatrix::SIGN) {
-        _eltwiseUnaryOp(target, SignOperator());
-    } else if(f == NVMatrix::ABS) {
-        _eltwiseUnaryOp(target, AbsOperator());
-    }
-}
-
-void NVMatrix::apply(NVMatrix::FUNCTIONS f) {
-    apply(f, *this);
-}
-
 template <class Randomizer>
 void NVMatrix::_unaryRandomize(NVMatrix& target, Randomizer rnd) {
     assert(rndInitialized);
@@ -363,39 +334,8 @@ void NVMatrix::addGaussianNoise(NVMatrix& stdevs, NVMatrix& target) {
     _binaryRandomize(stdevs, target, AddGaussianBinaryRandomizer());
 }
 
-void NVMatrix::inRangeInc(float lower, float upper) {
-    inRangeInc(lower, upper, *this);
-}
-void NVMatrix::inRangeInc(float lower, float upper, NVMatrix& target) {
-    _eltwiseUnaryOp(target, InRangeOperator<false>(lower, upper));
-}
-
-void NVMatrix::inRangeExc(float lower, float upper) {
-    inRangeExc(lower, upper, *this);
-}
-
-void NVMatrix::inRangeExc(float lower, float upper, NVMatrix& target) {
-    _eltwiseUnaryOp(target, InRangeOperator<true>(lower, upper));
-}
-
-void NVMatrix::biggerThanScalar(float scalar) {
-    biggerThanScalar(scalar, *this);
-}
-
-void NVMatrix::biggerThanScalar(float scalar, NVMatrix& target) {
-    _eltwiseUnaryOp(target, BiggerThanScalarOperator(scalar));
-}
-
-void NVMatrix::smallerThanScalar(float scalar) {
-    smallerThanScalar(scalar, *this);
-}
-
-void NVMatrix::smallerThanScalar(float scalar, NVMatrix& target) {
-    _eltwiseUnaryOp(target, SmallerThanScalarOperator(scalar));
-}
-
 void NVMatrix::biggerThan(NVMatrix& b, NVMatrix& target) {
-    _eltwiseBinaryOp(b, target, BiggerThanOperator());
+    _eltwiseBinaryOp(b, target, NVMatrixBinaryOps::BiggerThan());
 }
 
 void NVMatrix::biggerThan(NVMatrix& b) {
@@ -403,7 +343,7 @@ void NVMatrix::biggerThan(NVMatrix& b) {
 }
 
 void NVMatrix::equals(NVMatrix& b, NVMatrix& target) {
-    _eltwiseBinaryOp(b, target, EqualsOperator());
+    _eltwiseBinaryOp(b, target, NVMatrixBinaryOps::Equals());
 }
 
 void NVMatrix::equals(NVMatrix& m) {
@@ -411,7 +351,7 @@ void NVMatrix::equals(NVMatrix& m) {
 }
 
 void NVMatrix::biggerThanVector(NVMatrix& vec, NVMatrix& target) {
-    _eltwiseVectorOp(vec, target, BiggerThanOperator());
+    _eltwiseVectorOp(vec, target, NVMatrixBinaryOps::BiggerThan());
 }
 
 void NVMatrix::biggerThanVector(NVMatrix& vec) {
@@ -532,7 +472,7 @@ void NVMatrix::copy(NVMatrix &dest, int srcStartRow, int srcEndRow,
                     int destStartRow, int destStartCol) const {
     NVMatrix* srcSlice = &slice(srcStartRow, srcEndRow, srcStartCol, srcEndCol);
     NVMatrix* destSlice = &dest.slice(destStartRow, destStartRow + srcEndRow - srcStartRow, destStartCol, destStartCol + srcEndCol - srcStartCol);
-    srcSlice->_eltwiseUnaryOp<IdentityOperator>(*destSlice, IdentityOperator());
+    srcSlice->_eltwiseUnaryOp(NVMatrixOps::Identity(), *destSlice);
     delete srcSlice;
     delete destSlice;
 }
@@ -580,7 +520,7 @@ void NVMatrix::flipTrans(NVMatrix& target) {
     assert(&target != this);
     target.resize(_numRows, _numCols);
     target.setTrans(!isTrans());
-    _eltwiseUnaryOp(target, IdentityOperator());
+    _eltwiseUnaryOp(NVMatrixOps::Identity(), target);
 }
 
 void NVMatrix::squaredDiff(NVMatrix& b) {
@@ -588,14 +528,14 @@ void NVMatrix::squaredDiff(NVMatrix& b) {
 }
 
 void NVMatrix::squaredDiff(NVMatrix& b, NVMatrix& target) {
-    _eltwiseBinaryOp(b, target, SquaredDiffOperator());
+    _eltwiseBinaryOp(b, target, NVMatrixBinaryOps::SquaredDiff());
 }
 
 void NVMatrix::add(NVMatrix& b, float scaleA, float scaleB, NVMatrix& target) {
     if (scaleA == 1 && scaleB == 1) { // slight optimization
-        _eltwiseBinaryOp<AddOperator>(b, target, AddOperator());
+        _eltwiseBinaryOp(b, target, NVMatrixBinaryOps::Add());
     } else {
-        _eltwiseBinaryOp(b, target, WeightedAddOperator(scaleA, scaleB));
+        _eltwiseBinaryOp(b, target, NVMatrixBinaryOps::WeightedAdd(scaleA, scaleB));
     }
 }
 
@@ -628,7 +568,7 @@ void NVMatrix::subtract(NVMatrix& b) {
 }
 
 void NVMatrix::eltwiseMult(NVMatrix& b, NVMatrix& target) {
-    _eltwiseBinaryOp(b, target, MultiplyOperator());
+    _eltwiseBinaryOp(b, target, NVMatrixBinaryOps::Multiply());
 }
 
 void NVMatrix::eltwiseMult(NVMatrix& b) {
@@ -636,7 +576,7 @@ void NVMatrix::eltwiseMult(NVMatrix& b) {
 }
 
 void NVMatrix::eltwiseDivide(NVMatrix& b, NVMatrix& target) {
-    _eltwiseBinaryOp(b, target, DivideOperator());
+    _eltwiseBinaryOp(b, target, NVMatrixBinaryOps::Divide());
 }
 
 void NVMatrix::eltwiseDivide(NVMatrix& b) {
@@ -657,7 +597,7 @@ void NVMatrix::tile(int timesY, int timesX, NVMatrix& target) {
 }
 
 void NVMatrix::addVector(NVMatrix& vec, float scaleVec, NVMatrix& target) {
-    _eltwiseVectorOp(vec, target, WeightedAddOperator(1, scaleVec));
+    _eltwiseVectorOp(vec, target, NVMatrixBinaryOps::WeightedAdd(1, scaleVec));
 }
 
 void NVMatrix::addVector(NVMatrix& vec) {
@@ -673,62 +613,15 @@ void NVMatrix::addVector(NVMatrix& vec, NVMatrix& target) {
 }
 
 void NVMatrix::equalsVector(NVMatrix& vec, NVMatrix& target) {
-    _eltwiseVectorOp(vec, target, EqualsOperator());
+    _eltwiseVectorOp(vec, target, NVMatrixBinaryOps::Equals());
 }
 
 void NVMatrix::equalsVector(NVMatrix& vec) {
     equalsVector(vec, *this);
 }
 
-void NVMatrix::addScalar(float scaleThis, float scalar, NVMatrix& target) {
-    _eltwiseUnaryOp(target, WeightedAddScalarOperator(scaleThis, scalar));
-}
-
-void NVMatrix::addScalar(float scalar, NVMatrix& target) {
-    _eltwiseUnaryOp(target, AddScalarOperator(scalar));
-}
-
-void NVMatrix::addScalar(float scalar) {
-    addScalar(scalar, *this);
-}
-
-void NVMatrix::minWithScalar(float scalar, NVMatrix& target) {
-    _eltwiseUnaryOp(target, MinWithScalarOperator(scalar));
-}
-
-void NVMatrix::minWithScalar(float scalar) {
-    minWithScalar(scalar, *this);
-}
-
-void NVMatrix::maxWithScalar(float scalar, NVMatrix& target) {
-    _eltwiseUnaryOp(target, MaxWithScalarOperator(scalar));
-}
-
-void NVMatrix::maxWithScalar(float scalar) {
-    maxWithScalar(scalar, *this);
-}
-
-/*
- * For legacy support...
- */
-void NVMatrix::subtractFromScalar(float scalar, NVMatrix& target) {
-    addScalar(-1, scalar, target);
-}
-
-void NVMatrix::subtractFromScalar(float scalar) {
-    subtractFromScalar(scalar, *this);
-}
-
-void NVMatrix::pow(float p, NVMatrix& target) {
-    _eltwiseUnaryOp(target, PowOperator(p));
-}
-
-void NVMatrix::pow(float p) {
-    pow(p, *this);
-}
-
 void NVMatrix::eltwiseMultByVector(NVMatrix& vec, NVMatrix& target) {
-    _eltwiseVectorOp(vec, target, MultiplyOperator());
+    _eltwiseVectorOp(vec, target, NVMatrixBinaryOps::Multiply());
 }
 
 void NVMatrix::eltwiseMultByVector(NVMatrix& vec) {
@@ -740,17 +633,7 @@ void NVMatrix::eltwiseDivideByVector(NVMatrix& vec) {
 }
 
 void NVMatrix::eltwiseDivideByVector(NVMatrix& vec, NVMatrix& target) {
-    _eltwiseVectorOp(vec, target, DivideOperator());
-}
-
-void NVMatrix::scale(float _scale) {
-    scale(_scale, *this);
-}
-
-void NVMatrix::scale(float _scale, NVMatrix& target) {
-    if (_scale != 1 || &target != this) { // optimize away scale by 1
-        _eltwiseUnaryOp(target, MultByScalarOperator(_scale));
-    }
+    _eltwiseVectorOp(vec, target, NVMatrixBinaryOps::Divide());
 }
 
 /*
@@ -877,27 +760,27 @@ NVMatrix& NVMatrix::_aggregate(int axis, Agg agg) {
 }
 
 void NVMatrix::max(int axis, NVMatrix& target) {
-    _aggregate(axis, target, MaxAggregator());
+    _aggregate(axis, target, NVMatrixAggs::Max());
 }
 
 void NVMatrix::sum(int axis, NVMatrix& target) {
-    _aggregate(axis, target, SumAggregator());
+    _aggregate(axis, target, NVMatrixAggs::Sum());
 }
 
 void NVMatrix::min(int axis, NVMatrix& target) {
-    _aggregate(axis, target, MinAggregator());
+    _aggregate(axis, target, NVMatrixAggs::Min());
 }
 
 NVMatrix& NVMatrix::max(int axis) {
-    return _aggregate(axis, MaxAggregator());
+    return _aggregate(axis, NVMatrixAggs::Max());
 }
 
 NVMatrix& NVMatrix::sum(int axis) {
-    return _aggregate(axis, SumAggregator());
+    return _aggregate(axis, NVMatrixAggs::Sum());
 }
 
 NVMatrix& NVMatrix::min(int axis) {
-    return _aggregate(axis, MinAggregator());
+    return _aggregate(axis, NVMatrixAggs::Min());
 }
 
 void NVMatrix::_sum_setParams(int n, dim3* blocks, dim3* threads, int* numCols) {
@@ -913,15 +796,15 @@ float NVMatrix::mean() {
 }
 
 float NVMatrix::sum() {
-    return _totalAgg(SumAggregator());
+    return _totalAgg(NVMatrixAggs::Sum());
 }
 
 float NVMatrix::max() {
-    return _totalAgg(MaxAggregator());
+    return _totalAgg(NVMatrixAggs::Max());
 }
 
 float NVMatrix::min() {
-    return _totalAgg<MinAggregator>(MinAggregator());
+    return _totalAgg(NVMatrixAggs::Min());
 }
 
 template<class Agg>
@@ -931,12 +814,10 @@ float NVMatrix::_totalAgg(Agg agg) {
     int numCols;
     // Sum most of it on GPU
     NVMatrix* src = this;
-    int gpuSumThresh = typeid(Agg) == typeid(SumAggregator) || typeid(Agg) == typeid(MaxAggregator) || typeid(Agg) == typeid(MinAggregator)
-                     ? CPUSUM_MAX : 1;
-    for (NVMatrix* target = NULL; src->getNumElements() > gpuSumThresh; src = target) {
+    for (NVMatrix* target = NULL; src->getNumElements() > CPUSUM_MAX; src = target) {
         _sum_setParams(src->getNumElements(), &blocks, &threads, &numCols);
         target = new NVMatrix(1, blocks.x);
-        kTotalAgg<Agg><<<blocks, threads>>>(src->getDevData(), target->getDevData(), numCols, src->getNumElements(), agg);
+        kTotalAgg<<<blocks, threads>>>(src->getDevData(), target->getDevData(), numCols, src->getNumElements(), agg);
         cutilCheckMsg("kTotalAgg: Kernel execution failed");
         cudaThreadSynchronize(); // not really necessary?
         delete (src == this ? NULL : src);
@@ -946,11 +827,11 @@ float NVMatrix::_totalAgg(Agg agg) {
     src->copyToHost(srcCPU);
     if (src->getNumElements() > 1) { // Sum remainder on CPU
         delete (src == this ? NULL : src);
-        if (typeid(Agg) == typeid(SumAggregator)) {
+        if (typeid(Agg) == typeid(NVMatrixAggs::Sum)) {
             return srcCPU.sum();
-        } else if (typeid(Agg) == typeid(MaxAggregator)) {
+        } else if (typeid(Agg) == typeid(NVMatrixAggs::Max)) {
             return srcCPU.max();
-        } else if (typeid(Agg) == typeid(MinAggregator)) {
+        } else if (typeid(Agg) == typeid(NVMatrixAggs::Min)) {
             return srcCPU.min();
         } else {
             assert(false);

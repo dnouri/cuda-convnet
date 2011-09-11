@@ -41,6 +41,7 @@
 
 #include <matrix.h>
 #include "nvmatrix_kernels.cuh"
+#include "nvmatrix_operators.cuh"
 
 #ifdef WARNINGS
 #define WARN(msg) printf("WARN: File %s, line %d: %s\n", __FILE__, __LINE__, msg);
@@ -100,8 +101,36 @@ private:
     template<class Agg> NVMatrix& _aggregate(int axis, Agg agg);
     template <class Randomizer> void _unaryRandomize(NVMatrix& target, Randomizer rnd);
     template <class Randomizer> void _binaryRandomize(NVMatrix& data2, NVMatrix& target, Randomizer rnd);
+    
+    template <class Op>
+    void _eltwiseUnaryOp(Op op, NVMatrix& target) {
+        if (!target.isSameDims(*this)) {
+            target.resize(*this);
+        }
+        int height = target.getFollowingDim(), width = target.getLeadingDim();
+        dim3 blocks(std::min(NUM_BLOCKS_MAX, DIVUP(width, ELTWISE_THREADS_X)),
+                std::min(NUM_BLOCKS_MAX, DIVUP(height, ELTWISE_THREADS_Y)));
+        dim3 threads(ELTWISE_THREADS_X, ELTWISE_THREADS_Y);
+        if (target.isTrans() == isTrans()) {
+            kEltwiseUnaryOp<Op><<<blocks, threads>>>(_devData, target._devData, height, width, getStride(), target.getStride(), op);
+            cutilCheckMsg("kEltwiseUnaryOp: Kernel execution failed");
+        } else {
+            bool checkBounds = !(width % ELTWISE_THREADS_X == 0 && height % ELTWISE_THREADS_X == 0);
+            if (checkBounds) {
+                kEltwiseUnaryOpTrans<Op, true><<<blocks, threads>>>(_devData, target._devData, height, width, getStride(), target.getStride(), op);
+            } else {
+                kEltwiseUnaryOpTrans<Op, false><<<blocks, threads>>>(_devData, target._devData, height, width, getStride(), target.getStride(), op);
+            }
+            cutilCheckMsg("kEltwiseUnaryOpTrans: Kernel execution failed");
+        }
+    }
+
+    template <class Op>
+    void _eltwiseUnaryOp(Op op) {
+        _eltwiseUnaryOp<Op>(op, *this);
+    }
+    
 public:
-    enum FUNCTIONS {LOG, LOGISTIC1, LOGISTIC2, EXP, SQUARE, SQRT, ZERO, ONE, RECIPROCAL, SIGN, ABS};
     NVMatrix();
     NVMatrix(bool isTrans);
     NVMatrix(int numRows, int numCols, bool isTrans=false);
@@ -226,14 +255,6 @@ public:
     void randomizeGaussian(NVMatrix& stdevs, NVMatrix& target);
     void binarizeProbs();
     void binarizeProbs(NVMatrix& target);
-    void smallerThanScalar(float scalar, NVMatrix& target);
-    void smallerThanScalar(float scalar);
-    void biggerThanScalar(float scalar, NVMatrix& target);
-    void biggerThanScalar(float scalar);
-    void inRangeInc(float lower, float upper);
-    void inRangeInc(float lower, float upper, NVMatrix& target);
-    void inRangeExc(float lower, float upper);
-    void inRangeExc(float lower, float upper, NVMatrix& target);
 
     void biggerThan(NVMatrix& m, NVMatrix& target);
     void biggerThan(NVMatrix& m);
@@ -250,31 +271,25 @@ public:
     NVMatrix& sliceCols(int startCol, int endCol) const;
     void sliceCols(int startCol, int endCol, NVMatrix& target) const;
 
-    void apply(NVMatrix::FUNCTIONS f, NVMatrix& target);
-    void apply(NVMatrix::FUNCTIONS f);
+    template <class Op> void apply(Op op, NVMatrix& target) {
+        _eltwiseUnaryOp(op, target);
+    }
+    template <class Op> void apply(Op op) {
+        apply(op, *this);
+    }
 
     bool resize(int numRows, int numCols);
     bool resize(const NVMatrix &like);
     bool resize(const Matrix &like);
     void reshape(int numRows, int numCols);
     NVMatrix& reshaped(int numRows, int numCols);
-
-    void copy(NVMatrix &dest, int srcStartRow, int srcEndRow, int srcStartCol, int srcEndCol,
-                        int destStartRow, int destStartCol) const;
-
+    void copy(NVMatrix &dest, int srcStartRow, int srcEndRow, int srcStartCol, int srcEndCol, int destStartRow, int destStartCol) const;
     void add(NVMatrix& b, float scaleA, float scaleB, NVMatrix& target);
     void add(NVMatrix& b, float scaleB, NVMatrix& target);
     void add(NVMatrix& b, NVMatrix& target);
     void add(NVMatrix& b, float scaleB);
     void add(NVMatrix& b, float scaleA, float scaleB);
     void add(NVMatrix& b);
-    void addScalar(float scaleThis, float scalar, NVMatrix& target);
-    void addScalar(float scalar, NVMatrix& target);
-    void addScalar(float scalar);
-    void subtractFromScalar(float scalar);
-    void subtractFromScalar(float scalar, NVMatrix& target);
-    void pow(float p);
-    void pow(float p, NVMatrix& target);
     void eltwiseMult(NVMatrix& b);
     void eltwiseMult(NVMatrix& b, NVMatrix& target);
     void eltwiseDivide(NVMatrix& b);
@@ -294,12 +309,6 @@ public:
     void eltwiseDivideByVector(NVMatrix& vec, NVMatrix& target);
     void eltwiseDivideByVector(NVMatrix& vec);
     void tile(int timesY, int timesX, NVMatrix& target);
-    void scale(float _scale);
-    void scale(float _scale, NVMatrix& target);
-    void minWithScalar(float scalar, NVMatrix& target);
-    void minWithScalar(float scalar);
-    void maxWithScalar(float scalar, NVMatrix& target);
-    void maxWithScalar(float scalar);
 
     void sum(int axis, NVMatrix& target);
     NVMatrix& sum(int axis);
@@ -392,37 +401,6 @@ public:
             cutilCheckMsg("kEltwiseOpTrans: Kernel execution failed");
         }
     }
-    /*
-     * __global__ void kEltwiseUnaryOp(float* a, float* dest, const uint numRows, const uint numCols,
-                                    const uint strideA, const uint strideDest, Op op) {
-     */
-    template <class Op>
-    void _eltwiseUnaryOp(NVMatrix& target, Op op) {
-        if (!target.isSameDims(*this)) {
-            target.resize(*this);
-        }
-        int height = target.getFollowingDim(), width = target.getLeadingDim();
-        dim3 blocks(std::min(NUM_BLOCKS_MAX, DIVUP(width, ELTWISE_THREADS_X)),
-                std::min(NUM_BLOCKS_MAX, DIVUP(height, ELTWISE_THREADS_Y)));
-        dim3 threads(ELTWISE_THREADS_X, ELTWISE_THREADS_Y);
-        if (target.isTrans() == isTrans()) {
-            kEltwiseUnaryOp<Op><<<blocks, threads>>>(_devData, target._devData, height, width, getStride(), target.getStride(), op);
-            cutilCheckMsg("kEltwiseUnaryOp: Kernel execution failed");
-        } else {
-            bool checkBounds = !(width % ELTWISE_THREADS_X == 0 && height % ELTWISE_THREADS_X == 0);
-            if (checkBounds) {
-                kEltwiseUnaryOpTrans<Op, true><<<blocks, threads>>>(_devData, target._devData, height, width, getStride(), target.getStride(), op);
-            } else {
-                kEltwiseUnaryOpTrans<Op, false><<<blocks, threads>>>(_devData, target._devData, height, width, getStride(), target.getStride(), op);
-            }
-            cutilCheckMsg("kEltwiseUnaryOpTrans: Kernel execution failed");
-        }
-    }
-
-    template <class Op>
-    void _eltwiseUnaryOp( Op op) {
-        _eltwiseUnaryOp<Op>(*this, op);
-    }
 
     template <class Op>
     void _eltwiseVectorOp(NVMatrix& vec, NVMatrix& target, Op op) {
@@ -447,7 +425,7 @@ public:
     }
 
     template<class UnaryOperator> float argMax(UnaryOperator u) {
-       return _totalAgg<ArgMaxAggregator<UnaryOperator> >(ArgMaxAggregator<UnaryOperator>(u));
+       return _totalAgg(NVMatrixAggs::ArgMax<UnaryOperator>(u));
     }
 
 };

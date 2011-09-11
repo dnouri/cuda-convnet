@@ -148,7 +148,7 @@ void MultiviewTestWorker::run() {
                 softmaxActs.add(logregLayer.getPrev()[1]->getActs());
             }
         }
-        softmaxActs.scale(1 / float(_numViews));
+        softmaxActs.apply(NVMatrixOps::MultByScalar(1 / float(_numViews)));
         NVMatrixV logregInput;
         logregInput.push_back(&logregLayer.getPrev()[0]->getActs());
         logregInput.push_back(&softmaxActs);

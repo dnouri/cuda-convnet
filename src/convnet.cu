@@ -29,6 +29,7 @@
 #include <string>
 
 #include <nvmatrix.cuh>
+#include <nvmatrix_operators.cuh>
 #include <matrix.h>
 #include <convnet.cuh>
 #include <util.cuh>
@@ -291,7 +292,7 @@ bool ConvNet::checkGradient(const string& name, float eps, Weights& weights) {
     }
 
     Matrix gradCPU;
-    weights.getGrad().scale(-1.0 / _data->getNumCases());
+    weights.getGrad().apply(NVMatrixOps::MultByScalar(-1.0 / _data->getNumCases()));
     weights.getGrad().copyToHost(gradCPU, true);
     float analNorm = gradCPU.norm();
     float numNorm = numGrad.norm();

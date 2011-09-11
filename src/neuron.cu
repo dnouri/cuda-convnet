@@ -94,7 +94,7 @@ Neuron& Neuron::makeNeuron(PyObject* neuronDict) {
  * =======================
  */
 void LogisticNeuron::_activate(NVMatrix& input) {
-    input.apply(NVMatrix::LOGISTIC1);
+    input.apply(NVMatrixOps::Logistic());
     _acts = &input;
 }
 
@@ -108,7 +108,7 @@ void LogisticNeuron::_computeInputGrad(NVMatrix& actsGrad) {
  * =======================
  */
 void ReluNeuron::_activate(NVMatrix& input) {
-    input._eltwiseUnaryOp(ReluOperator());
+    input.apply(ReluOperator());
     _acts = &input;
 }
 
@@ -126,7 +126,7 @@ void ReluNeuron::_computeInputGrad(NVMatrix& actsGrad) {
  */
 void AbsNeuron::_activate(NVMatrix& input) {
     input.copy(_input);
-    input.apply(NVMatrix::ABS);
+    input.apply(NVMatrixOps::Abs());
 }
 
 void AbsNeuron::_computeInputGrad(NVMatrix& actsGrad) {
@@ -143,7 +143,7 @@ TanhNeuron::TanhNeuron(float a, float b) : Neuron(), _a(a), _b(b) {
 }
 
 void TanhNeuron::_activate(NVMatrix& input) {
-    input._eltwiseUnaryOp(TanhOperator(_a, _b));
+    input.apply(TanhOperator(_a, _b));
     _acts = &input;
 }
 
@@ -162,7 +162,7 @@ AbsTanhNeuron::AbsTanhNeuron(float a, float b) : Neuron(), _a(a), _b(b) {
 
 void AbsTanhNeuron::_activate(NVMatrix& input) {
     input.copy(_input);
-    input._eltwiseUnaryOp(AbsTanhOperator(_a, _b));
+    input.apply(AbsTanhOperator(_a, _b));
     _acts = &input;
 }
 
@@ -179,7 +179,7 @@ void AbsTanhNeuron::_computeInputGrad(NVMatrix& actsGrad) {
  */
 void SoftReluNeuron::_activate(NVMatrix& input) {
     input.copy(_input);
-    input._eltwiseUnaryOp(SoftReluOperator());
+    input.apply(SoftReluOperator());
 }
 
 void SoftReluNeuron::_computeInputGrad(NVMatrix& actsGrad) {

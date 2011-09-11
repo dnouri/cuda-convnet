@@ -402,7 +402,7 @@ void SoftmaxLayer::fpropActs(NVMatrixV& v, PASS_TYPE passType) {
 
     NVMatrix& max = input.max(1);
     input.addVector(max, -1, _acts);
-    _acts.apply(NVMatrix::EXP);
+    _acts.apply(NVMatrixOps::Exp());
     NVMatrix& sum = _acts.sum(1);
     _acts.eltwiseDivideByVector(sum);
     
