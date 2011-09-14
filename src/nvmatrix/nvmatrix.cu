@@ -335,7 +335,7 @@ void NVMatrix::addGaussianNoise(NVMatrix& stdevs, NVMatrix& target) {
 }
 
 void NVMatrix::biggerThan(NVMatrix& b, NVMatrix& target) {
-    _eltwiseBinaryOp(b, target, NVMatrixBinaryOps::BiggerThan());
+    applyBinary(NVMatrixBinaryOps::BiggerThan(), b, target);
 }
 
 void NVMatrix::biggerThan(NVMatrix& b) {
@@ -343,7 +343,7 @@ void NVMatrix::biggerThan(NVMatrix& b) {
 }
 
 void NVMatrix::equals(NVMatrix& b, NVMatrix& target) {
-    _eltwiseBinaryOp(b, target, NVMatrixBinaryOps::Equals());
+    applyBinary(NVMatrixBinaryOps::Equals(), b, target);
 }
 
 void NVMatrix::equals(NVMatrix& m) {
@@ -351,7 +351,7 @@ void NVMatrix::equals(NVMatrix& m) {
 }
 
 void NVMatrix::biggerThanVector(NVMatrix& vec, NVMatrix& target) {
-    _eltwiseVectorOp(vec, target, NVMatrixBinaryOps::BiggerThan());
+    applyBinaryV(NVMatrixBinaryOps::BiggerThan(), vec, target);
 }
 
 void NVMatrix::biggerThanVector(NVMatrix& vec) {
@@ -472,7 +472,7 @@ void NVMatrix::copy(NVMatrix &dest, int srcStartRow, int srcEndRow,
                     int destStartRow, int destStartCol) const {
     NVMatrix* srcSlice = &slice(srcStartRow, srcEndRow, srcStartCol, srcEndCol);
     NVMatrix* destSlice = &dest.slice(destStartRow, destStartRow + srcEndRow - srcStartRow, destStartCol, destStartCol + srcEndCol - srcStartCol);
-    srcSlice->_eltwiseUnaryOp(NVMatrixOps::Identity(), *destSlice);
+    srcSlice->apply(NVMatrixOps::Identity(), *destSlice);
     delete srcSlice;
     delete destSlice;
 }
@@ -520,7 +520,7 @@ void NVMatrix::flipTrans(NVMatrix& target) {
     assert(&target != this);
     target.resize(_numRows, _numCols);
     target.setTrans(!isTrans());
-    _eltwiseUnaryOp(NVMatrixOps::Identity(), target);
+    apply(NVMatrixOps::Identity(), target);
 }
 
 void NVMatrix::squaredDiff(NVMatrix& b) {
@@ -528,14 +528,14 @@ void NVMatrix::squaredDiff(NVMatrix& b) {
 }
 
 void NVMatrix::squaredDiff(NVMatrix& b, NVMatrix& target) {
-    _eltwiseBinaryOp(b, target, NVMatrixBinaryOps::SquaredDiff());
+    applyBinary(NVMatrixBinaryOps::SquaredDiff(), b, target);
 }
 
 void NVMatrix::add(NVMatrix& b, float scaleA, float scaleB, NVMatrix& target) {
     if (scaleA == 1 && scaleB == 1) { // slight optimization
-        _eltwiseBinaryOp(b, target, NVMatrixBinaryOps::Add());
+        applyBinary(NVMatrixBinaryOps::Add(), b, target);
     } else {
-        _eltwiseBinaryOp(b, target, NVMatrixBinaryOps::WeightedAdd(scaleA, scaleB));
+        applyBinary(NVMatrixBinaryOps::WeightedAdd(scaleA, scaleB), b, target);
     }
 }
 
@@ -568,7 +568,7 @@ void NVMatrix::subtract(NVMatrix& b) {
 }
 
 void NVMatrix::eltwiseMult(NVMatrix& b, NVMatrix& target) {
-    _eltwiseBinaryOp(b, target, NVMatrixBinaryOps::Multiply());
+    applyBinary(NVMatrixBinaryOps::Multiply(), b, target);
 }
 
 void NVMatrix::eltwiseMult(NVMatrix& b) {
@@ -576,7 +576,7 @@ void NVMatrix::eltwiseMult(NVMatrix& b) {
 }
 
 void NVMatrix::eltwiseDivide(NVMatrix& b, NVMatrix& target) {
-    _eltwiseBinaryOp(b, target, NVMatrixBinaryOps::Divide());
+    applyBinary(NVMatrixBinaryOps::Divide(), b, target);
 }
 
 void NVMatrix::eltwiseDivide(NVMatrix& b) {
@@ -597,7 +597,7 @@ void NVMatrix::tile(int timesY, int timesX, NVMatrix& target) {
 }
 
 void NVMatrix::addVector(NVMatrix& vec, float scaleVec, NVMatrix& target) {
-    _eltwiseVectorOp(vec, target, NVMatrixBinaryOps::WeightedAdd(1, scaleVec));
+    applyBinaryV(NVMatrixBinaryOps::WeightedAdd(1, scaleVec), vec, target);
 }
 
 void NVMatrix::addVector(NVMatrix& vec) {
@@ -613,7 +613,7 @@ void NVMatrix::addVector(NVMatrix& vec, NVMatrix& target) {
 }
 
 void NVMatrix::equalsVector(NVMatrix& vec, NVMatrix& target) {
-    _eltwiseVectorOp(vec, target, NVMatrixBinaryOps::Equals());
+    applyBinaryV(NVMatrixBinaryOps::Equals(), vec, target);
 }
 
 void NVMatrix::equalsVector(NVMatrix& vec) {
@@ -621,7 +621,7 @@ void NVMatrix::equalsVector(NVMatrix& vec) {
 }
 
 void NVMatrix::eltwiseMultByVector(NVMatrix& vec, NVMatrix& target) {
-    _eltwiseVectorOp(vec, target, NVMatrixBinaryOps::Multiply());
+    applyBinaryV(NVMatrixBinaryOps::Multiply(), vec, target);
 }
 
 void NVMatrix::eltwiseMultByVector(NVMatrix& vec) {
@@ -633,7 +633,7 @@ void NVMatrix::eltwiseDivideByVector(NVMatrix& vec) {
 }
 
 void NVMatrix::eltwiseDivideByVector(NVMatrix& vec, NVMatrix& target) {
-    _eltwiseVectorOp(vec, target, NVMatrixBinaryOps::Divide());
+    applyBinaryV(NVMatrixBinaryOps::Divide(), vec, target);
 }
 
 /*
@@ -749,6 +749,83 @@ void NVMatrix::_aggregate(int axis, NVMatrix& target, Agg agg) {
         } else {
             copy(target);
         }
+    }
+}
+
+void NVMatrix::inRangeInc(float lower, float upper) {
+    inRangeInc(lower, upper, *this);
+}
+void NVMatrix::inRangeInc(float lower, float upper, NVMatrix& target) {
+    apply(NVMatrixOps::InRange<false>(lower, upper), target);
+}
+
+void NVMatrix::inRangeExc(float lower, float upper) {
+    inRangeExc(lower, upper, *this);
+}
+
+void NVMatrix::inRangeExc(float lower, float upper, NVMatrix& target) {
+    apply(NVMatrixOps::InRange<true>(lower, upper), target);
+}
+
+void NVMatrix::biggerThanScalar(float scalar) {
+    biggerThanScalar(scalar, *this);
+}
+
+void NVMatrix::biggerThanScalar(float scalar, NVMatrix& target) {
+    apply(NVMatrixOps::BiggerThanScalar(scalar), target);
+}
+
+void NVMatrix::smallerThanScalar(float scalar) {
+    smallerThanScalar(scalar, *this);
+}
+
+void NVMatrix::smallerThanScalar(float scalar, NVMatrix& target) {
+    apply(NVMatrixOps::SmallerThanScalar(scalar), target);
+}
+
+void NVMatrix::addScalar(float scaleThis, float scalar, NVMatrix& target) {
+    apply(NVMatrixOps::WeightedAddScalar(scaleThis, scalar), target);
+}
+
+void NVMatrix::addScalar(float scalar, NVMatrix& target) {
+    apply(NVMatrixOps::AddScalar(scalar), target);
+}
+
+void NVMatrix::addScalar(float scalar) {
+    addScalar(scalar, *this);
+}
+
+void NVMatrix::minWithScalar(float scalar, NVMatrix& target) {
+    apply(NVMatrixOps::MinWithScalar(scalar), target);
+}
+
+void NVMatrix::minWithScalar(float scalar) {
+    minWithScalar(scalar, *this);
+}
+
+void NVMatrix::maxWithScalar(float scalar, NVMatrix& target) {
+    apply(NVMatrixOps::MaxWithScalar(scalar), target);
+}
+
+void NVMatrix::maxWithScalar(float scalar) {
+    maxWithScalar(scalar, *this);
+}
+
+void NVMatrix::pow(float p, NVMatrix& target) {
+    apply(NVMatrixOps::Pow(p), target);
+}
+
+void NVMatrix::pow(float p) {
+    pow(p, *this);
+}
+
+void NVMatrix::scale(float _scale) {
+    scale(_scale, *this);
+}
+
+void NVMatrix::scale(float _scale, NVMatrix& target) {
+    if (_scale != 1 || &target != this) { // optimize away scale by 1
+        apply(NVMatrixOps::MultByScalar(_scale), target);
     }
 }
 

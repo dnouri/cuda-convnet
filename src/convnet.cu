@@ -41,7 +41,6 @@ using namespace std;
  * ConvNet
  * =======================
  */
-
 ConvNet::ConvNet(PyListObject* layerParams, int minibatchSize, int deviceID) : Thread(false),  _deviceID(deviceID), _data(NULL) {
     try {
         int numLayers = PyList_GET_SIZE(layerParams);

@@ -356,35 +356,38 @@ __global__ void kAggRows_wholerow_nosync(const float* mat, float* matSum, const 
     const uint tidxInWarp = tidx % WARP_SIZE;
     
     __shared__ float accum[(WARP_SIZE + 1) * AWR_NUM_WARPS + WARP_SIZE/2];
-    volatile float* myAccum = &accum[warpIdx * (WARP_SIZE + 1) + tidxInWarp];
     __shared__ float finalAccum[AWR_NUM_WARPS + AWR_NUM_WARPS / 2];
-    volatile float* myFinalAccum = &finalAccum[tidx];
-    
+
+    float* myAccum = &accum[warpIdx * (WARP_SIZE + 1) + tidxInWarp];
+    volatile float* vMyAccum = &accum[warpIdx * (WARP_SIZE + 1) + tidxInWarp];
     matSum += blockIdx.y;
     mat += width * blockIdx.y;
 
     for (uint idxY = blockIdx.y; idxY < height; idxY += gridDim.y) {
-        myAccum[0] = agg.getBaseValue();
+        float rAccum = agg.getBaseValue(); // cache in register, a bit faster than shmem
         for (uint x = tidx; x < width; x += AWR_NUM_THREADS) {
-            myAccum[0] = agg(myAccum[0], mat[x]);
+            rAccum = agg(rAccum, mat[x]);
         }
+        myAccum[0] = rAccum;
+        
         // Each warp does a reduction that doesn't require synchronizatoin
         #pragma unroll
         for (uint i = 0; i < LOG_WARP_SIZE; i++) {
             const uint d = 1 << i;
-            myAccum[0] = agg(myAccum[0], myAccum[d]);
+            vMyAccum[0] = agg(vMyAccum[0], vMyAccum[d]);
         }
         __syncthreads();
         // The warps write their results
         if (tidx < AWR_NUM_WARPS) {
-            myFinalAccum[0] = accum[tidx * (WARP_SIZE + 1)];
+            volatile float* vMyFinalAccum = &finalAccum[tidx];
+            vMyFinalAccum[0] = accum[tidx * (WARP_SIZE + 1)];
             #pragma unroll
             for (uint i = 0; i < AWR_LOG_NUM_WARPS; i++) {
                 const uint d = 1 << i;
-                myFinalAccum[0] = agg(myFinalAccum[0], myFinalAccum[d]);
+                vMyFinalAccum[0] = agg(vMyFinalAccum[0], vMyFinalAccum[d]);
             }
             if (tidx == 0) {
-                matSum[0] = myFinalAccum[0];
+                matSum[0] = vMyFinalAccum[0];
                 matSum += gridDim.y;
             }
         }

@@ -163,11 +163,11 @@ public:
         }
     };
 
-    class PowOperator {
+    class Pow {
     private:
         const float p;
     public:
-        PowOperator(float _p) : p(_p) {
+        Pow(float _p) : p(_p) {
         }
         __device__ inline float operator()(float a) const {
             return __powf(a, p);

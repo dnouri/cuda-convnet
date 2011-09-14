@@ -126,7 +126,7 @@ void Layer::bprop(NVMatrix& v, PASS_TYPE passType) {
                 bpropActs(v, i, _prev[i]->getRcvdBInputs() > 0 ? 1 : 0, passType);
                 _prev[i]->incRcvdBInputs();
             }
-        }    
+        }
     }
     
     bpropWeights(v, passType);
