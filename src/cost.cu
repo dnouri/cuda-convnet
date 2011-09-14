@@ -45,8 +45,8 @@ Cost::Cost(vector<CostLayer*>& costs) {
     }
 }
 
-doublev*& Cost::operator [](const string s) {
-    return _costMap[s];
+doublev& Cost::operator [](const string s) {
+    return *_costMap[s];
 }
 
 CostMap& Cost::getCostMap() {

@@ -46,7 +46,7 @@ private:
 public:
     Cost();
     Cost(std::vector<CostLayer*>& costs);
-    doublev*& operator [](const std::string s);
+    doublev& operator [](const std::string s);
     CostMap& getCostMap();
     /*
      * Returns sum of first values returned by all the costs, weighted by the cost coefficients.
