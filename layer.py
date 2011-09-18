@@ -307,10 +307,11 @@ class ConvLayerParser(LayerWithInputParser):
         dic['modulesX'] = 1 + int(ceil((2 * dic['padding'] + dic['imgSize'] - dic['filterSize']) / float(dic['stride'])))
         dic['modules'] = dic['modulesX']**2
         dic['numFilters'] = mcp.safe_get_int(name, 'numFilters')
-        dic['numOutputs'] = dic['modules'] * dic['numFilters']
         dic['partialSum'] = mcp.safe_get_int(name, 'partialSum')
         dic['sharedBiases'] = mcp.safe_get_bool(name, 'sharedBiases', default=True)
         dic['groups'] = mcp.safe_get_int(name, 'groups', default=1)
+        dic['numFilters'] *= dic['groups']
+        dic['numOutputs'] = dic['modules'] * dic['numFilters']
 
         LayerParser.verify_int_range(dic['stride'], name, 'stride', 1, None)
         LayerParser.verify_int_range(dic['filterSize'], name, 'filterSize', 1, None)
@@ -329,7 +330,7 @@ class ConvLayerParser(LayerWithInputParser):
             raise LayerParsingError("Layer '%s': number of channels must be smaller than 4 or divisible by 4" % name)
 
         LayerParser.verify_divisible(name, dic['channels'], dic['groups'], 'channels', 'groups')
-        LayerParser.verify_divisible(name, dic['numFilters'], 16*dic['groups'], 'numFilters', '16 * groups')
+        LayerParser.verify_divisible(name, dic['numFilters']/dic['groups'], 16, 'numFilters')
         
         if dic['groups'] > 1:
             LayerParser.verify_divisible(name, dic['channels'], 4*dic['groups'], 'channels', '4 * groups')
@@ -345,7 +346,7 @@ class ConvLayerParser(LayerWithInputParser):
         
         print "Initialized convolutional layer '%s', producing %d groups of %dx%d %d-channel output" % \
               (name, dic['groups'], dic['modulesX'], dic['modulesX'], dic['numFilters']/dic['groups'])
-        
+  
         return dic    
     
 class DataLayerParser(LayerParser):
@@ -375,7 +376,7 @@ class PoolLayerParser(LayerWithInputParser):
         dic = LayerWithInputParser.parse(self, name, mcp, prev_layers, model)
         dic['channels'] = mcp.safe_get_int(name, 'channels')
         dic['sizeX'] = mcp.safe_get_int(name, 'sizeX')
-        dic['start'] = mcp.safe_get_int(name, 'start')
+        dic['start'] = mcp.safe_get_int(name, 'start', default=0)
         dic['stride'] = mcp.safe_get_int(name, 'stride')
         dic['outputsX'] = mcp.safe_get_int(name, 'outputsX', default=0)
         dic['stride'] = mcp.safe_get_int(name, 'stride')
