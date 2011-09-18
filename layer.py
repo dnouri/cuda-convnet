@@ -343,7 +343,8 @@ class ConvLayerParser(LayerWithInputParser):
                                                                      dic['numFilters'], dic['initW'], order='C')
         dic['biases'], dic['biasesInc'] = LayerParser.make_weights(num_biases, 1, 0, order='C')
         
-        print "Initialized convolutional layer '%s', producing %dx%d %d-channel output" % (name, dic['modulesX'], dic['modulesX'], dic['numFilters'])
+        print "Initialized convolutional layer '%s', producing %d groups of %dx%d %d-channel output" % \
+              (name, dic['groups'], dic['modulesX'], dic['modulesX'], dic['numFilters']/dic['groups'])
         
         return dic    
     
