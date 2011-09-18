@@ -149,10 +149,10 @@ if __name__ == "__main__":
             if type(filters) == list: # Fully-connected layer
                 input_idx = int(options["-i"])
                 filters = filters[input_idx]
-                num_filters = layer['numOutputs']
+                num_filters = layer['outputs']
                 channels = int(options["-c"])
             else: # Conv layer
-                num_filters = layer['numFilters']
+                num_filters = layer['filters']
                 channels = layer['channels']
             combine_chans = "-o" not in options and channels == 3
             
