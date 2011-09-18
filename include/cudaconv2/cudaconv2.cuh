@@ -34,23 +34,26 @@
 enum FILTER_OUTPUT_ORDER {MODULE_FILTER_IMAGE, FILTER_MODULE_IMAGE};
 
 void convFilterActs(NVMatrix& images, NVMatrix& filters, NVMatrix& targets,
-                       int numModulesX, int paddingStart, int moduleStride, int numColors);
+                          int numModulesX, int paddingStart, int moduleStride,
+                          int numImgColors, int numGroups);
 void convFilterActs(NVMatrix& images, NVMatrix& filters, NVMatrix& targets,
-                       int numModulesX, int paddingStart, int moduleStride, int numColors,
-                       float scaleTargets, float scaleOutput);
+                   int numModulesX, int paddingStart, int moduleStride,
+                   int numImgColors, int numGroups,
+                   float scaleTargets, float scaleOutput);
 
 void convImgActs(NVMatrix& hidActs, NVMatrix& filters, NVMatrix& targets,
-                    int imgSize, int paddingStart, int moduleStride, int numColors);
+                 int imgSize, int paddingStart, int moduleStride, int numImgColors, int numGroups);
 void convImgActs(NVMatrix& hidActs, NVMatrix& filters, NVMatrix& targets,
-                    int imgSize, int paddingStart, int moduleStride, int numColors,
-                    float scaleTargets, float scaleOutput);
+                 int imgSize, int paddingStart, int moduleStride, int numImgColors, int numGroups,
+                 float scaleTargets, float scaleOutput);
 
 void convWeightActs(NVMatrix& images, NVMatrix& hidActs, NVMatrix& targets,
-        int numModulesX, int filterSize, int paddingStart, int moduleStride, int numColors,
-        float scaleTargets, float scaleOutput, int moduleSum);
+                    int numModulesX, int filterSize, int paddingStart, int moduleStride, int numImgColors,
+                    int numGroups, float scaleTargets, float scaleOutput, int moduleSum);
 void convWeightActs(NVMatrix& images, NVMatrix& hidActs, NVMatrix& targets,
-                       int numModulesX, int filterSize, int paddingStart,
-                       int moduleStride, int numColors);
+                    int numModulesX, int filterSize, int paddingStart,
+                    int moduleStride, int numImgColors, int numGroups);
+
 
 #endif	/* COMMON_CUH */
 

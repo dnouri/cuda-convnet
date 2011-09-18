@@ -349,6 +349,10 @@ __global__ void kAggRows_wholerow(const float* mat, float* matSum, const uint wi
     }
 }
 
+/*
+ * Implements multiscan idea from http://www.moderngpu.com
+ * Not really useful for pure reductions but neat nonetheless.
+ */
 template<class Agg>
 __global__ void kAggRows_wholerow_nosync(const float* mat, float* matSum, const uint width, const uint height, Agg agg) {
     const uint tidx = threadIdx.x;

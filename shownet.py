@@ -155,7 +155,7 @@ if __name__ == "__main__":
                 num_filters = layer['numFilters']
                 channels = layer['channels']
             combine_chans = "-o" not in options and channels == 3
-
+            
             filters = filters.reshape(channels, filters.shape[0]/channels, filters.shape[1])
             filters -= filters.min()
             filters /= filters.max()

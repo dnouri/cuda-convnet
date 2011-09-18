@@ -312,12 +312,14 @@ ConvLayer::ConvLayer(PyObject* paramsDict) : WeightLayer(paramsDict, true, true,
     _channels = pyDictGetInt(paramsDict, "channels");
     _imgSize = pyDictGetInt(paramsDict, "imgSize");
     _numFilters = pyDictGetInt(paramsDict, "numFilters");
+    _groups = pyDictGetInt(paramsDict, "groups");
     _partialSum = pyDictGetInt(paramsDict, "partialSum");
     _sharedBiases = pyDictGetInt(paramsDict, "sharedBiases");
 
     _modules = _modulesX * _modulesX;
     _filterPixels = _filterSize * _filterSize;
     _imgPixels = _imgSize * _imgSize;
+    _filterChannels = _channels / _groups;
     
     _weights.initialize(*hWeights, *hWeightsInc, epsW, wc, momW, true);
     _biases.initialize(*hBiases, *hBiasesInc, epsB, 0, momB, true);
@@ -329,7 +331,7 @@ ConvLayer::ConvLayer(PyObject* paramsDict) : WeightLayer(paramsDict, true, true,
 }
 
 void ConvLayer::fpropActs(NVMatrixV& v, PASS_TYPE passType) {
-    convFilterActs(*v[0], *_weights, _acts, _modulesX, _padding, _stride, _channels);
+    convFilterActs(*v[0], *_weights, _acts, _modulesX, _padding, _stride, _channels, _groups);
     if (_sharedBiases) {
         _acts.reshape(_numFilters, _acts.getNumElements() / _numFilters);
         _acts.addVector(*_biases);
@@ -353,17 +355,17 @@ void ConvLayer::bpropWeights(NVMatrix& v, PASS_TYPE passType) {
         v.sum(1, _biases.getGrad());
     }
     if (_partialSum > 0 && _partialSum < _modules) {
-        convWeightActs(_prev[0]->getActs(), v, _weightGradTmp, _modulesX, _filterSize, _padding, _stride, _channels, 0, 1, _partialSum);
-        _weightGradTmp.reshape(_modules / _partialSum, _channels * _filterPixels * _numFilters);
+        convWeightActs(_prev[0]->getActs(), v, _weightGradTmp, _modulesX, _filterSize, _padding, _stride, _channels, _groups, 0, 1, _partialSum);
+        _weightGradTmp.reshape(_modules / _partialSum, _filterChannels * _filterPixels * _numFilters);
         _weightGradTmp.sum(0, _weights.getGrad());
-        _weights.getGrad().reshape(_channels * _filterPixels, _numFilters);
+        _weights.getGrad().reshape(_filterChannels * _filterPixels, _numFilters);
     } else {
-        convWeightActs(_prev[0]->getActs(), v, _weights.getGrad(), _modulesX, _filterSize, _padding, _stride, _channels);
+        convWeightActs(_prev[0]->getActs(), v, _weights.getGrad(), _modulesX, _filterSize, _padding, _stride, _channels, _groups);
     }
 }
 
 void ConvLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType) {
-    convImgActs(v, *_weights, _prev[inpIdx]->getActsGrad(), _imgSize, _padding, _stride, _channels, scaleTargets, 1);
+    convImgActs(v, *_weights, _prev[inpIdx]->getActsGrad(), _imgSize, _padding, _stride, _channels, _groups, scaleTargets, 1);
 }
 
 void ConvLayer::truncBwdActs() {

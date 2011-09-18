@@ -25,6 +25,7 @@
 from data import *
 import numpy.random as nr
 import numpy as n
+import random as r
 
 class CIFARDataProvider(LabeledMemoryDataProvider):
     def __init__(self, data_dir, batch_range, init_epoch=1, init_batchnum=None, dp_params={}, test=False):

@@ -85,43 +85,42 @@ class AbsTanhNeuronParser(ParamNeuronParser):
 
 # Subclass that throws more convnet-specific exceptions than the default
 class MyConfigParser(cfg.SafeConfigParser):
-    def get(self, section, option):
-        return self.safeGet(section, option)
-    
-    def safeGet(self, section, option, f=cfg.SafeConfigParser.get, typestr=None):
+    def safe_get(self, section, option, f=cfg.SafeConfigParser.get, typestr=None, default=None):
         try:
             return f(self, section, option)
         except cfg.NoOptionError, e:
+            if default is not None:
+                return default
             raise LayerParsingError("Layer '%s': required parameter '%s' missing" % (section, option))
         except ValueError, e:
             if typestr is None:
                 raise e
             raise LayerParsingError("Layer '%s': parameter '%s' must be %s" % (section, option, typestr))
         
-    def safeGetList(self, section, option, f, typestr=None):
-        v = self.safeGet(section, option)
+    def safe_get_list(self, section, option, f, typestr=None):
+        v = self.safe_get(section, option)
         try:
             return [f(x) for x in v.split(',')]
         except:
             raise LayerParsingError("Layer '%s': parameter '%s' must be ','-delimited list of %s" % (section, option, typestr))
         
-    def getint(self, section, option):
-        return self.safeGet(section, option, cfg.SafeConfigParser.getint, 'int')
+    def safe_get_int(self, section, option, default=None):
+        return self.safe_get(section, option, f=cfg.SafeConfigParser.getint, typestr='int', default=default)
         
-    def getfloat(self, section, option):
-        return self.safeGet(section, option, cfg.SafeConfigParser.getfloat, 'float')
+    def safe_get_float(self, section, option, default=None):
+        return self.safe_get(section, option, f=cfg.SafeConfigParser.getfloat, typestr='float', default=default)
     
-    def getbool(self, section, option):
-        return self.safeGet(section, option, cfg.SafeConfigParser.getboolean, 'bool')
+    def safe_get_bool(self, section, option, default=None):
+        return self.safe_get(section, option, f=cfg.SafeConfigParser.getboolean, typestr='bool', default=default)
     
-    def getFloatList(self, section, option):
-        return self.safeGetList(section, option, float, typestr='floats')
+    def safe_get_float_list(self, section, option):
+        return self.safe_get_list(section, option, float, typestr='floats')
     
-    def getIntList(self, section, option):
-        return self.safeGetList(section, option, int, typestr='ints')
+    def safe_get_int_list(self, section, option):
+        return self.safe_get_list(section, option, int, typestr='ints')
     
-    def getBoolList(self, section, option):
-        return self.safeGetList(section, option, bool, typestr='bools')
+    def safe_get_bool_list(self, section, option):
+        return self.safe_get_list(section, option, bool, typestr='bools')
                      
 class LayerParser:
     def requires_params(self):
@@ -133,7 +132,7 @@ class LayerParser:
     def parse(self, name, mcp, prev_layers, model):
         dic = {}
         dic['name'] = name
-        dic['type'] = mcp.get(name, 'type')
+        dic['type'] = mcp.safe_get(name, 'type')
 
         return dic
     
@@ -167,6 +166,11 @@ class LayerParser:
             raise LayerParsingError("Layer '%s': parameter '%s' must be greater than %d" % (layer_name, param_name, _min))
         elif _max is not None and v > _max:
             raise LayerParsingError("Layer '%s': parameter '%s' must be smaller than %d" % (layer_name, param_name, _max))
+    
+    @staticmethod
+    def verify_divisible(layer_name, value, div, value_name, div_name=None):
+        if value % div != 0:
+            raise LayerParsingError("Layer '%s': parameter '%s' must be divisible by %s" % (layer_name, value_name, str(div) if div_name is None else '%s' % div_name))
 
     @staticmethod
     def parse_layers(layer_cfg_path, param_cfg_path, model, layers=[]):
@@ -181,7 +185,7 @@ class LayerParser:
                 for name in mcp.sections():
                     if not mcp.has_option(name, 'type'):
                         raise LayerParsingError("Layer '%s': no type given" % name)
-                    ltype = mcp.get(name, 'type')
+                    ltype = mcp.safe_get(name, 'type')
                     if ltype not in layer_parsers:
                         raise LayerParsingError("Layer '%s': Unknown layer type: '%s'" % (name, ltype))
                     layers += [layer_parsers[ltype].parse(name, mcp, layers, model)]
@@ -222,7 +226,7 @@ class LayerWithInputParser(LayerParser):
     def parse(self, name, mcp, prev_layers, model):
         dic = LayerParser.parse(self, name, mcp, prev_layers, model)
         
-        dic['inputs'] = [inp.strip() for inp in mcp.get(name, 'inputs').split(',')]
+        dic['inputs'] = [inp.strip() for inp in mcp.safe_get(name, 'inputs').split(',')]
         prev_names = [p['name'] for p in prev_layers]
         for inp in dic['inputs']:
             if inp not in prev_names:
@@ -245,11 +249,11 @@ class FCLayerParser(LayerWithInputParser):
             raise LayerParsingError("Layer '%s': %s list length does not match number of inputs" % (dic['name'], param))
     
     def add_params(self, name, mcp, dic):
-        dic['epsW'] = mcp.getFloatList(name, 'epsW')
-        dic['epsB'] = mcp.getfloat(name, 'epsB')
-        dic['momW'] = mcp.getFloatList(name, 'momW')
-        dic['momB'] = mcp.getfloat(name, 'momB')
-        dic['wc'] = mcp.getFloatList(name, 'wc')
+        dic['epsW'] = mcp.safe_get_float_list(name, 'epsW')
+        dic['epsB'] = mcp.safe_get_float(name, 'epsB')
+        dic['momW'] = mcp.safe_get_float_list(name, 'momW')
+        dic['momB'] = mcp.safe_get_float(name, 'momB')
+        dic['wc'] = mcp.safe_get_float_list(name, 'wc')
         
         FCLayerParser.verify_num_params(dic, 'epsW')
         FCLayerParser.verify_num_params(dic, 'momW')
@@ -258,9 +262,9 @@ class FCLayerParser(LayerWithInputParser):
     def parse(self, name, mcp, prev_layers, model):
         dic = LayerWithInputParser.parse(self, name, mcp, prev_layers, model)
 
-        dic['numOutputs'] = mcp.getint(name, 'numOutputs')
-        dic['neuron'] = LayerParser.parse_neuron(name, mcp.get(name, 'neuron'))
-        dic['initW'] = mcp.getFloatList(name, 'initW')
+        dic['numOutputs'] = mcp.safe_get_int(name, 'numOutputs')
+        dic['neuron'] = LayerParser.parse_neuron(name, mcp.safe_get(name, 'neuron'))
+        dic['initW'] = mcp.safe_get_float_list(name, 'initW')
         
         LayerParser.verify_int_range(dic['numOutputs'], name, 'numOutputs', 1, None)
         FCLayerParser.verify_num_params(dic, 'initW')
@@ -283,48 +287,59 @@ class ConvLayerParser(LayerWithInputParser):
         return True
     
     def add_params(self, name, mcp, dic):
-        dic['epsW'] = mcp.getfloat(name, 'epsW')
-        dic['epsB'] = mcp.getfloat(name, 'epsB')
-        dic['momW'] = mcp.getfloat(name, 'momW')
-        dic['momB'] = mcp.getfloat(name, 'momB')
-        dic['wc'] = mcp.getfloat(name, 'wc')
+        dic['epsW'] = mcp.safe_get_float(name, 'epsW')
+        dic['epsB'] = mcp.safe_get_float(name, 'epsB')
+        dic['momW'] = mcp.safe_get_float(name, 'momW')
+        dic['momB'] = mcp.safe_get_float(name, 'momB')
+        dic['wc'] = mcp.safe_get_float(name, 'wc')
     
     def parse(self, name, mcp, prev_layers, model):
         dic = LayerWithInputParser.parse(self, name, mcp, prev_layers, model)
         
-        dic['channels'] = mcp.getint(name, 'channels')
+        dic['channels'] = mcp.safe_get_int(name, 'channels')
         dic['imgPixels'] = dic['numInputs'][0] / dic['channels']
         dic['imgSize'] = int(n.sqrt(dic['imgPixels']))
-        if dic['numInputs'][0] % dic['imgPixels'] != 0 or dic['imgSize'] * dic['imgSize'] != dic['imgPixels']:
-            raise LayerParsingError("Layer '%s': has %-d dimensional input, not interpretable as square %d-channel images" % (name, dic['numInputs'][0], dic['channels']))
-        if dic['channels'] > 3 and dic['channels'] % 4 != 0:
-            raise LayerParsingError("Layer '%s': number of channels must be smaller than 4 or divisible by 4" % name)
         
-        dic['padding'] = mcp.getint(name, 'padding')
-        dic['stride'] = mcp.getint(name, 'stride')
-        dic['filterSize'] = mcp.getint(name, 'filterSize')
+        dic['padding'] = mcp.safe_get_int(name, 'padding', default=0)
+        dic['stride'] = mcp.safe_get_int(name, 'stride', default=1)
+        dic['filterSize'] = mcp.safe_get_int(name, 'filterSize')
         dic['filterPixels'] = dic['filterSize']**2
         dic['modulesX'] = 1 + int(ceil((2 * dic['padding'] + dic['imgSize'] - dic['filterSize']) / float(dic['stride'])))
         dic['modules'] = dic['modulesX']**2
-        dic['numFilters'] = mcp.getint(name, 'numFilters')
+        dic['numFilters'] = mcp.safe_get_int(name, 'numFilters')
         dic['numOutputs'] = dic['modules'] * dic['numFilters']
-        dic['partialSum'] = mcp.getint(name, 'partialSum')
-        if dic['partialSum'] != 0 and dic['modules'] % dic['partialSum'] != 0:
-            raise LayerParsingError("Layer '%s': convolutional layer produces %d outputs per filter, but given partialSum parameter (%d) does not divide this number" % (name, dic['modules'], dic['partialSum']))
-        dic['sharedBiases'] = mcp.getbool(name, 'sharedBiases')
-        
+        dic['partialSum'] = mcp.safe_get_int(name, 'partialSum')
+        dic['sharedBiases'] = mcp.safe_get_bool(name, 'sharedBiases', default=True)
+        dic['groups'] = mcp.safe_get_int(name, 'groups', default=1)
+
         LayerParser.verify_int_range(dic['stride'], name, 'stride', 1, None)
         LayerParser.verify_int_range(dic['filterSize'], name, 'filterSize', 1, None)
         LayerParser.verify_int_range(dic['padding'], name, 'padding', 0, None)
         LayerParser.verify_int_range(dic['channels'], name, 'channels', 1, None)
         LayerParser.verify_int_range(dic['imgSize'], name, 'imgSize', 1, None)
+        LayerParser.verify_int_range(dic['groups'], name, 'groups', 1, None)
         
+        dic['filterChannels'] = dic['channels'] / dic['groups']
+        
+        if dic['partialSum'] != 0 and dic['modules'] % dic['partialSum'] != 0:
+            raise LayerParsingError("Layer '%s': convolutional layer produces %d outputs per filter, but given partialSum parameter (%d) does not divide this number" % (name, dic['modules'], dic['partialSum']))
+        if dic['numInputs'][0] % dic['imgPixels'] != 0 or dic['imgSize'] * dic['imgSize'] != dic['imgPixels']:
+            raise LayerParsingError("Layer '%s': has %-d dimensional input, not interpretable as square %d-channel images" % (name, dic['numInputs'][0], dic['channels']))
+        if dic['channels'] > 3 and dic['channels'] % 4 != 0:
+            raise LayerParsingError("Layer '%s': number of channels must be smaller than 4 or divisible by 4" % name)
+
+        LayerParser.verify_divisible(name, dic['channels'], dic['groups'], 'channels', 'groups')
+        LayerParser.verify_divisible(name, dic['numFilters'], 16*dic['groups'], 'numFilters', '16 * groups')
+        
+        if dic['groups'] > 1:
+            LayerParser.verify_divisible(name, dic['channels'], 4*dic['groups'], 'channels', '4 * groups')
+                
         dic['padding'] = -dic['padding']
-        dic['neuron'] = LayerParser.parse_neuron(name, mcp.get(name, 'neuron'))
-        dic['initW'] = mcp.getfloat(name, 'initW')
+        dic['neuron'] = LayerParser.parse_neuron(name, mcp.safe_get(name, 'neuron'))
+        dic['initW'] = mcp.safe_get_float(name, 'initW')
         
         num_biases = dic['numFilters'] if dic['sharedBiases'] else dic['modules']*dic['numFilters']
-        dic['weights'], dic['weightsInc'] = LayerParser.make_weights(dic['filterPixels']*dic['channels'], \
+        dic['weights'], dic['weightsInc'] = LayerParser.make_weights(dic['filterPixels']*dic['filterChannels'], \
                                                                      dic['numFilters'], dic['initW'], order='C')
         dic['biases'], dic['biasesInc'] = LayerParser.make_weights(num_biases, 1, 0, order='C')
         
@@ -335,7 +350,7 @@ class ConvLayerParser(LayerWithInputParser):
 class DataLayerParser(LayerParser):
     def parse(self, name, mcp, prev_layers, model):
         dic = LayerParser.parse(self, name, mcp, prev_layers, model)
-        dic['dataIdx'] = mcp.getint(name, 'dataIdx')
+        dic['dataIdx'] = mcp.safe_get_int(name, 'dataIdx')
         dic['numOutputs'] = model.train_data_provider.get_data_dims(idx=dic['dataIdx'])
         
         print "Initialized data layer '%s', producing %d outputs" % (name, dic['numOutputs'])
@@ -357,13 +372,13 @@ class PoolLayerParser(LayerWithInputParser):
         
     def parse(self, name, mcp, prev_layers, model):
         dic = LayerWithInputParser.parse(self, name, mcp, prev_layers, model)
-        dic['channels'] = mcp.getint(name, 'channels')
-        dic['sizeX'] = mcp.getint(name, 'sizeX')
-        dic['start'] = mcp.getint(name, 'start')
-        dic['stride'] = mcp.getint(name, 'stride')
-        dic['outputsX'] = mcp.getint(name, 'outputsX')
-        dic['stride'] = mcp.getint(name, 'stride')
-        dic['pool'] = mcp.get(name, 'pool')
+        dic['channels'] = mcp.safe_get_int(name, 'channels')
+        dic['sizeX'] = mcp.safe_get_int(name, 'sizeX')
+        dic['start'] = mcp.safe_get_int(name, 'start')
+        dic['stride'] = mcp.safe_get_int(name, 'stride')
+        dic['outputsX'] = mcp.safe_get_int(name, 'outputsX', default=0)
+        dic['stride'] = mcp.safe_get_int(name, 'stride')
+        dic['pool'] = mcp.safe_get(name, 'pool')
         
         dic['imgPixels'] = dic['numInputs'][0] / dic['channels']
         dic['imgSize'] = int(n.sqrt(dic['imgPixels']))
@@ -395,10 +410,10 @@ class NormLayerParser(LayerWithInputParser):
         
     def parse(self, name, mcp, prev_layers, model):
         dic = LayerWithInputParser.parse(self, name, mcp, prev_layers, model)
-        dic['channels'] = mcp.getint(name, 'channels')
-        dic['sizeX'] = mcp.getint(name, 'sizeX')
-        dic['pow'] = mcp.getfloat(name, 'pow')
-        dic['scale'] = mcp.getfloat(name, 'scale') / (dic['sizeX']**2)
+        dic['channels'] = mcp.safe_get_int(name, 'channels')
+        dic['sizeX'] = mcp.safe_get_int(name, 'sizeX')
+        dic['pow'] = mcp.safe_get_float(name, 'pow')
+        dic['scale'] = mcp.safe_get_float(name, 'scale') / (dic['sizeX']**2)
         
         dic['imgPixels'] = dic['numInputs'][0] / dic['channels']
         dic['imgSize'] = int(n.sqrt(dic['imgPixels']))
@@ -423,7 +438,7 @@ class CostParser(LayerWithInputParser):
         return True    
     
     def add_params(self, name, mcp, dic):
-        dic['coeff'] = mcp.getfloat(name, 'coeff')
+        dic['coeff'] = mcp.safe_get_float(name, 'coeff')
             
 class LogregCostParser(CostParser):
     def __init__(self):

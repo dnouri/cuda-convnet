@@ -155,8 +155,8 @@ class ConvLayer : public WeightLayer {
 private:
     Weights _weights, _biases;
     Neuron* _neuron;
-    int _modulesX, _padding, _stride, _filterSize, _channels, _imgSize;
-    int _imgPixels, _filterPixels, _modules;
+    int _modulesX, _padding, _stride, _filterSize, _channels, _imgSize, _groups;
+    int _imgPixels, _filterPixels, _modules, _filterChannels;
     int _partialSum;
     int _numFilters;
     bool _sharedBiases;
