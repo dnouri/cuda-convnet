@@ -170,7 +170,7 @@ class LayerParser:
     @staticmethod
     def verify_divisible(layer_name, value, div, value_name, div_name=None):
         if value % div != 0:
-            raise LayerParsingError("Layer '%s': parameter '%s' must be divisible by %s" % (layer_name, value_name, str(div) if div_name is None else '%s' % div_name))
+            raise LayerParsingError("Layer '%s': parameter '%s' must be divisible by %s" % (layer_name, value_name, str(div) if div_name is None else "'%s'" % div_name))
 
     @staticmethod
     def parse_layers(layer_cfg_path, param_cfg_path, model, layers=[]):
@@ -232,7 +232,7 @@ class LayerWithInputParser(LayerParser):
             if inp not in prev_names:
                 raise LayerParsingError("Layer '%s': input '%s' not defined" % (name, inp))
         dic['inputs'] = [prev_names.index(inp) for inp in dic['inputs']]
-        dic['numInputs'] = [prev_layers[i]['numOutputs'] for i in dic['inputs']]
+        dic['numInputs'] = [prev_layers[i]['outputs'] for i in dic['inputs']]
         
         if self.num_inputs > 0 and len(dic['numInputs']) != self.num_inputs:
             raise LayerParsingError("Layer '%s': number of inputs must be %d", name, self.num_inputs) 
@@ -262,21 +262,21 @@ class FCLayerParser(LayerWithInputParser):
     def parse(self, name, mcp, prev_layers, model):
         dic = LayerWithInputParser.parse(self, name, mcp, prev_layers, model)
 
-        dic['numOutputs'] = mcp.safe_get_int(name, 'numOutputs')
+        dic['outputs'] = mcp.safe_get_int(name, 'outputs')
         dic['neuron'] = LayerParser.parse_neuron(name, mcp.safe_get(name, 'neuron'))
         dic['initW'] = mcp.safe_get_float_list(name, 'initW')
         
-        LayerParser.verify_int_range(dic['numOutputs'], name, 'numOutputs', 1, None)
+        LayerParser.verify_int_range(dic['outputs'], name, 'outputs', 1, None)
         FCLayerParser.verify_num_params(dic, 'initW')
         
-        weights = [LayerParser.make_weights(numIn, dic['numOutputs'], init, order='F') for numIn,init in zip(dic['numInputs'], dic['initW'])]
-        biases = LayerParser.make_weights(1, dic['numOutputs'], 0, order='F')
+        weights = [LayerParser.make_weights(numIn, dic['outputs'], init, order='F') for numIn,init in zip(dic['numInputs'], dic['initW'])]
+        biases = LayerParser.make_weights(1, dic['outputs'], 0, order='F')
         dic['weights'] = [w[0] for w in weights]
         dic['weightsInc'] = [w[1] for w in weights]
         dic['biases'] = biases[0]
         dic['biasesInc'] = biases[1]
         
-        print "Initialized fully-connected layer '%s', producing %d outputs" % (name, dic['numOutputs'])
+        print "Initialized fully-connected layer '%s', producing %d outputs" % (name, dic['outputs'])
         return dic
 
 class ConvLayerParser(LayerWithInputParser):
@@ -306,12 +306,12 @@ class ConvLayerParser(LayerWithInputParser):
         dic['filterPixels'] = dic['filterSize']**2
         dic['modulesX'] = 1 + int(ceil((2 * dic['padding'] + dic['imgSize'] - dic['filterSize']) / float(dic['stride'])))
         dic['modules'] = dic['modulesX']**2
-        dic['numFilters'] = mcp.safe_get_int(name, 'numFilters')
+        dic['filters'] = mcp.safe_get_int(name, 'filters')
         dic['partialSum'] = mcp.safe_get_int(name, 'partialSum')
         dic['sharedBiases'] = mcp.safe_get_bool(name, 'sharedBiases', default=True)
         dic['groups'] = mcp.safe_get_int(name, 'groups', default=1)
-        dic['numFilters'] *= dic['groups']
-        dic['numOutputs'] = dic['modules'] * dic['numFilters']
+        dic['filters'] *= dic['groups']
+        dic['outputs'] = dic['modules'] * dic['filters']
 
         LayerParser.verify_int_range(dic['stride'], name, 'stride', 1, None)
         LayerParser.verify_int_range(dic['filterSize'], name, 'filterSize', 1, None)
@@ -330,7 +330,7 @@ class ConvLayerParser(LayerWithInputParser):
             raise LayerParsingError("Layer '%s': number of channels must be smaller than 4 or divisible by 4" % name)
 
         LayerParser.verify_divisible(name, dic['channels'], dic['groups'], 'channels', 'groups')
-        LayerParser.verify_divisible(name, dic['numFilters']/dic['groups'], 16, 'numFilters')
+        LayerParser.verify_divisible(name, dic['filters']/dic['groups'], 16, 'filters')
         
         if dic['groups'] > 1:
             LayerParser.verify_divisible(name, dic['channels'], 4*dic['groups'], 'channels', '4 * groups')
@@ -339,13 +339,13 @@ class ConvLayerParser(LayerWithInputParser):
         dic['neuron'] = LayerParser.parse_neuron(name, mcp.safe_get(name, 'neuron'))
         dic['initW'] = mcp.safe_get_float(name, 'initW')
         
-        num_biases = dic['numFilters'] if dic['sharedBiases'] else dic['modules']*dic['numFilters']
+        num_biases = dic['filters'] if dic['sharedBiases'] else dic['modules']*dic['filters']
         dic['weights'], dic['weightsInc'] = LayerParser.make_weights(dic['filterPixels']*dic['filterChannels'], \
-                                                                     dic['numFilters'], dic['initW'], order='C')
+                                                                     dic['filters'], dic['initW'], order='C')
         dic['biases'], dic['biasesInc'] = LayerParser.make_weights(num_biases, 1, 0, order='C')
         
         print "Initialized convolutional layer '%s', producing %d groups of %dx%d %d-channel output" % \
-              (name, dic['groups'], dic['modulesX'], dic['modulesX'], dic['numFilters']/dic['groups'])
+              (name, dic['groups'], dic['modulesX'], dic['modulesX'], dic['filters']/dic['groups'])
   
         return dic    
     
@@ -353,9 +353,9 @@ class DataLayerParser(LayerParser):
     def parse(self, name, mcp, prev_layers, model):
         dic = LayerParser.parse(self, name, mcp, prev_layers, model)
         dic['dataIdx'] = mcp.safe_get_int(name, 'dataIdx')
-        dic['numOutputs'] = model.train_data_provider.get_data_dims(idx=dic['dataIdx'])
+        dic['outputs'] = model.train_data_provider.get_data_dims(idx=dic['dataIdx'])
         
-        print "Initialized data layer '%s', producing %d outputs" % (name, dic['numOutputs'])
+        print "Initialized data layer '%s', producing %d outputs" % (name, dic['outputs'])
         return dic
 
 class SoftmaxLayerParser(LayerWithInputParser):
@@ -364,8 +364,8 @@ class SoftmaxLayerParser(LayerWithInputParser):
         
     def parse(self, name, mcp, prev_layers, model):
         dic = LayerWithInputParser.parse(self, name, mcp, prev_layers, model)
-        dic['numOutputs'] = prev_layers[dic['inputs'][0]]['numOutputs']
-        print "Initialized softmax layer '%s', producing %d outputs" % (name, dic['numOutputs'])
+        dic['outputs'] = prev_layers[dic['inputs'][0]]['outputs']
+        print "Initialized softmax layer '%s', producing %d outputs" % (name, dic['outputs'])
         return dic
 
 class PoolLayerParser(LayerWithInputParser):
@@ -400,7 +400,7 @@ class PoolLayerParser(LayerWithInputParser):
             raise LayerParsingError("Layer '%s': has %-d dimensional input, not interpretable as %d-channel images" % (name, dic['numInputs'][0], dic['channels']))
         if dic['outputsX'] <= 0:
             dic['outputsX'] = int(ceil((dic['imgSize'] - dic['start'] - dic['sizeX']) / float(dic['stride']))) + 1;
-        dic['numOutputs'] = dic['outputsX']**2 * dic['channels']
+        dic['outputs'] = dic['outputsX']**2 * dic['channels']
         
         print "Initialized %s-pooling layer '%s', producing %dx%d %d-channel output" % (dic['pool'], name, dic['outputsX'], dic['outputsX'], dic['channels'])
         return dic
@@ -428,7 +428,7 @@ class NormLayerParser(LayerWithInputParser):
         
         if dic['numInputs'][0] % dic['imgPixels'] != 0 or dic['imgSize'] * dic['imgSize'] != dic['imgPixels']:
             raise LayerParsingError("Layer '%s': has %-d dimensional input, not interpretable as %d-channel images" % (name, dic['numInputs'][0], dic['channels']))
-        dic['numOutputs'] = dic['imgPixels'] * dic['channels']
+        dic['outputs'] = dic['imgPixels'] * dic['channels']
         print "Initialized %s-normalization layer '%s', producing %dx%d %d-channel output" % (self.norm_type, name, dic['imgSize'], dic['imgSize'], dic['channels'])
         return dic
 

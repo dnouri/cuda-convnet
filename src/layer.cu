@@ -311,7 +311,7 @@ ConvLayer::ConvLayer(PyObject* paramsDict) : WeightLayer(paramsDict, true, true,
     _modulesX = pyDictGetInt(paramsDict, "modulesX");
     _channels = pyDictGetInt(paramsDict, "channels");
     _imgSize = pyDictGetInt(paramsDict, "imgSize");
-    _numFilters = pyDictGetInt(paramsDict, "numFilters");
+    _numFilters = pyDictGetInt(paramsDict, "filters");
     _groups = pyDictGetInt(paramsDict, "groups");
     _partialSum = pyDictGetInt(paramsDict, "partialSum");
     _sharedBiases = pyDictGetInt(paramsDict, "sharedBiases");
