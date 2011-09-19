@@ -27,6 +27,7 @@
 #ifndef NEURONS_CUH
 #define	NEURONS_CUH
 
+#include <assert.h>
 #include <string>
 #include <nvmatrix.cuh>
 #include <cutil_inline.h>
@@ -37,12 +38,23 @@
 class Neuron {
 protected:
     bool _activated;
-    virtual void _activate(NVMatrix& input);
-    virtual void _computeInputGrad(NVMatrix& actsGrad);
+    virtual void _activate(NVMatrix& input) {
+    }
+    virtual void _computeInputGrad(NVMatrix& actsGrad) {
+    }
 public:
-    Neuron();
-    virtual void activate(NVMatrix& input);
-    virtual void computeInputGrad(NVMatrix& actsGrad);
+    Neuron() : _activated(false) {
+    }
+    virtual void activate(NVMatrix& input) {
+        _activated = true;
+        _activate(input);
+    }
+
+    virtual void computeInputGrad(NVMatrix& actsGrad) {
+        assert(_activated);
+        _computeInputGrad(actsGrad);
+    }
+    
     static Neuron& makeNeuron(PyObject* neuronDict);
 };
 
@@ -60,8 +72,14 @@ public:
 protected:
     NVMatrix* _acts; // Logistic neuron must remember activities for gradient computation
 
-    void _activate(NVMatrix& input);
-    void _computeInputGrad(NVMatrix& actsGrad);
+    void _activate(NVMatrix& input) {
+        input.apply(NVMatrixOps::Logistic());
+        _acts = &input;
+    }
+
+    void _computeInputGrad(NVMatrix& actsGrad) {
+        actsGrad.applyBinary(LogisticGradientOperator(), *_acts);
+    }
 };
 
 /*
@@ -85,8 +103,56 @@ public:
 protected:
     NVMatrix* _acts; // Relu neuron must remember activities for gradient computation
 
-    void _activate(NVMatrix& input);
-    void _computeInputGrad(NVMatrix& actsGrad);
+    void _activate(NVMatrix& input) {
+        input.apply(ReluOperator());
+        _acts = &input;
+    }
+
+    void _computeInputGrad(NVMatrix& actsGrad) {
+        actsGrad.applyBinary(ReluGradientOperator(), *_acts);
+    }
+};
+
+/*
+ * y == min(a, max(0, x))
+ */
+class BoundedReluNeuron : public Neuron {
+public:
+    class BoundedReluOperator {
+    private:
+        float _a;
+    public:
+        BoundedReluOperator(float a) : _a(a) {
+        }
+        __device__ float operator()(float x) const {
+            return x < 0 ? 0 : x > _a ? _a : x;
+        }
+    };
+
+    class BoundedReluGradientOperator {
+    private:
+        float _a;
+    public:
+        BoundedReluGradientOperator(float a) : _a(a) {
+        }
+        __device__ float operator()(float unitActGrad, float unitAct) const  {
+            return unitActGrad * (unitAct > 0) * (unitAct < _a); 
+        }
+    };
+    BoundedReluNeuron(float a) : _a(a) {
+    }
+protected:
+    NVMatrix* _acts; // Relu neuron must remember activities for gradient computation
+    float _a;
+    
+    void _activate(NVMatrix& input) {
+        input.apply(BoundedReluOperator(_a));
+        _acts = &input;
+    }
+
+    void _computeInputGrad(NVMatrix& actsGrad) {
+        actsGrad.applyBinary(BoundedReluGradientOperator(_a), *_acts);
+    }
 };
 
 /*
@@ -103,8 +169,15 @@ public:
 protected:
     NVMatrix _input; // Abs neuron must remember input for gradient computation
 
-    void _activate(NVMatrix& input);
-    void _computeInputGrad(NVMatrix& actsGrad);
+    void _activate(NVMatrix& input) {
+        input.copy(_input);
+        input.apply(NVMatrixOps::Abs());
+    }
+
+    void _computeInputGrad(NVMatrix& actsGrad) {
+        actsGrad.applyBinary(AbsGradientOperator(), _input);
+        _input.truncate(); // Forget input to conserve memory
+    }
 };
 
 /*
@@ -135,13 +208,20 @@ public:
         }
     };
     
-    TanhNeuron(float a, float b);
+    TanhNeuron(float a, float b) : Neuron(), _a(a), _b(b) {
+    }
 protected:
     NVMatrix* _acts;
     float _a, _b;
 
-    void _activate(NVMatrix& input);
-    void _computeInputGrad(NVMatrix& actsGrad);
+    void _activate(NVMatrix& input) {
+        input.apply(TanhOperator(_a, _b));
+        _acts = &input;
+    }
+
+    void _computeInputGrad(NVMatrix& actsGrad) {
+        actsGrad.applyBinary(TanhGradientOperator(_a, _b), *_acts);
+    }
 };
 
 /*
@@ -160,13 +240,24 @@ public:
         }
     };
     
-    AbsTanhNeuron(float a, float b);
+    AbsTanhNeuron(float a, float b) : Neuron(), _a(a), _b(b) {
+        assert(_b >= 0);
+    }
 protected:
     NVMatrix _input, *_acts;
     float _a, _b;
+    
+    void _activate(NVMatrix& input) {
+        input.copy(_input);
+        input.apply(AbsTanhOperator(_a, _b));
+        _acts = &input;
+    }
 
-    void _activate(NVMatrix& input);
-    void _computeInputGrad(NVMatrix& actsGrad);
+    void _computeInputGrad(NVMatrix& actsGrad) {
+        actsGrad.applyBinary(AbsNeuron::AbsGradientOperator(), _input);
+        actsGrad.applyBinary(TanhNeuron::TanhGradientOperator(_a, _b), *_acts);
+        _input.truncate(); // Forget input to conserve memory
+    }
 };
 
 /*
@@ -196,8 +287,15 @@ public:
 protected:
     NVMatrix _input;
 
-    void _activate(NVMatrix& input);
-    void _computeInputGrad(NVMatrix& actsGrad);
+    void _activate(NVMatrix& input) {
+        input.copy(_input);
+        input.apply(SoftReluOperator());
+    }
+
+    void _computeInputGrad(NVMatrix& actsGrad) {
+        actsGrad.applyBinary(SoftReluGradientOperator(), _input);
+        _input.truncate(); // Forget input to conserve memory
+    }
 };
 #endif	/* NEURONS_CUH */
 

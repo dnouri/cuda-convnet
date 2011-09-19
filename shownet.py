@@ -153,7 +153,7 @@ if __name__ == "__main__":
                 channels = int(options["-c"])
             else: # Conv layer
                 num_filters = layer['filters']
-                channels = layer['channels']
+                channels = layer['channels']/layer['groups']
             combine_chans = "-o" not in options and channels == 3
             
             filters = filters.reshape(channels, filters.shape[0]/channels, filters.shape[1])

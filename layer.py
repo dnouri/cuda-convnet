@@ -322,12 +322,12 @@ class ConvLayerParser(LayerWithInputParser):
         
         dic['filterChannels'] = dic['channels'] / dic['groups']
         
-        if dic['partialSum'] != 0 and dic['modules'] % dic['partialSum'] != 0:
-            raise LayerParsingError("Layer '%s': convolutional layer produces %d outputs per filter, but given partialSum parameter (%d) does not divide this number" % (name, dic['modules'], dic['partialSum']))
         if dic['numInputs'][0] % dic['imgPixels'] != 0 or dic['imgSize'] * dic['imgSize'] != dic['imgPixels']:
             raise LayerParsingError("Layer '%s': has %-d dimensional input, not interpretable as square %d-channel images" % (name, dic['numInputs'][0], dic['channels']))
         if dic['channels'] > 3 and dic['channels'] % 4 != 0:
             raise LayerParsingError("Layer '%s': number of channels must be smaller than 4 or divisible by 4" % name)
+        if dic['partialSum'] != 0 and dic['modules'] % dic['partialSum'] != 0:
+            raise LayerParsingError("Layer '%s': convolutional layer produces %d outputs per filter, but given partialSum parameter (%d) does not divide this number" % (name, dic['modules'], dic['partialSum']))
 
         LayerParser.verify_divisible(name, dic['channels'], dic['groups'], 'channels', 'groups')
         LayerParser.verify_divisible(name, dic['filters']/dic['groups'], 16, 'filters')
@@ -478,4 +478,6 @@ neuron_parsers = sorted([NeuronParser('ident', 'f(x) = x'),
                          NeuronParser('relu', 'f(x) = max(0, x)'),
                          NeuronParser('softrelu', 'f(x) = log(1 + e^x)'),
                          ParamNeuronParser('tanh[a,b]', 'f(x) = a * tanh(b * x)'),
-                         AbsTanhNeuronParser()], key=lambda x:x.type)
+                         ParamNeuronParser('brelu[a]', 'f(x) = min(a, max(0, x))'),
+                         AbsTanhNeuronParser()],
+                        key=lambda x:x.type)

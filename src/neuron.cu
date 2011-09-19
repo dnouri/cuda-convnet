@@ -29,30 +29,6 @@
 
 using namespace std;
 
-/* 
- * =======================
- * Neuron
- * =======================
- */
-Neuron::Neuron() : _activated(false) {
-}
-
-void Neuron::_activate(NVMatrix& input) {
-}
-
-void Neuron::_computeInputGrad(NVMatrix& actsGrad) {
-}
-
-void Neuron::activate(NVMatrix& input) {
-    _activated = true;
-    _activate(input);
-}
-
-void Neuron::computeInputGrad(NVMatrix& actsGrad) {
-    assert(_activated);
-    _computeInputGrad(actsGrad);
-}
-
 Neuron& Neuron::makeNeuron(PyObject* neuronDict) {
     string type = pyDictGetString(neuronDict, "type");
     PyObject* neuronParamsDict = PyDict_GetItemString(neuronDict, "params");
@@ -63,6 +39,11 @@ Neuron& Neuron::makeNeuron(PyObject* neuronDict) {
     
     if (type == "softrelu") {
         return *new SoftReluNeuron();
+    }
+    
+    if (type == "brelu") {
+        float a = pyDictGetFloat(neuronParamsDict, "a");
+        return *new BoundedReluNeuron(a);
     }
 
     if (type == "abs") {
@@ -86,103 +67,4 @@ Neuron& Neuron::makeNeuron(PyObject* neuronDict) {
     }
     
     throw string("Unknown neuron type: ") + type;
-}
-
-/* 
- * =======================
- * LogisticNeuron
- * =======================
- */
-void LogisticNeuron::_activate(NVMatrix& input) {
-    input.apply(NVMatrixOps::Logistic());
-    _acts = &input;
-}
-
-void LogisticNeuron::_computeInputGrad(NVMatrix& actsGrad) {
-    actsGrad.applyBinary(LogisticGradientOperator(), *_acts);
-}
-
-/* 
- * =======================
- * ReluNeuron
- * =======================
- */
-void ReluNeuron::_activate(NVMatrix& input) {
-    input.apply(ReluOperator());
-    _acts = &input;
-}
-
-void ReluNeuron::_computeInputGrad(NVMatrix& actsGrad) {
-    actsGrad.applyBinary(ReluGradientOperator(), *_acts);
-}
-
-/* 
- * =======================
- * AbsNeuron
- * =======================
- * 
- * Mainly here (originally) to demonstrate how to write a neuron that requires memory
- * of the input to compute its gradient.
- */
-void AbsNeuron::_activate(NVMatrix& input) {
-    input.copy(_input);
-    input.apply(NVMatrixOps::Abs());
-}
-
-void AbsNeuron::_computeInputGrad(NVMatrix& actsGrad) {
-    actsGrad.applyBinary(AbsGradientOperator(), _input);
-    _input.truncate(); // Forget input to conserve memory
-}
-
-/* 
- * =======================
- * TanhNeuron
- * =======================
- */
-TanhNeuron::TanhNeuron(float a, float b) : Neuron(), _a(a), _b(b) {
-}
-
-void TanhNeuron::_activate(NVMatrix& input) {
-    input.apply(TanhOperator(_a, _b));
-    _acts = &input;
-}
-
-void TanhNeuron::_computeInputGrad(NVMatrix& actsGrad) {
-    actsGrad.applyBinary(TanhGradientOperator(_a, _b), *_acts);
-}
-
-/* 
- * =======================
- * AbsTanhNeuron
- * =======================
- */
-AbsTanhNeuron::AbsTanhNeuron(float a, float b) : Neuron(), _a(a), _b(b) {
-    assert(_b >= 0);
-}
-
-void AbsTanhNeuron::_activate(NVMatrix& input) {
-    input.copy(_input);
-    input.apply(AbsTanhOperator(_a, _b));
-    _acts = &input;
-}
-
-void AbsTanhNeuron::_computeInputGrad(NVMatrix& actsGrad) {
-    actsGrad.applyBinary(AbsNeuron::AbsGradientOperator(), _input);
-    actsGrad.applyBinary(TanhNeuron::TanhGradientOperator(_a, _b), *_acts);
-    _input.truncate(); // Forget input to conserve memory
-}
-
-/* 
- * =======================
- * SoftReluNeuron
- * =======================
- */
-void SoftReluNeuron::_activate(NVMatrix& input) {
-    input.copy(_input);
-    input.apply(SoftReluOperator());
-}
-
-void SoftReluNeuron::_computeInputGrad(NVMatrix& actsGrad) {
-    actsGrad.applyBinary(SoftReluGradientOperator(), _input);
-    _input.truncate(); // Forget input to conserve memory
 }
