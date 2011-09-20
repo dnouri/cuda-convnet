@@ -69,7 +69,8 @@ void Layer::truncBwdActs() {
         _actsGrad.truncate();
     }
     if (!_saveActs) {
-        _acts.truncate();
+        _outputs.truncate();
+        getActs().truncate();
     }
 }
 
@@ -98,7 +99,8 @@ void Layer::fprop(NVMatrixV& v, PASS_TYPE passType) {
     for (NVMatrixV::iterator it = v.begin(); it != v.end(); ++it) {
         (*it)->transpose(_trans);
     }
-    _acts.transpose(_trans);
+    _outputs.transpose(_trans);
+    getActs().transpose(_trans);
     fpropActs(v, passType);
     fpropNext(passType);
 }
@@ -116,7 +118,7 @@ void Layer::bprop(NVMatrix& v, PASS_TYPE passType) {
         _prev[i]->getActs().transpose(_trans);
         _prev[i]->getActsGrad().transpose(_trans);
     }
-    _acts.transpose(_trans);
+    getActs().transpose(_trans);
     
     bpropCommon(v, passType);
     
@@ -194,7 +196,7 @@ vector<Layer*>& Layer::getNext() {
 }
 
 NVMatrix& Layer::getActs() {
-    return _acts;
+    return _outputs;
 }
 
 NVMatrix& Layer::getActsGrad() {
@@ -241,20 +243,23 @@ FCLayer::FCLayer(PyObject* paramsDict) : WeightLayer(paramsDict, true, true, tru
     _weights.initialize(*hWeights, *hWeightsInc, *epsW, *wc, *momW, false);
     _biases.initialize(*hBiases, *hBiasesInc, epsB, 0, momB, true);
 
-    _neuron = &Neuron::makeNeuron(PyDict_GetItemString(paramsDict, "neuron"));
+    _neuron = &Neuron::makeNeuron(PyDict_GetItemString(paramsDict, "neuron"), _outputs);
     
     _allWeights.addWeights(_weights);
     _allWeights.addWeights(_biases);
 }
 
+NVMatrix& FCLayer::getActs() {
+    return _neuron->getActs();
+}
+
 void FCLayer::fpropActs(NVMatrixV& v, PASS_TYPE passType) {
-    v[0]->rightMult(*_weights[0], _acts);
+    v[0]->rightMult(*_weights[0], _outputs);
     for (int i = 1; i < v.size(); i++) {
-        _acts.addProduct(*v[i], *_weights[i]);
+        _outputs.addProduct(*v[i], *_weights[i]);
     }
-    
-    _acts.addVector(*_biases);
-    _neuron->activate(_acts);
+    _outputs.addVector(*_biases);
+    _neuron->activate();
 }
 
 void FCLayer::bpropCommon(NVMatrix& v, PASS_TYPE passType) {
@@ -324,22 +329,26 @@ ConvLayer::ConvLayer(PyObject* paramsDict) : WeightLayer(paramsDict, true, true,
     _weights.initialize(*hWeights, *hWeightsInc, epsW, wc, momW, true);
     _biases.initialize(*hBiases, *hBiasesInc, epsB, 0, momB, true);
 
-    _neuron = &Neuron::makeNeuron(PyDict_GetItemString(paramsDict, "neuron"));
+    _neuron = &Neuron::makeNeuron(PyDict_GetItemString(paramsDict, "neuron"), _outputs);
     
     _allWeights.addWeights(_weights);
     _allWeights.addWeights(_biases);
 }
 
+NVMatrix& ConvLayer::getActs() {
+    return _neuron->getActs();
+}
+
 void ConvLayer::fpropActs(NVMatrixV& v, PASS_TYPE passType) {
-    convFilterActs(*v[0], *_weights, _acts, _modulesX, _padding, _stride, _channels, _groups);
+    convFilterActs(*v[0], *_weights, _outputs, _modulesX, _padding, _stride, _channels, _groups);
     if (_sharedBiases) {
-        _acts.reshape(_numFilters, _acts.getNumElements() / _numFilters);
-        _acts.addVector(*_biases);
-        _acts.reshape(_numFilters * _modules, _acts.getNumElements() / (_numFilters * _modules));
+        _outputs.reshape(_numFilters, _outputs.getNumElements() / _numFilters);
+        _outputs.addVector(*_biases);
+        _outputs.reshape(_numFilters * _modules, _outputs.getNumElements() / (_numFilters * _modules));
     } else {
-        _acts.addVector(*_biases);
+        _outputs.addVector(*_biases);
     }
-    _neuron->activate(_acts);
+    _neuron->activate();
 }
 
 void ConvLayer::bpropCommon(NVMatrix& v, PASS_TYPE passType) {
@@ -393,9 +402,9 @@ void SoftmaxLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_T
     if (doLogregGrad) {
         NVMatrix& labels = _next[0]->getPrev()[0]->getActs();
         float gradCoeff = dynamic_cast<CostLayer*>(_next[0])->getCoeff();
-        computeLogregSoftmaxGrad(labels, _acts, _prev[inpIdx]->getActsGrad(), scaleTargets == 1, gradCoeff);
+        computeLogregSoftmaxGrad(labels, _outputs, _prev[inpIdx]->getActsGrad(), scaleTargets == 1, gradCoeff);
     } else {
-        computeSoftmaxGrad(_acts, v, _prev[inpIdx]->getActsGrad(), scaleTargets == 1);
+        computeSoftmaxGrad(_outputs, v, _prev[inpIdx]->getActsGrad(), scaleTargets == 1);
     }
 }
 
@@ -403,10 +412,10 @@ void SoftmaxLayer::fpropActs(NVMatrixV& v, PASS_TYPE passType) {
     NVMatrix& input = *v[0];
 
     NVMatrix& max = input.max(1);
-    input.addVector(max, -1, _acts);
-    _acts.apply(NVMatrixOps::Exp());
-    NVMatrix& sum = _acts.sum(1);
-    _acts.eltwiseDivideByVector(sum);
+    input.addVector(max, -1, _outputs);
+    _outputs.apply(NVMatrixOps::Exp());
+    NVMatrix& sum = _outputs.sum(1);
+    _outputs.eltwiseDivideByVector(sum);
     
     delete &max;
     delete &sum;
@@ -429,9 +438,9 @@ void DataLayer::fpropActs(NVMatrixV& data, PASS_TYPE passType) {
     NVMatrix& d = *data[_dataIdx];
     // TODO: this is slightly inelegant because it creates a copy of the data structure
     // (though not of any GPU memory)
-    _acts = d;
-    // Make sure that _acts knows that it does not own its GPU memory
-    _acts.setView(true);
+    _outputs = d;
+    // Make sure that _outputs knows that it does not own its GPU memory
+    _outputs.setView(true);
 }
 
 void DataLayer::fprop(NVMatrixV& data, PASS_TYPE passType) {
@@ -473,7 +482,7 @@ AvgPoolLayer::AvgPoolLayer(PyObject* paramsDict) : PoolLayer(paramsDict, true, t
 }
 
 void AvgPoolLayer::fpropActs(NVMatrixV& v, PASS_TYPE passType) {
-    convLocalPool(*v[0], _acts, _channels, _sizeX, _start, _stride, _outputsX, AvgPooler(_sizeX*_sizeX));
+    convLocalPool(*v[0], _outputs, _channels, _sizeX, _start, _stride, _outputsX, AvgPooler(_sizeX*_sizeX));
 }
 
 void AvgPoolLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType) {
@@ -489,11 +498,11 @@ MaxPoolLayer::MaxPoolLayer(PyObject* paramsDict) : PoolLayer(paramsDict, true, t
 }
 
 void MaxPoolLayer::fpropActs(NVMatrixV& v, PASS_TYPE passType) {
-    convLocalPool(*v[0], _acts, _channels, _sizeX, _start, _stride, _outputsX, MaxPooler());
+    convLocalPool(*v[0], _outputs, _channels, _sizeX, _start, _stride, _outputsX, MaxPooler());
 }
 
 void MaxPoolLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType) {
-    convLocalMaxUndo(_prev[inpIdx]->getActs(), v, _acts, _prev[inpIdx]->getActsGrad(), _sizeX, _start, _stride, _outputsX, scaleTargets, 1);
+    convLocalMaxUndo(_prev[inpIdx]->getActs(), v, _outputs, _prev[inpIdx]->getActsGrad(), _sizeX, _start, _stride, _outputsX, scaleTargets, 1);
 }
 
 /* 
@@ -510,11 +519,11 @@ ResponseNormLayer::ResponseNormLayer(PyObject* paramsDict) : Layer(paramsDict, t
 }
 
 void ResponseNormLayer::fpropActs(NVMatrixV& v, PASS_TYPE passType) {
-    convResponseNorm(*v[0], _denoms, _acts, _channels, _sizeX, _scale, _pow);
+    convResponseNorm(*v[0], _denoms, _outputs, _channels, _sizeX, _scale, _pow);
 }
 
 void ResponseNormLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType) {
-    convResponseNormUndo(v, _denoms, _prev[inpIdx]->getActs(), _acts, _prev[inpIdx]->getActsGrad(), _channels, _sizeX, _scale, _pow, scaleTargets, 1);
+    convResponseNormUndo(v, _denoms, _prev[inpIdx]->getActs(), _outputs, _prev[inpIdx]->getActsGrad(), _channels, _sizeX, _scale, _pow, scaleTargets, 1);
 }
 
 void ResponseNormLayer::truncBwdActs() {
@@ -537,11 +546,11 @@ void ContrastNormLayer::fpropActs(NVMatrixV& v, PASS_TYPE passType) {
     NVMatrix& images = *v[0];
     convLocalPool(images, _meanDiffs, _channels, _sizeX, -_sizeX/2, 1, _imgSize, AvgPooler(_sizeX*_sizeX));
     _meanDiffs.add(images, -1, 1);
-    convContrastNorm(images, _meanDiffs, _denoms, _acts, _channels, _sizeX, _scale, _pow);
+    convContrastNorm(images, _meanDiffs, _denoms, _outputs, _channels, _sizeX, _scale, _pow);
 }
 
 void ContrastNormLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType) {
-    convContrastNormUndo(v, _denoms, _meanDiffs, _acts, _prev[inpIdx]->getActsGrad(), _channels, _sizeX, _scale, _pow, scaleTargets, 1);
+    convContrastNormUndo(v, _denoms, _meanDiffs, _outputs, _prev[inpIdx]->getActsGrad(), _channels, _sizeX, _scale, _pow, scaleTargets, 1);
 }
 
 void ContrastNormLayer::truncBwdActs() {
@@ -598,7 +607,7 @@ void LogregCostLayer::fpropActs(NVMatrixV& v, PASS_TYPE passType) {
     NVMatrix& probs = *v[1];
     int numCases = labels.getNumElements();
     
-    NVMatrix& trueLabelLogProbs = _acts, correctProbs;
+    NVMatrix& trueLabelLogProbs = _outputs, correctProbs;
     computeLogregCost(labels, probs, trueLabelLogProbs, correctProbs);
     _costv.clear();
     _costv.push_back(-trueLabelLogProbs.sum());

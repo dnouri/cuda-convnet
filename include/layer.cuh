@@ -50,7 +50,8 @@ class Layer {
 protected:
     std::vector<Layer*> _prev, _next;
     int _rcvdFInputs, _rcvdBInputs;
-    NVMatrix _acts, _actsGrad; // Activities and activity gradient in this layer
+    NVMatrix _outputs; // Output from this layer BEFORE any neuron nonlinearity
+    NVMatrix _actsGrad; // Layer activity gradients
     bool _gradConsumer, _gradProducer, _trans;
     int _numGradProducersNext;
     std::string _name, _type;
@@ -88,7 +89,7 @@ public:
     void addPrev(Layer* l);
     std::vector<Layer*>& getPrev();
     std::vector<Layer*>& getNext();
-    NVMatrix& getActs();
+    virtual NVMatrix& getActs();
     NVMatrix& getActsGrad();
     
     // Do nothing if this layer has no weights
@@ -121,6 +122,7 @@ private:
     Weights _biases;
     Neuron* _neuron;
 protected:
+    NVMatrix& getActs();
     void fpropActs(NVMatrixV& v, PASS_TYPE passType);
     void bpropCommon(NVMatrix& v, PASS_TYPE passType);
     void bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType);
@@ -162,6 +164,7 @@ private:
     bool _sharedBiases;
     NVMatrix _weightGradTmp;
 protected:
+    NVMatrix& getActs();
     void fpropActs(NVMatrixV& v, PASS_TYPE passType);
     void bpropCommon(NVMatrix& v, PASS_TYPE passType);
     void bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType);
