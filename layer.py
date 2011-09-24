@@ -159,7 +159,7 @@ class LayerParser:
         return weights, weights_inc    
     
     @staticmethod
-    def verify_int_range(v, layer_name, param_name, _min, _max):
+    def verify_int_range(layer_name, v, param_name, _min, _max):
         if _min is not None and _max is not None and (v < _min or v > _max):
             raise LayerParsingError("Layer '%s': parameter '%s' must be in the range %d-%d" % (layer_name, param_name, _min, _max))
         elif _min is not None and v < _min:
@@ -171,6 +171,11 @@ class LayerParser:
     def verify_divisible(layer_name, value, div, value_name, div_name=None):
         if value % div != 0:
             raise LayerParsingError("Layer '%s': parameter '%s' must be divisible by %s" % (layer_name, value_name, str(div) if div_name is None else "'%s'" % div_name))
+        
+    @staticmethod
+    def verify_str_in(layer_name, value, lst):
+        if value not in lst:
+            raise LayerParsingError("Layer '%s': parameter '%s' must be one of %s" % (layer_name, value_name, ", ".join("'%s'" % s for s in lst)))
 
     @staticmethod
     def parse_layers(layer_cfg_path, param_cfg_path, model, layers=[]):
@@ -266,7 +271,7 @@ class FCLayerParser(LayerWithInputParser):
         dic['neuron'] = LayerParser.parse_neuron(name, mcp.safe_get(name, 'neuron'))
         dic['initW'] = mcp.safe_get_float_list(name, 'initW')
         
-        LayerParser.verify_int_range(dic['outputs'], name, 'outputs', 1, None)
+        LayerParser.verify_int_range(name, dic['outputs'], 'outputs', 1, None)
         FCLayerParser.verify_num_params(dic, 'initW')
         
         weights = [LayerParser.make_weights(numIn, dic['outputs'], init, order='F') for numIn,init in zip(dic['numInputs'], dic['initW'])]
@@ -293,6 +298,12 @@ class ConvLayerParser(LayerWithInputParser):
         dic['momB'] = mcp.safe_get_float(name, 'momB')
         dic['wc'] = mcp.safe_get_float(name, 'wc')
     
+    # Returns (groups, filterChannels) array that represents the set
+    # of image channels to which each group is connected
+    def gen_rand_conns(self, groups, channels, filterChannels):
+        overSample = groups * filterChannels / channels
+        return [x for i in xrange(overSample) for x in nr.permutation(range(channels))]
+        
     def parse(self, name, mcp, prev_layers, model):
         dic = LayerWithInputParser.parse(self, name, mcp, prev_layers, model)
         
@@ -312,16 +323,25 @@ class ConvLayerParser(LayerWithInputParser):
         dic['groups'] = mcp.safe_get_int(name, 'groups', default=1)
         dic['filters'] *= dic['groups']
         dic['outputs'] = dic['modules'] * dic['filters']
+        dic['randSparse'] = mcp.safe_get_bool(name, 'randSparse', default=False)
 
-        LayerParser.verify_int_range(dic['stride'], name, 'stride', 1, None)
-        LayerParser.verify_int_range(dic['filterSize'], name, 'filterSize', 1, None)
-        LayerParser.verify_int_range(dic['padding'], name, 'padding', 0, None)
-        LayerParser.verify_int_range(dic['channels'], name, 'channels', 1, None)
-        LayerParser.verify_int_range(dic['imgSize'], name, 'imgSize', 1, None)
-        LayerParser.verify_int_range(dic['groups'], name, 'groups', 1, None)
+        LayerParser.verify_int_range(name, dic['stride'], 'stride', 1, None)
+        LayerParser.verify_int_range(name, dic['filterSize'],'filterSize', 1, None)
+        LayerParser.verify_int_range(name, dic['padding'], 'padding', 0, None)
+        LayerParser.verify_int_range(name, dic['channels'], 'channels', 1, None)
+        LayerParser.verify_int_range(name, dic['imgSize'], 'imgSize', 1, None)
+        LayerParser.verify_int_range(name, dic['groups'], 'groups', 1, None)
         
         dic['filterChannels'] = dic['channels'] / dic['groups']
-        
+        if dic['randSparse']: # Random sparse connectivity requires some extra checks
+            if dic['groups'] == 1:
+                raise LayerParsingError("Layer '%s': number of groups must be greater than 1 when using random sparse connectivity")
+            dic['filterChannels'] = mcp.safe_get_int(name, 'filterChannels', default=dic['filterChannels'])
+            LayerParser.verify_divisible(name, dic['channels'], dic['filterChannels'], 'channels', 'filterChannels')
+            LayerParser.verify_divisible(name, dic['filterChannels'], 4, 'filterChannels')
+            LayerParser.verify_divisible(name, dic['groups']*dic['filterChannels'], dic['channels'], 'groups * filterChannels', 'channels')
+            dic['filterConns'] = self.gen_rand_conns(dic['groups'], dic['channels'], dic['filterChannels'])
+
         if dic['numInputs'][0] % dic['imgPixels'] != 0 or dic['imgSize'] * dic['imgSize'] != dic['imgPixels']:
             raise LayerParsingError("Layer '%s': has %-d dimensional input, not interpretable as square %d-channel images" % (name, dic['numInputs'][0], dic['channels']))
         if dic['channels'] > 3 and dic['channels'] % 4 != 0:
@@ -329,12 +349,13 @@ class ConvLayerParser(LayerWithInputParser):
         if dic['partialSum'] != 0 and dic['modules'] % dic['partialSum'] != 0:
             raise LayerParsingError("Layer '%s': convolutional layer produces %d outputs per filter, but given partialSum parameter (%d) does not divide this number" % (name, dic['modules'], dic['partialSum']))
 
-        LayerParser.verify_divisible(name, dic['channels'], dic['groups'], 'channels', 'groups')
-        LayerParser.verify_divisible(name, dic['filters']/dic['groups'], 16, 'filters')
+        if not dic['randSparse']:
+            LayerParser.verify_divisible(name, dic['channels'], dic['groups'], 'channels', 'groups')
+            if dic['groups'] > 1:
+                LayerParser.verify_divisible(name, dic['channels'], 4*dic['groups'], 'channels', '4 * groups')
+
+        LayerParser.verify_divisible(name, dic['filters'], 16*dic['groups'], 'filters * groups')
         
-        if dic['groups'] > 1:
-            LayerParser.verify_divisible(name, dic['channels'], 4*dic['groups'], 'channels', '4 * groups')
-                
         dic['padding'] = -dic['padding']
         dic['neuron'] = LayerParser.parse_neuron(name, mcp.safe_get(name, 'neuron'))
         dic['initW'] = mcp.safe_get_float(name, 'initW')
@@ -385,16 +406,13 @@ class PoolLayerParser(LayerWithInputParser):
         dic['imgPixels'] = dic['numInputs'][0] / dic['channels']
         dic['imgSize'] = int(n.sqrt(dic['imgPixels']))
         
-        LayerParser.verify_int_range(dic['sizeX'], name, 'sizeX', 1, dic['imgSize'])
-        LayerParser.verify_int_range(dic['stride'], name, 'stride', 1, dic['sizeX'])
-        LayerParser.verify_int_range(dic['outputsX'], name, 'outputsX', 0, None)
-        LayerParser.verify_int_range(dic['channels'], name, 'channels', 1, None)
+        LayerParser.verify_int_range(name, dic['sizeX'], 'sizeX', 1, dic['imgSize'])
+        LayerParser.verify_int_range(name, dic['stride'], 'stride', 1, dic['sizeX'])
+        LayerParser.verify_int_range(name, dic['outputsX'], 'outputsX', 0, None)
+        LayerParser.verify_int_range(name, dic['channels'], 'channels', 1, None)
         
-        if dic['channels'] % 16 != 0:
-            raise LayerParsingError("Layer '%s': parameter 'channels' must be multiple of 16")
-        
-        if dic['pool'] not in ('max', 'avg'):
-            raise LayerParsingError("Layer '%s': parameter 'pool' must be one of 'max', 'avg'", name)
+        LayerParser.verify_divisible(name, dic['channels'], 16, 'channels')
+        LayerParser.verify_str_in(name, dic['pool'], ['max', 'avg'])
         
         if dic['numInputs'][0] % dic['imgPixels'] != 0 or dic['imgSize'] * dic['imgSize'] != dic['imgPixels']:
             raise LayerParsingError("Layer '%s': has %-d dimensional input, not interpretable as %d-channel images" % (name, dic['numInputs'][0], dic['channels']))
@@ -420,8 +438,8 @@ class NormLayerParser(LayerWithInputParser):
         dic['imgPixels'] = dic['numInputs'][0] / dic['channels']
         dic['imgSize'] = int(n.sqrt(dic['imgPixels']))
         
-        LayerParser.verify_int_range(dic['sizeX'], name, 'sizeX', 1, dic['imgSize'])
-        LayerParser.verify_int_range(dic['channels'], name, 'channels', 1, None)
+        LayerParser.verify_int_range(name, dic['sizeX'], 'sizeX', 1, dic['imgSize'])
+        LayerParser.verify_int_range(name, dic['channels'], 'channels', 1, None)
         
         if dic['channels'] > 3 and dic['channels'] % 4 != 0:
             raise LayerParsingError("Layer '%s': number of channels must be smaller than 4 or divisible by 4" % name)
@@ -474,7 +492,7 @@ layer_parsers = {'data': DataLayerParser(),
 # A user may write tanh[0.5,0.25], etc.
 neuron_parsers = sorted([NeuronParser('ident', 'f(x) = x'),
                          NeuronParser('logistic', 'f(x) = 1 / (1 + e^-x)'),
-                         NeuronParser('abs', 'f(x) = abs(x)'),
+                         NeuronParser('abs', 'f(x) = |x|'),
                          NeuronParser('relu', 'f(x) = max(0, x)'),
                          NeuronParser('softrelu', 'f(x) = log(1 + e^x)'),
                          ParamNeuronParser('tanh[a,b]', 'f(x) = a * tanh(b * x)'),

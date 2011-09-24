@@ -320,11 +320,17 @@ ConvLayer::ConvLayer(PyObject* paramsDict) : WeightLayer(paramsDict, true, true,
     _groups = pyDictGetInt(paramsDict, "groups");
     _partialSum = pyDictGetInt(paramsDict, "partialSum");
     _sharedBiases = pyDictGetInt(paramsDict, "sharedBiases");
+    _randSparse = pyDictGetInt(paramsDict, "randSparse");
+    _filterChannels = pyDictGetInt(paramsDict, "filterChannels");
 
     _modules = _modulesX * _modulesX;
     _filterPixels = _filterSize * _filterSize;
     _imgPixels = _imgSize * _imgSize;
-    _filterChannels = _channels / _groups;
+    _overSample = (_groups * _filterChannels) / _channels;
+    
+    if (_randSparse) {
+        _filterConns.hFilterConns = pyDictGetIntA(paramsDict, "filterConns");
+    }
     
     _weights.initialize(*hWeights, *hWeightsInc, epsW, wc, momW, true);
     _biases.initialize(*hBiases, *hBiasesInc, epsB, 0, momB, true);
@@ -335,12 +341,25 @@ ConvLayer::ConvLayer(PyObject* paramsDict) : WeightLayer(paramsDict, true, true,
     _allWeights.addWeights(_biases);
 }
 
+void ConvLayer::copyToGPU() {
+    WeightLayer::copyToGPU();
+    if (_randSparse) { // Copy vector that describes sparse random connectivity to GPU
+        cudaMalloc(&_filterConns.dFilterConns, sizeof(int) * _groups * _filterChannels);
+        cudaMemcpy(_filterConns.dFilterConns, _filterConns.hFilterConns, sizeof(int) * _groups * _filterChannels, cudaMemcpyHostToDevice);
+        cutilCheckMsg("cudaMemcpy: failed");
+    }
+}
+
 NVMatrix& ConvLayer::getActs() {
     return _neuron->getActs();
 }
 
 void ConvLayer::fpropActs(NVMatrixV& v, PASS_TYPE passType) {
-    convFilterActs(*v[0], *_weights, _outputs, _modulesX, _padding, _stride, _channels, _groups);
+    if (_randSparse) {
+        convFilterActsSparse(*v[0], *_weights, _outputs, _filterConns.dFilterConns, _modulesX, _padding, _stride, _channels, _filterChannels, _groups);
+    } else {
+        convFilterActs(*v[0], *_weights, _outputs, _modulesX, _padding, _stride, _channels, _groups);
+    }
     if (_sharedBiases) {
         _outputs.reshape(_numFilters, _outputs.getNumElements() / _numFilters);
         _outputs.addVector(*_biases);
@@ -363,24 +382,40 @@ void ConvLayer::bpropWeights(NVMatrix& v, PASS_TYPE passType) {
     } else {
         v.sum(1, _biases.getGrad());
     }
-    if (_partialSum > 0 && _partialSum < _modules) {
-        convWeightActs(_prev[0]->getActs(), v, _weightGradTmp, _modulesX, _filterSize, _padding, _stride, _channels, _groups, 0, 1, _partialSum);
+    
+    NVMatrix& tgt = _partialSum > 0 ? _weightGradTmp : _weights.getGrad();
+    if (_randSparse) {
+        convWeightActsSparse(_prev[0]->getActs(), v, tgt, _filterConns.dFilterConns, _modulesX, _filterSize, _padding, _stride, _channels, _filterChannels, _groups, 0, 1, _partialSum);
+    } else {
+        convWeightActs(_prev[0]->getActs(), v, tgt, _modulesX, _filterSize, _padding, _stride, _channels, _groups, 0, 1, _partialSum);
+    }
+    if (_partialSum > 0) {
         _weightGradTmp.reshape(_modules / _partialSum, _filterChannels * _filterPixels * _numFilters);
         _weightGradTmp.sum(0, _weights.getGrad());
         _weights.getGrad().reshape(_filterChannels * _filterPixels, _numFilters);
-    } else {
-        convWeightActs(_prev[0]->getActs(), v, _weights.getGrad(), _modulesX, _filterSize, _padding, _stride, _channels, _groups);
     }
 }
 
 void ConvLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType) {
-    convImgActs(v, *_weights, _prev[inpIdx]->getActsGrad(), _imgSize, _padding, _stride, _channels, _groups, scaleTargets, 1);
+    if (_randSparse) {
+        if (_overSample > 1) {
+            convImgActsSparse(v, *_weights, _actGradTmp, _filterConns.dFilterConns, _imgSize, _padding, _stride, _channels, _filterChannels, _groups, scaleTargets, 1);
+            _actGradTmp.reshape(_overSample, _actGradTmp.getNumElements()/_overSample);
+            _actGradTmp.sum(0, _prev[inpIdx]->getActsGrad());
+            _prev[inpIdx]->getActsGrad().reshape(_prev[inpIdx]->getActsGrad().getNumElements()/_actGradTmp.getNumCols(), _actGradTmp.getNumCols());
+        } else {
+            convImgActsSparse(v, *_weights, _prev[inpIdx]->getActsGrad(), _filterConns.dFilterConns, _imgSize, _padding, _stride, _channels, _filterChannels, _groups, scaleTargets, 1);
+        }
+    } else {
+        convImgActs(v, *_weights, _prev[inpIdx]->getActsGrad(), _imgSize, _padding, _stride, _channels, _groups, scaleTargets, 1);
+    }
 }
 
 void ConvLayer::truncBwdActs() {
     Layer::truncBwdActs();
     if (!_saveActsGrad) {
         _weightGradTmp.truncate();
+        _actGradTmp.truncate();
     }
 }
 

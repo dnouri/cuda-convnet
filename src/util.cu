@@ -50,6 +50,17 @@ intv* getIntV(PyObject* pyList) {
     return vec;
 }
 
+int* getIntA(PyObject* pyList) {
+    if (pyList == NULL) {
+        return NULL;
+    }
+    int* arr = new int[PyList_GET_SIZE(pyList)];
+    for (int i = 0; i < PyList_GET_SIZE(pyList); i++) {
+        arr[i] = PyInt_AS_LONG(PyList_GET_ITEM(pyList, i));
+    }
+    return arr;
+}
+
 MatrixV* getMatrixV(PyObject* pyList) {
     if (pyList == NULL) {
         return NULL;
@@ -67,6 +78,10 @@ int pyDictGetInt(PyObject* dict, const char* key) {
 
 intv* pyDictGetIntV(PyObject* dict, const char* key) {
     return getIntV(PyDict_GetItemString(dict, key));
+}
+
+int* pyDictGetIntA(PyObject* dict, const char* key) {
+    return getIntA(PyDict_GetItemString(dict, key));
 }
 
 string pyDictGetString(PyObject* dict, const char* key) {

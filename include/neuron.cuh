@@ -91,7 +91,7 @@ public:
     class LogisticGradientOperator {
     public:
         __device__ float operator()(float unitActGrad, float unitAct) const  {
-            return unitActGrad * unitAct * (1 - unitAct); 
+            return unitActGrad * unitAct * (1.0f - unitAct); 
         }
     };
     
@@ -119,14 +119,14 @@ public:
     class ReluOperator {
     public:    
         __device__ float operator()(float x) const {
-            return x < 0 ? 0 : x;
+            return x < 0.0f ? 0.0f : x;
         }
     };
 
     class ReluGradientOperator {
     public:
         __device__ float operator()(float unitActGrad, float unitAct) const  {
-            return unitActGrad * (unitAct > 0); 
+            return unitActGrad * (unitAct > 0.0f); 
         }
     };
     
@@ -160,7 +160,7 @@ public:
         BoundedReluOperator(float a) : _a(a) {
         }
         __device__ float operator()(float x) const {
-            return x < 0 ? 0 : x > _a ? _a : x;
+            return x < 0.0f ? 0.0f : x > _a ? _a : x;
         }
     };
 
@@ -171,7 +171,7 @@ public:
         BoundedReluGradientOperator(float a) : _a(a) {
         }
         __device__ float operator()(float unitActGrad, float unitAct) const  {
-            return unitActGrad * (unitAct > 0) * (unitAct < _a); 
+            return unitActGrad * (unitAct > 0.0f) * (unitAct < _a); 
         }
     };
     
@@ -203,7 +203,7 @@ public:
     class AbsGradientOperator {
     public:
         __device__ float operator()(float unitActGrad, float unitInput) const  {
-            return unitActGrad * (unitInput > 0 ? 1 : -1); 
+            return unitActGrad * (unitInput > 0.0f ? 1.0f : -1.0f); 
         }
     };
     
@@ -241,7 +241,7 @@ public:
         TanhOperator(float a, float b) : _a(a), _n2b(-2*b) {
         }
         virtual __device__ float operator()(float x) const {
-            return _a * (__fdividef(2, 1 + __expf(x * _n2b)) - 1);
+            return _a * (__fdividef(2.0f, 1.0f + __expf(x * _n2b)) - 1.0f);
         }
     };
 
@@ -252,8 +252,8 @@ public:
         TanhGradientOperator(float a, float b) : _n4ab(-4*a*b), _a(a) {
         }
         __device__ float operator()(float unitActGrad, float unitAct) const  {
-            const float t = (1 - __fdividef(unitAct, _a)) / 2;
-            return unitActGrad * _n4ab * (t * (t - 1));
+            const float t = (1.0f - __fdividef(unitAct, _a)) / 2.0f;
+            return unitActGrad * _n4ab * (t * (t - 1.0f));
         }
     };
     
@@ -289,7 +289,7 @@ public:
         AbsTanhOperator(float a, float b) : TanhNeuron::TanhOperator(a, b) {
         }
         __device__ float operator()(float x) const {
-            return TanhNeuron::TanhOperator::operator ()(x) * (x > 0 ? 1 : -1);
+            return TanhNeuron::TanhOperator::operator ()(x) * (x > 0.0f ? 1.0f : -1.0f);
         }
     };
     
@@ -326,7 +326,7 @@ public:
         __device__ float operator()(float x) const {
             // This piece-wise implementation has better numerical stability than
             // simply computing log(1 + e^x).
-            return x > 4 ? x : __logf(1 + __expf(x));
+            return x > 4.0f ? x : __logf(1.0f + __expf(x));
         }
     };
 
@@ -337,7 +337,7 @@ public:
                 return unitActGrad;
             }
             const float f = __expf(unitInput);
-            return unitActGrad * __fdividef(f, 1 + f); 
+            return unitActGrad * __fdividef(f, 1.0f + f); 
         }
     };
     

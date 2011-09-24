@@ -111,9 +111,9 @@ protected:
     void addWeights(WeightList& wl);
 public:
     WeightLayer(PyObject* paramsDict, bool gradConsumer, bool gradProducer, bool trans);
-    void updateWeights(int numCases);
-    void copyToCPU();
-    void copyToGPU();
+    virtual void updateWeights(int numCases);
+    virtual void copyToCPU();
+    virtual void copyToGPU();
 };
 
 class FCLayer : public WeightLayer {
@@ -155,15 +155,20 @@ public:
 
 class ConvLayer : public WeightLayer {
 private:
+    struct FilterConns {
+        int* hFilterConns;
+        int* dFilterConns;
+    };
     Weights _weights, _biases;
     Neuron* _neuron;
     int _modulesX, _padding, _stride, _filterSize, _channels, _imgSize, _groups;
     int _imgPixels, _filterPixels, _modules, _filterChannels;
-    int _partialSum;
-    int _numFilters;
-    bool _sharedBiases;
-    NVMatrix _weightGradTmp;
+    int _partialSum, _numFilters, _overSample;
+    bool _sharedBiases, _randSparse;
+    NVMatrix _weightGradTmp, _actGradTmp;
+    FilterConns _filterConns;
 protected:
+    void copyToGPU();
     NVMatrix& getActs();
     void fpropActs(NVMatrixV& v, PASS_TYPE passType);
     void bpropCommon(NVMatrix& v, PASS_TYPE passType);
