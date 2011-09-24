@@ -402,7 +402,7 @@ void ConvLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE
             convImgActsSparse(v, *_weights, _actGradTmp, _filterConns.dFilterConns, _imgSize, _padding, _stride, _channels, _filterChannels, _groups, scaleTargets, 1);
             _actGradTmp.reshape(_overSample, _actGradTmp.getNumElements()/_overSample);
             _actGradTmp.sum(0, _prev[inpIdx]->getActsGrad());
-            _prev[inpIdx]->getActsGrad().reshape(_prev[inpIdx]->getActsGrad().getNumElements()/_actGradTmp.getNumCols(), _actGradTmp.getNumCols());
+            _prev[inpIdx]->getActsGrad().reshape(_prev[inpIdx]->getActsGrad().getNumElements() / v.getNumCols(), v.getNumCols());
         } else {
             convImgActsSparse(v, *_weights, _prev[inpIdx]->getActsGrad(), _filterConns.dFilterConns, _imgSize, _padding, _stride, _channels, _filterChannels, _groups, scaleTargets, 1);
         }
