@@ -284,7 +284,7 @@ class FCLayerParser(LayerWithInputParser):
         print "Initialized fully-connected layer '%s', producing %d outputs" % (name, dic['outputs'])
         return dic
 
-class ConvLayerParser(LayerWithInputParser):
+class LocalLayerParser(LayerWithInputParser):
     def __init__(self):
         LayerWithInputParser.__init__(self, num_inputs=1)
     
@@ -297,12 +297,6 @@ class ConvLayerParser(LayerWithInputParser):
         dic['momW'] = mcp.safe_get_float(name, 'momW')
         dic['momB'] = mcp.safe_get_float(name, 'momB')
         dic['wc'] = mcp.safe_get_float(name, 'wc')
-    
-    # Returns (groups, filterChannels) array that represents the set
-    # of image channels to which each group is connected
-    def gen_rand_conns(self, groups, channels, filterChannels):
-        overSample = groups * filterChannels / channels
-        return [x for i in xrange(overSample) for x in nr.permutation(range(channels))]
         
     def parse(self, name, mcp, prev_layers, model):
         dic = LayerWithInputParser.parse(self, name, mcp, prev_layers, model)
@@ -318,12 +312,9 @@ class ConvLayerParser(LayerWithInputParser):
         dic['modulesX'] = 1 + int(ceil((2 * dic['padding'] + dic['imgSize'] - dic['filterSize']) / float(dic['stride'])))
         dic['modules'] = dic['modulesX']**2
         dic['filters'] = mcp.safe_get_int(name, 'filters')
-        dic['partialSum'] = mcp.safe_get_int(name, 'partialSum')
-        dic['sharedBiases'] = mcp.safe_get_bool(name, 'sharedBiases', default=True)
         dic['groups'] = mcp.safe_get_int(name, 'groups', default=1)
         dic['filters'] *= dic['groups']
         dic['outputs'] = dic['modules'] * dic['filters']
-        dic['randSparse'] = mcp.safe_get_bool(name, 'randSparse', default=False)
 
         LayerParser.verify_int_range(name, dic['stride'], 'stride', 1, None)
         LayerParser.verify_int_range(name, dic['filterSize'],'filterSize', 1, None)
@@ -333,6 +324,37 @@ class ConvLayerParser(LayerWithInputParser):
         LayerParser.verify_int_range(name, dic['groups'], 'groups', 1, None)
         
         dic['filterChannels'] = dic['channels'] / dic['groups']
+
+        if dic['numInputs'][0] % dic['imgPixels'] != 0 or dic['imgSize'] * dic['imgSize'] != dic['imgPixels']:
+            raise LayerParsingError("Layer '%s': has %-d dimensional input, not interpretable as square %d-channel images" % (name, dic['numInputs'][0], dic['channels']))
+        if dic['channels'] > 3 and dic['channels'] % 4 != 0:
+            raise LayerParsingError("Layer '%s': number of channels must be smaller than 4 or divisible by 4" % name)
+
+        LayerParser.verify_divisible(name, dic['filters'], 16*dic['groups'], 'filters * groups')
+        
+        dic['padding'] = -dic['padding']
+        dic['neuron'] = LayerParser.parse_neuron(name, mcp.safe_get(name, 'neuron'))
+        dic['initW'] = mcp.safe_get_float(name, 'initW')
+          
+        return dic    
+
+class ConvLayerParser(LocalLayerParser):
+    def __init__(self):
+        LocalLayerParser.__init__(self)
+
+    # Returns (groups, filterChannels) array that represents the set
+    # of image channels to which each group is connected
+    def gen_rand_conns(self, groups, channels, filterChannels):
+        overSample = groups * filterChannels / channels
+        return [x for i in xrange(overSample) for x in nr.permutation(range(channels))]
+        
+    def parse(self, name, mcp, prev_layers, model):
+        dic = LocalLayerParser.parse(self, name, mcp, prev_layers, model)
+        
+        dic['partialSum'] = mcp.safe_get_int(name, 'partialSum')
+        dic['sharedBiases'] = mcp.safe_get_bool(name, 'sharedBiases', default=True)
+        dic['randSparse'] = mcp.safe_get_bool(name, 'randSparse', default=False)
+        
         if dic['randSparse']: # Random sparse connectivity requires some extra checks
             if dic['groups'] == 1:
                 raise LayerParsingError("Layer '%s': number of groups must be greater than 1 when using random sparse connectivity")
@@ -342,24 +364,14 @@ class ConvLayerParser(LayerWithInputParser):
             LayerParser.verify_divisible(name, dic['groups']*dic['filterChannels'], dic['channels'], 'groups * filterChannels', 'channels')
             dic['filterConns'] = self.gen_rand_conns(dic['groups'], dic['channels'], dic['filterChannels'])
 
-        if dic['numInputs'][0] % dic['imgPixels'] != 0 or dic['imgSize'] * dic['imgSize'] != dic['imgPixels']:
-            raise LayerParsingError("Layer '%s': has %-d dimensional input, not interpretable as square %d-channel images" % (name, dic['numInputs'][0], dic['channels']))
-        if dic['channels'] > 3 and dic['channels'] % 4 != 0:
-            raise LayerParsingError("Layer '%s': number of channels must be smaller than 4 or divisible by 4" % name)
         if dic['partialSum'] != 0 and dic['modules'] % dic['partialSum'] != 0:
             raise LayerParsingError("Layer '%s': convolutional layer produces %d outputs per filter, but given partialSum parameter (%d) does not divide this number" % (name, dic['modules'], dic['partialSum']))
 
         if not dic['randSparse']:
-            LayerParser.verify_divisible(name, dic['channels'], dic['groups'], 'channels', 'groups')
             if dic['groups'] > 1:
                 LayerParser.verify_divisible(name, dic['channels'], 4*dic['groups'], 'channels', '4 * groups')
+            LayerParser.verify_divisible(name, dic['channels'], dic['groups'], 'channels', 'groups')
 
-        LayerParser.verify_divisible(name, dic['filters'], 16*dic['groups'], 'filters * groups')
-        
-        dic['padding'] = -dic['padding']
-        dic['neuron'] = LayerParser.parse_neuron(name, mcp.safe_get(name, 'neuron'))
-        dic['initW'] = mcp.safe_get_float(name, 'initW')
-        
         num_biases = dic['filters'] if dic['sharedBiases'] else dic['modules']*dic['filters']
         dic['weights'], dic['weightsInc'] = LayerParser.make_weights(dic['filterPixels']*dic['filterChannels'], \
                                                                      dic['filters'], dic['initW'], order='C')
@@ -369,6 +381,26 @@ class ConvLayerParser(LayerWithInputParser):
               (name, dic['groups'], dic['modulesX'], dic['modulesX'], dic['filters']/dic['groups'])
   
         return dic    
+    
+class LocalUnsharedLayerParser(LocalLayerParser):
+    def __init__(self):
+        LocalLayerParser.__init__(self)
+
+    def parse(self, name, mcp, prev_layers, model):
+        dic = LocalLayerParser.parse(self, name, mcp, prev_layers, model)
+        
+        if dic['groups'] > 1:
+            LayerParser.verify_divisible(name, dic['channels'], 4*dic['groups'], 'channels', '4 * groups')
+        LayerParser.verify_divisible(name, dic['channels'], dic['groups'], 'channels', 'groups')
+
+        dic['weights'], dic['weightsInc'] = LayerParser.make_weights(dic['modules'] * dic['filterPixels'] * dic['filterChannels'], \
+                                                                     dic['filters'], dic['initW'], order='C')
+        dic['biases'], dic['biasesInc'] = LayerParser.make_weights(dic['modules'] * dic['filters'], 1, 0, order='C')
+        
+        print "Initialized locally-connected layer '%s', producing %d groups of %dx%d %d-channel output" % \
+              (name, dic['groups'], dic['modulesX'], dic['modulesX'], dic['filters']/dic['groups'])
+  
+        return dic  
     
 class DataLayerParser(LayerParser):
     def parse(self, name, mcp, prev_layers, model):
@@ -481,6 +513,7 @@ class LogregCostParser(CostParser):
 layer_parsers = {'data': DataLayerParser(),
                  'fc': FCLayerParser(),
                  'conv': ConvLayerParser(),
+                 'local': LocalUnsharedLayerParser(),
                  'softmax': SoftmaxLayerParser(),
                  'pool': PoolLayerParser(),
                  'rnorm': NormLayerParser('response'),

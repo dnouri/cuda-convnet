@@ -87,6 +87,8 @@ Layer* ConvNet::initLayer(string& layerType, PyObject* paramsDict) {
         _layers.push_back(dynamic_cast<Layer*>(new FCLayer(paramsDict)));
     } else if (layerType == "conv") {
         _layers.push_back(dynamic_cast<Layer*>(new ConvLayer(paramsDict)));
+    } else if (layerType == "local") {
+        _layers.push_back(dynamic_cast<Layer*>(new LocalUnsharedLayer(paramsDict)));
     } else if (layerType == "pool") {
         _layers.push_back(dynamic_cast<Layer*>(&PoolLayer::makePoolLayer(paramsDict)));
     } else if (layerType == "rnorm") {

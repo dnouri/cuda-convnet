@@ -29,6 +29,8 @@ from util import *
 from math import sqrt, ceil, floor
 import os
 from gpumodel import IGPUModel
+import random as r
+import numpy.random as nr
 
 try:
     from pylab import *
@@ -37,7 +39,8 @@ except:
     sys.exit(1)
 
 FILTERS_PER_ROW = 16
-MAX_FILTERS = FILTERS_PER_ROW * 16
+MAX_ROWS = 16
+MAX_FILTERS = FILTERS_PER_ROW * MAX_ROWS
 
 class ShowNetError(Exception):
     pass
@@ -141,26 +144,33 @@ if __name__ == "__main__":
         
         # Draw some filters
         if layer_name:
+            filter_start = 0 # First filter to show
             layer_names = [l['name'] for l in dic['layers']]
             if layer_name not in layer_names:
                 raise ShowNetError("Layer with name '%s' not defined by given convnet." % layer_name)
             layer = dic['layers'][layer_names.index(layer_name)]
             filters = layer['weights']
-            if type(filters) == list: # Fully-connected layer
+            if layer['type'] == 'fc': # Fully-connected layer
                 input_idx = int(options["-i"])
                 filters = filters[input_idx]
                 num_filters = layer['outputs']
                 channels = int(options["-c"])
-            else: # Conv layer
+            elif layer['type'] in ('conv', 'local'): # Conv layer
                 num_filters = layer['filters']
-                channels = layer['channels']/layer['groups']
+                channels = layer['filterChannels']
+                if layer['type'] == 'local':
+                    filters = filters.reshape((layer['modules'], layer['filterPixels'] * channels, layer['filters']))
+                    filter_start = r.randint(0, layer['modules']-1)*layer['filters'] # pick out some random modules
+                    filters = filters.swapaxes(0,1).reshape(channels * layer['filterPixels'], layer['filters'] * layer['modules'])
+                    num_filters *= layer['modules']
+
+            filters = filters.reshape(channels, filters.shape[0]/channels, filters.shape[1])
             combine_chans = "-o" not in options and channels == 3
             
-            filters = filters.reshape(channels, filters.shape[0]/channels, filters.shape[1])
             filters -= filters.min()
             filters /= filters.max()
     
-            draw_filters(filters, 0, 2, 'Layer %s' % layer_name, num_filters, combine_chans)
+            draw_filters(filters, filter_start, 2, 'Layer %s' % layer_name, num_filters, combine_chans)
     
         show()
     except (UnpickleError, ShowNetError, opt.GetoptError), e:
