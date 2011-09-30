@@ -84,11 +84,17 @@ class DataProvider:
         return self.batch_meta['num_vis']
     
     def advance_batch(self):
-        self.batch_range_idx = (self.batch_range_idx + 1) % len(self.batch_range)
+        self.batch_range_idx = self.get_next_batch_idx()
         self.curr_batchnum = self.batch_range[self.batch_range_idx]
         if self.batch_range_idx == 0: # we wrapped
             self.curr_epoch += 1
             
+    def get_next_batch_idx(self):
+        return (self.batch_range_idx + 1) % len(self.batch_range)
+    
+    def get_next_batch_num(self):
+        return self.batch_range[self.get_next_batch_idx()]
+    
     # get filename of current batch
     def get_data_file_name(self, batchnum=None):
         if batchnum is None:

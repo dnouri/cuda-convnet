@@ -319,18 +319,40 @@ LocalLayer::LocalLayer(PyObject* paramsDict) : WeightLayer(paramsDict, true, tru
     _numFilters = pyDictGetInt(paramsDict, "filters");
     _groups = pyDictGetInt(paramsDict, "groups");
     _filterChannels = pyDictGetInt(paramsDict, "filterChannels");
+    _randSparse = pyDictGetInt(paramsDict, "randSparse");
 
     _modules = _modulesX * _modulesX;
     _filterPixels = _filterSize * _filterSize;
     _imgPixels = _imgSize * _imgSize;
+    _overSample = (_groups * _filterChannels) / _channels;
     
     _weights.initialize(*hWeights, *hWeightsInc, epsW, wc, momW, true);
     _biases.initialize(*hBiases, *hBiasesInc, epsB, 0, momB, true);
 
     _neuron = &Neuron::makeNeuron(PyDict_GetItemString(paramsDict, "neuron"), _outputs);
     
+    if (_randSparse) {
+        _filterConns.hFilterConns = pyDictGetIntA(paramsDict, "filterConns");
+    }
+    
     _allWeights.addWeights(_weights);
     _allWeights.addWeights(_biases);
+}
+
+void LocalLayer::copyToGPU() {
+    WeightLayer::copyToGPU();
+    if (_randSparse) { // Copy vector that describes sparse random connectivity to GPU
+        cudaMalloc(&_filterConns.dFilterConns, sizeof(int) * _groups * _filterChannels);
+        cudaMemcpy(_filterConns.dFilterConns, _filterConns.hFilterConns, sizeof(int) * _groups * _filterChannels, cudaMemcpyHostToDevice);
+        cutilCheckMsg("cudaMemcpy: failed");
+    }
+}
+
+void LocalLayer::truncBwdActs() {
+    WeightLayer::truncBwdActs();
+    if (!_saveActsGrad) {
+        _actGradTmp.truncate();
+    }
 }
 
 NVMatrix& LocalLayer::getActs() {
@@ -354,22 +376,6 @@ void LocalLayer::checkGradients(ConvNet* convNet) {
 ConvLayer::ConvLayer(PyObject* paramsDict) : LocalLayer(paramsDict) {
     _partialSum = pyDictGetInt(paramsDict, "partialSum");
     _sharedBiases = pyDictGetInt(paramsDict, "sharedBiases");
-    _randSparse = pyDictGetInt(paramsDict, "randSparse");
-
-    _overSample = (_groups * _filterChannels) / _channels;
-    
-    if (_randSparse) {
-        _filterConns.hFilterConns = pyDictGetIntA(paramsDict, "filterConns");
-    }
-}
-
-void ConvLayer::copyToGPU() {
-    LocalLayer::copyToGPU();
-    if (_randSparse) { // Copy vector that describes sparse random connectivity to GPU
-        cudaMalloc(&_filterConns.dFilterConns, sizeof(int) * _groups * _filterChannels);
-        cudaMemcpy(_filterConns.dFilterConns, _filterConns.hFilterConns, sizeof(int) * _groups * _filterChannels, cudaMemcpyHostToDevice);
-        cutilCheckMsg("cudaMemcpy: failed");
-    }
 }
 
 void ConvLayer::fpropActs(NVMatrixV& v, PASS_TYPE passType) {
@@ -399,7 +405,7 @@ void ConvLayer::bpropWeights(NVMatrix& v, PASS_TYPE passType) {
     
     NVMatrix& tgt = _partialSum > 0 ? _weightGradTmp : _weights.getGrad();
     if (_randSparse) {
-        convWeightActsSparse(_prev[0]->getActs(), v, tgt, _filterConns.dFilterConns, _modulesX, _filterSize, _padding, _stride, _channels, _filterChannels, _groups, 0, 1, _partialSum);
+        convWeightActsSparse(_prev[0]->getActs(), v, tgt, _filterConns.dFilterConns, _modulesX, _filterSize, _padding, _stride, _channels, _filterChannels, _groups, _partialSum, 0, 1);
     } else {
         convWeightActs(_prev[0]->getActs(), v, tgt, _modulesX, _filterSize, _padding, _stride, _channels, _groups, _partialSum, 0, 1);
     }
@@ -425,10 +431,9 @@ void ConvLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE
 }
 
 void ConvLayer::truncBwdActs() {
-    Layer::truncBwdActs();
+    LocalLayer::truncBwdActs();
     if (!_saveActsGrad) {
         _weightGradTmp.truncate();
-        _actGradTmp.truncate();
     }
 }
 /* 
@@ -440,18 +445,30 @@ LocalUnsharedLayer::LocalUnsharedLayer(PyObject* paramsDict) : LocalLayer(params
 }
 
 void LocalUnsharedLayer::fpropActs(NVMatrixV& v, PASS_TYPE passType) {
-    localFilterActs(*v[0], *_weights, _outputs, _modulesX, _padding, _stride, _channels, _groups);
+    if (_randSparse) {
+        localFilterActsSparse(*v[0], *_weights, _outputs, _filterConns.dFilterConns, _modulesX, _padding, _stride, _channels, _filterChannels, _groups);
+    } else {
+        localFilterActs(*v[0], *_weights, _outputs, _modulesX, _padding, _stride, _channels, _groups);
+    }
     _outputs.addVector(*_biases);
     _neuron->activate();
 }
 
 void LocalUnsharedLayer::bpropWeights(NVMatrix& v, PASS_TYPE passType) {
     v.sum(1, _biases.getGrad());
-    localWeightActs(_prev[0]->getActs(), v, _weights.getGrad(), _modulesX, _filterSize, _padding, _stride, _channels, _groups, 0, 1);
+    if (_randSparse) {
+        localWeightActsSparse(_prev[0]->getActs(), v, _weights.getGrad(), _filterConns.dFilterConns, _modulesX, _filterSize, _padding, _stride, _channels, _filterChannels, _groups, 0, 1);
+    } else {
+        localWeightActs(_prev[0]->getActs(), v, _weights.getGrad(), _modulesX, _filterSize, _padding, _stride, _channels, _groups, 0, 1);
+    }
 }
 
 void LocalUnsharedLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType) {
-    localImgActs(v, *_weights, _prev[inpIdx]->getActsGrad(), _imgSize, _padding, _stride, _channels, _groups, scaleTargets, 1);
+    if (_randSparse) {
+        localImgActsSparse(v, *_weights, _prev[inpIdx]->getActsGrad(), _filterConns.dFilterConns, _imgSize, _padding, _stride, _channels, _filterChannels, _groups, scaleTargets, 1);
+    } else {
+        localImgActs(v, *_weights, _prev[inpIdx]->getActsGrad(), _imgSize, _padding, _stride, _channels, _groups, scaleTargets, 1);
+    }
 }
 
 /* 

@@ -85,17 +85,37 @@ void convFilterActsSparse(NVMatrix& images, NVMatrix& filters, NVMatrix& targets
                           int numImgColors, int numFilterColors, int numGroups,
                           float scaleTargets, float scaleOutput);
 
-void convWeightActsSparse(NVMatrix& images, NVMatrix& hidActs, NVMatrix& targets, int* dColorIndices,
-                          int numModulesX, int filterSize, int paddingStart, int moduleStride,
+void localFilterActsSparse(NVMatrix& images, NVMatrix& filters, NVMatrix& targets, int* dColorIndices,
+                          int numModulesX, int paddingStart, int moduleStride,
+                          int numImgColors, int numFilterColors, int numGroups,
+                          float scaleTargets, float scaleOutput);
+void localFilterActsSparse(NVMatrix& images, NVMatrix& filters, NVMatrix& targets, int* dColorIndices,
+                          int numModulesX, int paddingStart, int moduleStride,
                           int numImgColors, int numFilterColors, int numGroups);
+
 void convWeightActsSparse(NVMatrix& images, NVMatrix& hidActs, NVMatrix& targets, int* dColorIndices,
-                          int numModulesX, int filterSize, int paddingStart, int moduleStride, int numImgColors, int numFilterColors,
-                          int numGroups, float scaleTargets, float scaleOutput, int partialSum);
+                         int numModulesX, int filterSize, int paddingStart, int moduleStride,
+                         int numImgColors, int numFilterColors, int numGroups);
+void convWeightActsSparse(NVMatrix& images, NVMatrix& hidActs, NVMatrix& targets, int* dColorIndices,
+                        int numModulesX, int filterSize, int paddingStart, int moduleStride, int numImgColors, int numFilterColors,
+                        int numGroups, int partialSum, float scaleTargets, float scaleOutput);
+
+void localWeightActsSparse(NVMatrix& images, NVMatrix& hidActs, NVMatrix& targets, int* dColorIndices,
+                         int numModulesX, int filterSize, int paddingStart, int moduleStride,
+                         int numImgColors, int numFilterColors, int numGroups);
+void localWeightActsSparse(NVMatrix& images, NVMatrix& hidActs, NVMatrix& targets, int* dColorIndices,
+                        int numModulesX, int filterSize, int paddingStart, int moduleStride, int numImgColors, int numFilterColors,
+                        int numGroups, float scaleTargets, float scaleOutput);
 
 void convImgActsSparse(NVMatrix& hidActs, NVMatrix& filters, NVMatrix& targets, int* dColorIndices,
-                       int imgSize, int paddingStart, int moduleStride, int numImgColors, int numFiltercolors, int numGroups);
-
+                       int imgSize, int paddingStart, int moduleStride, int numImgColors, int numFilterColors, int numGroups);
 void convImgActsSparse(NVMatrix& hidActs, NVMatrix& filters, NVMatrix& targets, int* dColorIndices,
+                       int imgSize, int paddingStart, int moduleStride, int numImgColors, int numFilterColors, int numGroups,
+                       float scaleTargets, float scaleOutput);
+
+void localImgActsSparse(NVMatrix& hidActs, NVMatrix& filters, NVMatrix& targets, int* dColorIndices,
+                        int imgSize, int paddingStart, int moduleStride, int numImgColors, int numFilterColors, int numGroups);
+void localImgActsSparse(NVMatrix& hidActs, NVMatrix& filters, NVMatrix& targets, int* dColorIndices,
                        int imgSize, int paddingStart, int moduleStride, int numImgColors, int numFilterColors, int numGroups,
                        float scaleTargets, float scaleOutput);
 

@@ -155,17 +155,27 @@ public:
 
 class LocalLayer : public WeightLayer {
 protected:
+    struct FilterConns {
+        int* hFilterConns;
+        int* dFilterConns;
+    } _filterConns;
+    
     Weights _weights, _biases;
     Neuron* _neuron;
     int _modulesX, _padding, _stride, _filterSize, _channels, _imgSize, _groups;
     int _imgPixels, _filterPixels, _modules, _filterChannels;
-    int _numFilters;
+    int _numFilters, _overSample;
+    bool _randSparse;
+    
+    NVMatrix _actGradTmp;
 
     NVMatrix& getActs();
     virtual void fpropActs(NVMatrixV& v, PASS_TYPE passType) = 0;
     virtual void bpropCommon(NVMatrix& v, PASS_TYPE passType);
     virtual void bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType) = 0;
     virtual void bpropWeights(NVMatrix& v, PASS_TYPE passType) = 0;
+    void copyToGPU();
+    virtual void truncBwdActs();
     
 public:
     LocalLayer(PyObject* paramsDict);
@@ -175,21 +185,16 @@ public:
 
 class ConvLayer : public LocalLayer {
 protected:
-    struct FilterConns {
-        int* hFilterConns;
-        int* dFilterConns;
-    };
-    FilterConns _filterConns;
-    int _partialSum, _overSample;
-    bool _sharedBiases, _randSparse;
+    int _partialSum;
+    bool _sharedBiases;
     
-    NVMatrix _weightGradTmp, _actGradTmp;
+    NVMatrix _weightGradTmp;
 
     void fpropActs(NVMatrixV& v, PASS_TYPE passType);
     void bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType);
     void bpropWeights(NVMatrix& v, PASS_TYPE passType);
-    void copyToGPU();
     void truncBwdActs();
+
 public:
     ConvLayer(PyObject* paramsDict);
 }; 
