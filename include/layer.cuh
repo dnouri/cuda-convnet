@@ -178,7 +178,7 @@ protected:
     virtual void truncBwdActs();
     
 public:
-    LocalLayer(PyObject* paramsDict);
+    LocalLayer(PyObject* paramsDict, bool useGrad);
 
     void checkGradients(ConvNet* convNet);
 };

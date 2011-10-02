@@ -298,7 +298,7 @@ void FCLayer::checkGradients(ConvNet* convNet) {
  * LocalLayer
  * =======================
  */
-LocalLayer::LocalLayer(PyObject* paramsDict) : WeightLayer(paramsDict, true, true, false) {
+LocalLayer::LocalLayer(PyObject* paramsDict, bool useGrad) : WeightLayer(paramsDict, true, true, false) {
     Matrix* hWeights = pyDictGetMatrix(paramsDict, "weights");
     Matrix* hWeightsInc = pyDictGetMatrix(paramsDict, "weightsInc");
     Matrix* hBiases = pyDictGetMatrix(paramsDict, "biases");
@@ -326,7 +326,7 @@ LocalLayer::LocalLayer(PyObject* paramsDict) : WeightLayer(paramsDict, true, tru
     _imgPixels = _imgSize * _imgSize;
     _overSample = (_groups * _filterChannels) / _channels;
     
-    _weights.initialize(*hWeights, *hWeightsInc, epsW, wc, momW, true);
+    _weights.initialize(*hWeights, *hWeightsInc, epsW, wc, momW, useGrad);
     _biases.initialize(*hBiases, *hBiasesInc, epsB, 0, momB, true);
 
     _neuron = &Neuron::makeNeuron(PyDict_GetItemString(paramsDict, "neuron"), _outputs);
@@ -373,7 +373,7 @@ void LocalLayer::checkGradients(ConvNet* convNet) {
  * ConvLayer
  * =======================
  */
-ConvLayer::ConvLayer(PyObject* paramsDict) : LocalLayer(paramsDict) {
+ConvLayer::ConvLayer(PyObject* paramsDict) : LocalLayer(paramsDict, true) {
     _partialSum = pyDictGetInt(paramsDict, "partialSum");
     _sharedBiases = pyDictGetInt(paramsDict, "sharedBiases");
 }
@@ -441,7 +441,7 @@ void ConvLayer::truncBwdActs() {
  * LocalUnsharedLayer
  * =======================
  */
-LocalUnsharedLayer::LocalUnsharedLayer(PyObject* paramsDict) : LocalLayer(paramsDict) {
+LocalUnsharedLayer::LocalUnsharedLayer(PyObject* paramsDict) : LocalLayer(paramsDict, false) {
 }
 
 void LocalUnsharedLayer::fpropActs(NVMatrixV& v, PASS_TYPE passType) {
@@ -456,10 +456,15 @@ void LocalUnsharedLayer::fpropActs(NVMatrixV& v, PASS_TYPE passType) {
 
 void LocalUnsharedLayer::bpropWeights(NVMatrix& v, PASS_TYPE passType) {
     v.sum(1, _biases.getGrad());
+    float scaleTargets = (passType != PASS_GC) * _weights.getMom(); // momentum
+    float scaleGrad = passType == PASS_GC ? 1 : _weights.getEps() / v.getNumCols(); // eps / numCases
     if (_randSparse) {
-        localWeightActsSparse(_prev[0]->getActs(), v, _weights.getGrad(), _filterConns.dFilterConns, _modulesX, _filterSize, _padding, _stride, _channels, _filterChannels, _groups, 0, 1);
+        localWeightActsSparse(_prev[0]->getActs(), v, _weights.getGrad(), _filterConns.dFilterConns,
+                              _modulesX, _filterSize, _padding, _stride, _channels, _filterChannels, _groups,
+                              scaleTargets, scaleGrad);
     } else {
-        localWeightActs(_prev[0]->getActs(), v, _weights.getGrad(), _modulesX, _filterSize, _padding, _stride, _channels, _groups, 0, 1);
+        localWeightActs(_prev[0]->getActs(), v, _weights.getGrad(), _modulesX, _filterSize,
+                        _padding, _stride, _channels, _groups, scaleTargets, scaleGrad);
     }
 }
 

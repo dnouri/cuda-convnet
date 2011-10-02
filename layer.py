@@ -73,7 +73,7 @@ class ParamNeuronParser(NeuronParser):
 
 class AbsTanhNeuronParser(ParamNeuronParser):
     def __init__(self):
-        ParamNeuronParser.__init__(self, 'abstanh[a,b]', 'f(x) = a * abs(tanh(b * x))')
+        ParamNeuronParser.__init__(self, 'abstanh[a,b]', 'f(x) = a * |tanh(b * x)|')
         
     def parse(self, type):
         dic = ParamNeuronParser.parse(self, type)
@@ -361,9 +361,6 @@ class LocalLayerParser(LayerWithInputParser):
         return dic    
 
 class ConvLayerParser(LocalLayerParser):
-    def __init__(self):
-        LocalLayerParser.__init__(self)
-        
     def parse(self, name, mcp, prev_layers, model):
         dic = LocalLayerParser.parse(self, name, mcp, prev_layers, model)
         
@@ -384,9 +381,6 @@ class ConvLayerParser(LocalLayerParser):
         return dic    
     
 class LocalUnsharedLayerParser(LocalLayerParser):
-    def __init__(self):
-        LocalLayerParser.__init__(self)
-
     def parse(self, name, mcp, prev_layers, model):
         dic = LocalLayerParser.parse(self, name, mcp, prev_layers, model)
 
