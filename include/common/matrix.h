@@ -95,29 +95,28 @@ class Matrix {
 private:
     MTYPE* _data;
     bool _ownsData;
-    int _numRows, _numCols;
-    int _numElements;
-    int _numDataBytes;
+    long int _numRows, _numCols;
+    long int _numElements;
     CBLAS_TRANSPOSE _trans;
 
-    void _init(MTYPE* data, int numRows, int numCols, bool transpose, bool ownsData);
+    void _init(MTYPE* data, long int numRows, long int numCols, bool transpose, bool ownsData);
     void _tileTo2(Matrix& target) const;
     void _copyAllTo(Matrix& target) const;
-    MTYPE _sum_column(int col) const;
-    MTYPE _sum_row(int row) const;
+    MTYPE _sum_column(long int col) const;
+    MTYPE _sum_row(long int row) const;
     MTYPE _aggregate(MTYPE(*agg_func)(MTYPE, MTYPE), MTYPE initialValue) const;
-    void _aggregate(int axis, Matrix& target, MTYPE(*agg_func)(MTYPE, MTYPE), MTYPE initialValue) const;
-    MTYPE _aggregateRow(int row, MTYPE(*agg_func)(MTYPE, MTYPE), MTYPE initialValue) const;
-    MTYPE _aggregateCol(int row, MTYPE(*agg_func)(MTYPE, MTYPE), MTYPE initialValue) const;
-    void _updateDims(int numRows, int numCols);
+    void _aggregate(long int axis, Matrix& target, MTYPE(*agg_func)(MTYPE, MTYPE), MTYPE initialValue) const;
+    MTYPE _aggregateRow(long int row, MTYPE(*agg_func)(MTYPE, MTYPE), MTYPE initialValue) const;
+    MTYPE _aggregateCol(long int row, MTYPE(*agg_func)(MTYPE, MTYPE), MTYPE initialValue) const;
+    void _updateDims(long int numRows, long int numCols);
     void _applyLoop(MTYPE(*func)(MTYPE));
     void _applyLoop(MTYPE (*func)(MTYPE), Matrix& target);
     void _applyLoop2(const Matrix& a, MTYPE(*func)(MTYPE, MTYPE), Matrix& target) const;
     void _applyLoop2(const Matrix& a, MTYPE (*func)(MTYPE,MTYPE, MTYPE), MTYPE scalar, Matrix& target) const;
     void _applyLoopScalar(const MTYPE scalar, MTYPE(*func)(MTYPE, MTYPE), Matrix& target) const;
-    void _checkBounds(int startRow, int endRow, int startCol, int endCol) const;
+    void _checkBounds(long int startRow, long int endRow, long int startCol, long int endCol) const;
     void _divideByVector(const Matrix& vec, Matrix& target);
-    inline int _getNumColsBackEnd() const {
+    inline long int _getNumColsBackEnd() const {
         return _trans == CblasNoTrans ? _numCols : _numRows;
     }
 public:
@@ -125,16 +124,16 @@ public:
         TANH, RECIPROCAL, SQUARE, ABS, EXP, LOG, ZERO, ONE, LOGISTIC1, LOGISTIC2, SIGN
     };
     Matrix();
-    Matrix(int numRows, int numCols);
+    Matrix(long int numRows, long int numCols);
 #ifdef NUMPY_INTERFACE
     Matrix(const PyArrayObject *src);
 #endif
     Matrix(const Matrix &like);
-    Matrix(MTYPE* data, int numRows, int numCols);
-    Matrix(MTYPE* data, int numRows, int numCols, bool transpose);
+    Matrix(MTYPE* data, long int numRows, long int numCols);
+    Matrix(MTYPE* data, long int numRows, long int numCols, bool transpose);
     ~Matrix();
 
-    inline MTYPE& getCell(int i, int j) const {
+    inline MTYPE& getCell(long int i, long int j) const {
         assert(i >= 0 && i < _numRows);
         assert(j >= 0 && j < _numCols);
         if (_trans == CblasTrans) {
@@ -143,7 +142,7 @@ public:
         return _data[i * _numCols + j];
     }
 
-    MTYPE& operator()(int i, int j) const {
+    MTYPE& operator()(long int i, long int j) const {
         return getCell(i, j);
     }
 
@@ -155,27 +154,27 @@ public:
         return !_ownsData;
     }
 
-    inline int getNumRows() const {
+    inline long int getNumRows() const {
         return _numRows;
     }
 
-    inline int getNumCols() const {
+    inline long int getNumCols() const {
         return _numCols;
     }
 
-    inline int getNumDataBytes() const {
-        return _numDataBytes;
+    inline long int getNumDataBytes() const {
+        return _numElements * sizeof(MTYPE);
     }
 
-    inline int getNumElements() const {
+    inline long int getNumElements() const {
         return _numElements;
     }
 
-    inline int getLeadingDim() const {
+    inline long int getLeadingDim() const {
         return _trans == CblasTrans ? _numRows : _numCols;
     }
 
-    inline int getFollowingDim() const {
+    inline long int getFollowingDim() const {
         return _trans == CblasTrans ? _numCols : _numRows;
     }
 
@@ -245,14 +244,14 @@ public:
     void eltWiseMultByVector(const Matrix& vec, Matrix& target);
     void eltWiseDivideByVector(const Matrix& vec);
     void eltWiseDivideByVector(const Matrix& vec, Matrix& target);
-    void resize(int newNumRows, int newNumCols);
+    void resize(long int newNumRows, long int newNumCols);
     void resize(const Matrix& like);
-    Matrix& slice(int startRow, int endRow, int startCol, int endCol) const;
-    void slice(int startRow, int endRow, int startCol, int endCol, Matrix &target) const;
-    Matrix& sliceRows(int startRow, int endRow) const;
-    void sliceRows(int startRow, int endRow, Matrix& target) const;
-    Matrix& sliceCols(int startCol, int endCol) const;
-    void sliceCols(int startCol, int endCol, Matrix& target) const;
+    Matrix& slice(long int startRow, long int endRow, long int startCol, long int endCol) const;
+    void slice(long int startRow, long int endRow, long int startCol, long int endCol, Matrix &target) const;
+    Matrix& sliceRows(long int startRow, long int endRow) const;
+    void sliceRows(long int startRow, long int endRow, Matrix& target) const;
+    Matrix& sliceCols(long int startCol, long int endCol) const;
+    void sliceCols(long int startCol, long int endCol, Matrix& target) const;
     void rightMult(const Matrix &b, MTYPE scale);
     void rightMult(const Matrix &b, Matrix &target) const;
     void rightMult(const Matrix &b);
@@ -265,26 +264,26 @@ public:
     void eltWiseDivide(const Matrix& a, Matrix &target) const;
     Matrix& transpose() const;
     Matrix& transpose(bool hard) const;
-    Matrix& tile(int timesY, int timesX) const;
-    void tile(int timesY, int timesX, Matrix& target) const;
-    void copy(Matrix &dest, int srcStartRow, int srcEndRow, int srcStartCol, int srcEndCol, int destStartRow, int destStartCol) const;
+    Matrix& tile(long int timesY, long int timesX) const;
+    void tile(long int timesY, long int timesX, Matrix& target) const;
+    void copy(Matrix &dest, long int srcStartRow, long int srcEndRow, long int srcStartCol, long int srcEndCol, long int destStartRow, long int destStartCol) const;
     Matrix& copy() const;
     void copy(Matrix& target) const;
-    Matrix& sum(int axis) const;
-    void sum(int axis, Matrix &target) const;
+    Matrix& sum(long int axis) const;
+    void sum(long int axis, Matrix &target) const;
     MTYPE sum() const;
     MTYPE max() const;
-    Matrix& max(int axis) const;
-    void max(int axis, Matrix& target) const;
+    Matrix& max(long int axis) const;
+    void max(long int axis, Matrix& target) const;
     MTYPE min() const;
-    Matrix& min(int axis) const;
-    void min(int axis, Matrix& target) const;
+    Matrix& min(long int axis) const;
+    void min(long int axis, Matrix& target) const;
     MTYPE norm() const;
     MTYPE norm2() const;
     void scale(MTYPE scale);
     void scale(MTYPE alpha, Matrix& target);
-    void reshape(int numRows, int numCols);
-    Matrix& reshaped(int numRows, int numCols);
+    void reshape(long int numRows, long int numCols);
+    Matrix& reshaped(long int numRows, long int numCols);
     void printShape(const char* name) const;
     bool hasNan() const;
     bool hasInf() const;
@@ -298,8 +297,8 @@ public:
     void randomizeNormal();
 #endif
     void print() const;
-    void print(int startRow,int rows, int startCol,int cols) const;
-    void print(int rows, int cols) const;
+    void print(long int startRow,long int rows, long int startCol,long int cols) const;
+    void print(long int rows, long int cols) const;
 };
 
 #endif /* MATRIX_H_ */

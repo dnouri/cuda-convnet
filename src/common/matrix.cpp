@@ -29,7 +29,7 @@
 
 using namespace std;
 
-void Matrix::_init(MTYPE* data, int numRows, int numCols, bool transpose, bool ownsData) {
+void Matrix::_init(MTYPE* data, long int numRows, long int numCols, bool transpose, bool ownsData) {
     _updateDims(numRows, numCols);
     _ownsData = ownsData;
     _trans = transpose ? CblasTrans : CblasNoTrans;
@@ -40,7 +40,7 @@ Matrix::Matrix() {
     _init(NULL, 0, 0, false, true);
 }
 
-Matrix::Matrix(int numRows, int numCols) {
+Matrix::Matrix(long int numRows, long int numCols) {
     _init(NULL, numRows, numCols, false, true);
     this->_data = numRows * numCols > 0 ? new MTYPE[this->_numElements] : NULL;
 }
@@ -52,13 +52,13 @@ Matrix::Matrix(const Matrix &like) {
 
 /* construct a matrix with another matrix's data. the resultant
  * matrix does NOT own its data */
-Matrix::Matrix(MTYPE* data, int numRows, int numCols) {
+Matrix::Matrix(MTYPE* data, long int numRows, long int numCols) {
     _init(data, numRows, numCols, false, false);
 }
 
 /* construct a matrix with another matrix's data (and optionally transpose it). the resultant
  * matrix does NOT own its data -- it is a VIEW */
-Matrix::Matrix(MTYPE* data, int numRows, int numCols, bool transpose) {
+Matrix::Matrix(MTYPE* data, long int numRows, long int numCols, bool transpose) {
     _init(data, numRows, numCols, transpose, false);
 }
 
@@ -74,8 +74,8 @@ Matrix::Matrix(const PyArrayObject *src) {
             this->_trans = src->flags & NPY_CONTIGUOUS ? CblasNoTrans : CblasTrans;
         } else {
             this->_data = new MTYPE[PyArray_DIM(src,0) * PyArray_DIM(src,1)];
-            for (int i = 0; i < PyArray_DIM(src,0); i++) {
-                for (int j = 0; j < PyArray_DIM(src,1); j++) {
+            for (long int i = 0; i < PyArray_DIM(src,0); i++) {
+                for (long int j = 0; j < PyArray_DIM(src,1); j++) {
                     (*this)(i,j) = *reinterpret_cast<MTYPE*>(PyArray_GETPTR2(src,i,j));
                 }
             }
@@ -91,14 +91,13 @@ Matrix::~Matrix() {
 }
 
 
-void Matrix::_updateDims(int numRows, int numCols) {
+void Matrix::_updateDims(long int numRows, long int numCols) {
     this->_numRows = numRows;
     this->_numCols = numCols;
     this->_numElements = numRows * numCols;
-    this->_numDataBytes = this->_numElements * sizeof(MTYPE);
 }
 
-void Matrix::_checkBounds(int startRow, int endRow, int startCol, int endCol) const {
+void Matrix::_checkBounds(long int startRow, long int endRow, long int startCol, long int endCol) const {
     assert(startRow >= 0 && startRow <= _numRows);
     assert(endRow >= 0 && endRow <= _numRows);
     assert(startCol >= 0 && startCol <= _numCols);
@@ -106,7 +105,7 @@ void Matrix::_checkBounds(int startRow, int endRow, int startCol, int endCol) co
 }
 
 /* will return a view if possible */
-Matrix& Matrix::slice(int startRow, int endRow, int startCol, int endCol) const {
+Matrix& Matrix::slice(long int startRow, long int endRow, long int startCol, long int endCol) const {
     endRow = endRow < 0 ? this->_numRows : endRow;
     endCol = endCol < 0 ? this->_numCols : endCol;
     _checkBounds(startRow, endRow, startCol, endCol);
@@ -121,7 +120,7 @@ Matrix& Matrix::slice(int startRow, int endRow, int startCol, int endCol) const 
 }
 
 /* this will NEVER return a view, unlike Matrix_slice */
-void Matrix::slice(int startRow, int endRow, int startCol, int endCol, Matrix& target) const {
+void Matrix::slice(long int startRow, long int endRow, long int startCol, long int endCol, Matrix& target) const {
     endRow = endRow < 0 ? this->_numRows : endRow;
     endCol = endCol < 0 ? this->_numCols : endCol;
     _checkBounds(startRow, endRow, startCol, endCol);
@@ -129,19 +128,19 @@ void Matrix::slice(int startRow, int endRow, int startCol, int endCol, Matrix& t
     this->copy(target, startRow, endRow, startCol, endCol, 0, 0);
 }
 
-Matrix& Matrix::sliceRows(int startRow, int endRow) const {
+Matrix& Matrix::sliceRows(long int startRow, long int endRow) const {
     return slice(startRow, endRow, 0, -1);
 }
 
-void Matrix::sliceRows(int startRow, int endRow, Matrix& target) const {
+void Matrix::sliceRows(long int startRow, long int endRow, Matrix& target) const {
     slice(startRow, endRow, 0, -1, target);
 }
 
-Matrix& Matrix::sliceCols(int startCol, int endCol) const {
+Matrix& Matrix::sliceCols(long int startCol, long int endCol) const {
     return slice(0, -1, startCol, endCol);
 }
 
-void Matrix::sliceCols(int startCol, int endCol, Matrix& target) const {
+void Matrix::sliceCols(long int startCol, long int endCol, Matrix& target) const {
     slice(0, -1, startCol, endCol, target);
 }
 
@@ -326,10 +325,10 @@ void Matrix::addVector(const Matrix& vec, MTYPE scale, Matrix& target) {
     assert(std::min(vec.getNumCols(), vec.getNumRows()) == 1);
     const bool rowVector = vec.getNumRows() == 1;
     assert((rowVector && vec.getNumCols() == target.getNumCols()) || (!rowVector && vec.getNumRows() == target.getNumRows()));
-    const int loopTil = rowVector ? target.getNumRows() : target.getNumCols();
-    const int dataInc = ((rowVector && target.isTrans()) || (!rowVector && !target.isTrans())) ? 1 : (rowVector ? target.getNumCols() : target.getNumRows());
-    const int myStride = ((target.isTrans() && rowVector) || (!target.isTrans() && !rowVector)) ? loopTil : 1;
-    for (int i = 0; i < loopTil; i++) {
+    const long int loopTil = rowVector ? target.getNumRows() : target.getNumCols();
+    const long int dataInc = ((rowVector && target.isTrans()) || (!rowVector && !target.isTrans())) ? 1 : (rowVector ? target.getNumCols() : target.getNumRows());
+    const long int myStride = ((target.isTrans() && rowVector) || (!target.isTrans() && !rowVector)) ? loopTil : 1;
+    for (long int i = 0; i < loopTil; i++) {
         CBLAS_AXPY(vec.getNumElements(), scale, vec._data, 1, target._data + dataInc * i, myStride);
     }
 }
@@ -359,10 +358,10 @@ void Matrix::eltWiseMultByVector(const Matrix& vec, Matrix& target) {
     assert(std::min(vec.getNumCols(), vec.getNumRows()) == 1);
     const bool rowVector = vec.getNumRows() == 1;
     assert((rowVector && vec.getNumCols() == target.getNumCols()) || (!rowVector && vec.getNumRows() == target.getNumRows()));
-    const int dataInc = ((rowVector && !target.isTrans()) || (!rowVector && target.isTrans())) ? 1 : (rowVector ? target.getNumRows() : target.getNumCols());
-    const int myStride = ((!target.isTrans() && !rowVector) || (target.isTrans() && rowVector)) ? 1 : vec.getNumElements();
-    const int numScaling = rowVector ? target.getNumRows() : target.getNumCols();
-    for (int i = 0; i < vec.getNumElements(); i++) {
+    const long int dataInc = ((rowVector && !target.isTrans()) || (!rowVector && target.isTrans())) ? 1 : (rowVector ? target.getNumRows() : target.getNumCols());
+    const long int myStride = ((!target.isTrans() && !rowVector) || (target.isTrans() && rowVector)) ? 1 : vec.getNumElements();
+    const long int numScaling = rowVector ? target.getNumRows() : target.getNumCols();
+    for (long int i = 0; i < vec.getNumElements(); i++) {
         CBLAS_SCAL(numScaling, vec._data[i], target._data + dataInc * i, myStride);
     }
 }
@@ -415,37 +414,37 @@ Matrix& Matrix::transpose(bool hard) const {
         return transpose();
     }
     Matrix &meTrans = *new Matrix(_numCols, _numRows);
-    for (int i = 0; i < _numRows; i++) {
-        for (int j = 0; j < _numCols; j++) {
+    for (long int i = 0; i < _numRows; i++) {
+        for (long int j = 0; j < _numCols; j++) {
             meTrans(j, i) = (*this)(i, j);
         }
     }
     return meTrans;
 }
 
-Matrix& Matrix::tile(int timesY, int timesX) const {
+Matrix& Matrix::tile(long int timesY, long int timesX) const {
     Matrix& tiled = *new Matrix(this->_numRows * timesY, this->_numCols * timesX);
     _tileTo2(tiled);
     return tiled;
 }
 
 /* resizes target if necessary */
-void Matrix::tile(int timesY, int timesX, Matrix& target) const {
+void Matrix::tile(long int timesY, long int timesX, Matrix& target) const {
     target.resize(this->_numRows * timesY, this->_numCols * timesX);
     _tileTo2(target);
 }
 
 /* a variant ... seems to be no faster than original. */
 void Matrix::_tileTo2(Matrix& target) const {
-    for(int y = 0; y < target._numRows; y += this->_numRows) {
-        for(int x = 0; x < target._numCols; x += this->_numCols) {
+    for(long int y = 0; y < target._numRows; y += this->_numRows) {
+        for(long int x = 0; x < target._numCols; x += this->_numCols) {
             this->copy(target, 0, -1, 0, -1, y, x);
         }
     }
 }
 
 /* guarantees that result will be non-transposed */
-void Matrix::resize(int newNumRows, int newNumCols) {
+void Matrix::resize(long int newNumRows, long int newNumCols) {
     if(this->_numRows != newNumRows || this->_numCols != newNumCols) {
         assert(!isView());
         if (this->getNumElements() != newNumRows * newNumCols) {
@@ -477,7 +476,7 @@ void Matrix::scale(MTYPE alpha, Matrix& target) {
  * Warnings:
  * 1. ALL DIMENSIONS MUST BE CORRECT
  * 2. The source and destination memories better not overlap! */
-void Matrix::copy(Matrix& dest, int srcStartRow, int srcEndRow, int srcStartCol, int srcEndCol, int destStartRow, int destStartCol) const {
+void Matrix::copy(Matrix& dest, long int srcStartRow, long int srcEndRow, long int srcStartCol, long int srcEndCol, long int destStartRow, long int destStartCol) const {
     srcEndRow = srcEndRow < 0 ? this->_numRows : srcEndRow;
     srcEndCol = srcEndCol < 0 ? this->_numCols : srcEndCol;
     assert(destStartRow >= 0 && destStartCol >= 0); //some range-checking
@@ -487,17 +486,17 @@ void Matrix::copy(Matrix& dest, int srcStartRow, int srcEndRow, int srcStartCol,
     // I found no evidence that memcpy is actually faster than just
     // copying element-by-element.
     if (!isTrans() && !dest.isTrans()) {
-        int src_start_idx = this->_numCols * srcStartRow + srcStartCol;
-        int dest_start_idx = dest._numCols * destStartRow + destStartCol;
-        int copy_row_width = srcEndCol - srcStartCol;
+        long int src_start_idx = this->_numCols * srcStartRow + srcStartCol;
+        long int dest_start_idx = dest._numCols * destStartRow + destStartCol;
+        long int copy_row_width = srcEndCol - srcStartCol;
 
-        for (int i = srcStartRow; i < srcEndRow; i++) {
+        for (long int i = srcStartRow; i < srcEndRow; i++) {
             memcpy(dest._data + dest_start_idx + dest._numCols * (i - srcStartRow),
                     this->_data + src_start_idx + this->_numCols * (i - srcStartRow), sizeof(MTYPE) * copy_row_width);
         }
     } else {
-        for (int i = srcStartRow; i < srcEndRow; i++) {
-            for (int j = srcStartCol; j < srcEndCol; j++) {
+        for (long int i = srcStartRow; i < srcEndRow; i++) {
+            for (long int j = srcStartCol; j < srcEndCol; j++) {
                 dest(i - srcStartRow + destStartRow, j - srcStartCol + destStartCol) = (*this)(i, j);
             }
         }
@@ -532,13 +531,13 @@ MTYPE Matrix::min() const {
     return _aggregate(&_min, MTYPE_MAX);
 }
 
-Matrix& Matrix::min(int axis) const {
+Matrix& Matrix::min(long int axis) const {
     Matrix& target = axis == 0 ? *new Matrix(1, this->_numCols) : *new Matrix(this->_numRows, 1);
     this->min(axis, target);
     return target;
 }
 
-void Matrix::min(int axis, Matrix& target) const {
+void Matrix::min(long int axis, Matrix& target) const {
     _aggregate(axis, target, &_min, MTYPE_MAX);
 }
 
@@ -546,13 +545,13 @@ MTYPE Matrix::max() const {
     return _aggregate(&_max, -MTYPE_MAX);
 }
 
-Matrix& Matrix::max(int axis) const {
+Matrix& Matrix::max(long int axis) const {
     Matrix& target = axis == 0 ? *new Matrix(1, this->_numCols) : *new Matrix(this->_numRows, 1);
     this->max(axis, target);
     return target;
 }
 
-void Matrix::max(int axis, Matrix& target) const {
+void Matrix::max(long int axis, Matrix& target) const {
     _aggregate(axis, target, &_max, -MTYPE_MAX);
 }
 
@@ -568,41 +567,41 @@ MTYPE Matrix::norm2() const {
     return _aggregate(&_addSquare, 0);
 }
 
-Matrix& Matrix::sum(int axis) const {
+Matrix& Matrix::sum(long int axis) const {
     Matrix& target = axis == 0 ? *new Matrix(1, this->_numCols) : *new Matrix(this->_numRows, 1);
     this->sum(axis, target);
     return target;
 }
 
-void Matrix::sum(int axis, Matrix& target) const {
+void Matrix::sum(long int axis, Matrix& target) const {
     _aggregate(axis, target, &_add, 0);
 }
 
-void Matrix::_aggregate(int axis, Matrix& target, MTYPE (*agg_func)(MTYPE, MTYPE), MTYPE initialValue) const {
+void Matrix::_aggregate(long int axis, Matrix& target, MTYPE (*agg_func)(MTYPE, MTYPE), MTYPE initialValue) const {
     if (axis == 0) {
         target.resize(1, this->_numCols);
-        for (int j = 0; j < this->_numCols; j++) {
+        for (long int j = 0; j < this->_numCols; j++) {
             target(0, j) = _aggregateCol(j, agg_func, initialValue);
         }
     } else {
         target.resize(this->_numRows, 1);
-        for (int i = 0; i < this->_numRows; i++) {
+        for (long int i = 0; i < this->_numRows; i++) {
             target(i, 0) = _aggregateRow(i, agg_func, initialValue);
         }
     }
 }
 
-MTYPE Matrix::_aggregateRow(int row, MTYPE (*agg_func)(MTYPE, MTYPE), MTYPE initialValue) const {
+MTYPE Matrix::_aggregateRow(long int row, MTYPE (*agg_func)(MTYPE, MTYPE), MTYPE initialValue) const {
     MTYPE v = initialValue;
-    for (int j = 0; j < this->_numCols; j++) {
+    for (long int j = 0; j < this->_numCols; j++) {
         v = agg_func((*this)(row, j), v);
     }
     return v;
 }
 
-MTYPE Matrix::_aggregateCol(int col, MTYPE (*agg_func)(MTYPE, MTYPE), MTYPE initialValue) const {
+MTYPE Matrix::_aggregateCol(long int col, MTYPE (*agg_func)(MTYPE, MTYPE), MTYPE initialValue) const {
     MTYPE v = initialValue;
-    for (int i = 0; i < this->_numRows; i++) {
+    for (long int i = 0; i < this->_numRows; i++) {
         v = agg_func((*this)(i, col), v);
     }
     return v;
@@ -611,27 +610,27 @@ MTYPE Matrix::_aggregateCol(int col, MTYPE (*agg_func)(MTYPE, MTYPE), MTYPE init
 MTYPE Matrix::_aggregate(MTYPE (*agg_func)(MTYPE, MTYPE), MTYPE initialValue) const {
     MTYPE v = initialValue;
     MTYPE* ptr = _data;
-    for (int i = 0; i < getNumElements(); i++, ptr++) {
+    for (long int i = 0; i < getNumElements(); i++, ptr++) {
         v = agg_func(*ptr, v);
     }
     return v;
 }
 
 void Matrix::printShape(const char* name) const {
-    printf("%s: %dx%d\n", name, getNumRows(), getNumCols());
+    printf("%s: %ldx%ld\n", name, getNumRows(), getNumCols());
 }
 
 void Matrix::print() const {
     print(0,getNumRows(),0, getNumCols());
 }
 
-void Matrix::print(int rows, int cols) const {
+void Matrix::print(long int rows, long int cols) const {
     print(0,rows,0, cols);
 }
 
-void Matrix::print(int startRow, int rows, int startCol, int cols) const {
-    for (int i = startRow; i < std::min(startRow+rows, this->_numRows); i++) {
-        for (int j = startCol; j < std::min(startCol+cols, this->_numCols); j++) {
+void Matrix::print(long int startRow, long int rows, long int startCol, long int cols) const {
+    for (long int i = startRow; i < std::min(startRow+rows, this->_numRows); i++) {
+        for (long int j = startCol; j < std::min(startCol+cols, this->_numCols); j++) {
             printf("%.15f ", (*this)(i, j));
         }
         printf("\n");
@@ -724,9 +723,9 @@ void Matrix::eltWiseDivideByVector(const Matrix& vec, Matrix& target) {
     const bool rowVector = vec.getNumRows() == 1;
     assert(rowVector && vec.getNumCols() == getNumCols() || !rowVector && vec.getNumRows() == getNumRows());
     if (isTrans() == target.isTrans() && (!isTrans() && rowVector || isTrans() && !rowVector)) {
-        const int loopTil = rowVector ? getNumRows() : getNumCols();
-        const int dataInc = rowVector ? getNumCols() : getNumRows();
-        for (int i = 0; i < loopTil; i++) {
+        const long int loopTil = rowVector ? getNumRows() : getNumCols();
+        const long int dataInc = rowVector ? getNumCols() : getNumRows();
+        for (long int i = 0; i < loopTil; i++) {
             MKL_VECDIV(vec.getNumElements(), this->_data + i * dataInc, vec._data, target._data + i * dataInc);
         }
     } else {
@@ -836,20 +835,20 @@ void Matrix::_divideByVector(const Matrix& vec, Matrix& target) {
     delete &vecInverse;
 }
 
-void Matrix::reshape(int numRows, int numCols) {
+void Matrix::reshape(long int numRows, long int numCols) {
     assert(_numElements == numRows*numCols);
     _numRows = numRows;
     _numCols = numCols;
 }
 
-Matrix& Matrix::reshaped(int numRows, int numCols) {
+Matrix& Matrix::reshaped(long int numRows, long int numCols) {
     assert(_numElements == numRows*numCols);
     return *new Matrix(_data, numRows, numCols, isTrans());
 }
 
 void Matrix::_applyLoop(MTYPE (*func)(MTYPE), Matrix& target) {
     MTYPE *ptr = this->_data, *tgtPtr = target._data;
-    for (int i = 0; i < getNumElements(); i++, ptr++, tgtPtr++) {
+    for (long int i = 0; i < getNumElements(); i++, ptr++, tgtPtr++) {
         *tgtPtr = (*func)(*ptr);
     }
 }
@@ -859,16 +858,16 @@ void Matrix::_applyLoop(MTYPE (*func)(MTYPE)) {
 }
 
 void Matrix::_applyLoop2(const Matrix& a, MTYPE (*func)(MTYPE,MTYPE), Matrix& target) const {
-    for (int i = 0; i < getNumRows(); i++) {
-        for (int j = 0; j < getNumCols(); j++) {
+    for (long int i = 0; i < getNumRows(); i++) {
+        for (long int j = 0; j < getNumCols(); j++) {
             target(i, j) = (*func)((*this)(i, j), a(i, j));
         }
     }
 }
 
 void Matrix::_applyLoop2(const Matrix& a, MTYPE (*func)(MTYPE,MTYPE, MTYPE), MTYPE scalar, Matrix& target) const {
-    for (int i = 0; i < getNumRows(); i++) {
-        for (int j = 0; j < getNumCols(); j++) {
+    for (long int i = 0; i < getNumRows(); i++) {
+        for (long int j = 0; j < getNumCols(); j++) {
             target(i, j) = (*func)((*this)(i, j), a(i, j), scalar);
         }
     }
@@ -877,14 +876,14 @@ void Matrix::_applyLoop2(const Matrix& a, MTYPE (*func)(MTYPE,MTYPE, MTYPE), MTY
 void Matrix::_applyLoopScalar(const MTYPE scalar, MTYPE(*func)(MTYPE, MTYPE), Matrix& target) const {
     MTYPE *myPtr = _data;
     MTYPE *targetPtr = target._data;
-    for (int i = 0; i < getNumElements(); i++, myPtr++, targetPtr++) {
+    for (long int i = 0; i < getNumElements(); i++, myPtr++, targetPtr++) {
         *targetPtr = (*func)(*myPtr, scalar);
     }
 }
 
 bool Matrix::hasNan() const {
-    for (int r = 0; r < _numRows; r++) {
-        for (int c = 0; c < _numCols; c++) {
+    for (long int r = 0; r < _numRows; r++) {
+        for (long int c = 0; c < _numCols; c++) {
             if (isnan((*this)(r,c))) {
                 return true;
             }
@@ -894,8 +893,8 @@ bool Matrix::hasNan() const {
 }
 
 bool Matrix::hasInf() const {
-    for (int r = 0; r < _numRows; r++) {
-        for (int c = 0; c < _numCols; c++) {
+    for (long int r = 0; r < _numRows; r++) {
+        for (long int c = 0; c < _numCols; c++) {
             if (isinf((*this)(r,c))) {
                 return true;
             }

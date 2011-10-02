@@ -89,10 +89,6 @@ private:
         return _isTrans ? 'n' : 't';
     }
 
-    unsigned int getNumRowsBackEnd() const {
-        return _isTrans ? _numCols : _numRows;
-    }
-
     void _init(int numRows, int numCols);
     void _init(int numRows, int numCols, int stride, bool isTrans);
     void _sum_setParams(int n, dim3* blocks, dim3* threads, int* numCols);

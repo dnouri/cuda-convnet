@@ -78,7 +78,7 @@ protected:
     CPUData* _hData;
     NVMatrixV _data;
     int _minibatchSize;
-    int _dataSize;
+    long int _dataSize;
 public:
     DataProvider(int minibatchSize);
     GPUData& operator[](int idx);
