@@ -332,12 +332,12 @@ class LocalLayerParser(LayerWithInputParser):
         
         dic['filterChannels'] = dic['channels'] / dic['groups']
         
-        if dic['filterSize'] > 2 * dic['padding'] + dic['imgSize']:
-            raise LayerParsingError("Layer '%s': filter size (%d) greater than image size + 2 * padding (%d)" % (name, dic['filterSize'], 2 * dic['padding'] + dic['imgSize']))
         if dic['numInputs'][0] % dic['imgPixels'] != 0 or dic['imgSize'] * dic['imgSize'] != dic['imgPixels']:
             raise LayerParsingError("Layer '%s': has %-d dimensional input, not interpretable as square %d-channel images" % (name, dic['numInputs'][0], dic['channels']))
         if dic['channels'] > 3 and dic['channels'] % 4 != 0:
             raise LayerParsingError("Layer '%s': number of channels must be smaller than 4 or divisible by 4" % name)
+        if dic['filterSize'] > 2 * dic['padding'] + dic['imgSize']:
+            raise LayerParsingError("Layer '%s': filter size (%d) greater than image size + 2 * padding (%d)" % (name, dic['filterSize'], 2 * dic['padding'] + dic['imgSize']))
         
         if dic['randSparse']: # Random sparse connectivity requires some extra checks
             if dic['groups'] == 1:
@@ -352,7 +352,7 @@ class LocalLayerParser(LayerWithInputParser):
                 LayerParser.verify_divisible(name, dic['channels'], 4*dic['groups'], 'channels', '4 * groups')
             LayerParser.verify_divisible(name, dic['channels'], dic['groups'], 'channels', 'groups')
 
-        LayerParser.verify_divisible(name, dic['filters'], 16*dic['groups'], 'filters * groups')
+        LayerParser.verify_divisible(name, dic['filters']/dic['groups'], 16, 'filters')
         
         dic['padding'] = -dic['padding']
         dic['neuron'] = LayerParser.parse_neuron(name, mcp.safe_get(name, 'neuron'))
