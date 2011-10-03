@@ -123,7 +123,7 @@ class ShowGPUModel(GPUModel):
         pl.xticks([])
         pl.yticks([])
         if not combine_chans:
-            pl.imshow(bigpic, cmap=cm.gray, interpolation='nearest')
+            pl.imshow(bigpic, cmap=pl.cm.gray, interpolation='nearest')
         else:
             bigpic = bigpic.swapaxes(0,2).swapaxes(0,1)
             pl.imshow(bigpic, interpolation='nearest')        
@@ -136,10 +136,9 @@ class ShowGPUModel(GPUModel):
         layer = self.layers[layer_names.index(self.show_filters)]
         filters = layer['weights']
         if layer['type'] == 'fc': # Fully-connected layer
-            input_idx = int(options["-i"])
-            filters = filters[input_idx]
+            filters = filters[self.input_idx]
             num_filters = layer['outputs']
-            channels = int(options["-c"])
+            channels = self.channels
         elif layer['type'] in ('conv', 'local'): # Conv layer
             num_filters = layer['filters']
             channels = layer['filterChannels']
@@ -223,7 +222,7 @@ class ShowGPUModel(GPUModel):
         op = GPUModel.get_options_parser()
         op.add_option("show-cost", "show_cost", StringOptionParser, "Show specified objective function", default="")
         op.add_option("show-filters", "show_filters", StringOptionParser, "Show learned filters in specified layer", default="")
-        op.add_option("filter-input-idx", "filter_input_idx", IntegerOptionParser, "Input index for layer given to --show-filters (fully-connected layers only)", default=0)
+        op.add_option("input-idx", "input_idx", IntegerOptionParser, "Input index for layer given to --show-filters (fully-connected layers only)", default=0)
         op.add_option("no-rgb", "no_rgb", BooleanOptionParser, "Don't combine filter channels into RGB in layer given to --show-filters", default=False)
         op.add_option("channels", "channels", IntegerOptionParser, "Number of channels in layer given to --show-filters (fully-connected layers only)", default=0)
         op.add_option("show-preds", "show_preds", BooleanOptionParser, "Show predictions made on test set", default=False, requires=['logreg_name'])
