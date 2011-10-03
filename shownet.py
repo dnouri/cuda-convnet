@@ -168,10 +168,13 @@ class ShowGPUModel(GPUModel):
         
         img_size = int(sqrt(self.test_data_provider.get_data_dims() / 3))
         label_names = self.test_data_provider.batch_meta['label_names']
-        preds = n.zeros((NUM_IMGS, num_classes), dtype=n.single)
-        img_indices = nr.randint(0, data[0].shape[1], NUM_IMGS)
-        data[0] = n.require(data[0][:,img_indices], requirements='C')
-        data[1] = n.require(data[1][:,img_indices], requirements='C')
+        if self.only_errors:
+            preds = n.zeros((data[0].shape[1], num_classes), dtype=n.single)
+        else:
+            preds = n.zeros((NUM_IMGS, num_classes), dtype=n.single)
+            img_indices = nr.randint(0, data[0].shape[1], NUM_IMGS)
+            data[0] = n.require(data[0][:,img_indices], requirements='C')
+            data[1] = n.require(data[1][:,img_indices], requirements='C')
         data += [preds]
         self.libmodel.startLabeler(data, self.logreg_idx)
         self.finish_batch()
@@ -185,7 +188,7 @@ class ShowGPUModel(GPUModel):
         #print [sum(x == i for x in data[1][0,:]) for i in range(16)]
         for r in xrange(NUM_ROWS):
             for c in xrange(NUM_COLS):
-                img_idx = r * NUM_COLS + c
+                img_idx = nr.randint(data[0].shape[1]) if self.only_errors else r * NUM_COLS + c
                 pl.subplot(NUM_ROWS*2, NUM_COLS, r * 2 * NUM_COLS + c + 1)
                 pl.xticks([])
                 pl.yticks([])
