@@ -88,5 +88,15 @@ public:
     void run();
 };
 
+class LabelWorker : public Worker {
+protected:
+    CPUData* _data;
+    Matrix* _preds;
+    int _logregIdx;
+public:
+    LabelWorker(ConvNet& convNet, CPUData& data, Matrix& preds, int logregIdx);
+    void run();
+};
+
 #endif	/* WORKER_CUH */
 

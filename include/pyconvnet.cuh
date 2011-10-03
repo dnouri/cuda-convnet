@@ -30,9 +30,6 @@
 #define _QUOTEME(x) #x
 #define QUOTEME(x) _QUOTEME(x)
 
-#ifdef EXEC
-int main(int argc, char** argv);
-#else
 extern "C" void INITNAME();
 
 PyObject* initModel(PyObject *self, PyObject *args);
@@ -41,7 +38,7 @@ PyObject* finishBatch(PyObject *self, PyObject *args);
 PyObject* checkGradients(PyObject *self, PyObject *args);
 PyObject* syncWithHost(PyObject *self, PyObject *args);
 PyObject* startMultiviewTest(PyObject *self, PyObject *args);
-#endif
+PyObject* startLabeler(PyObject *self, PyObject *args);
 
 #endif	/* PYCONVNET3_CUH */
 

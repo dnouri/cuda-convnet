@@ -41,40 +41,17 @@
 #include <pyconvnet.cuh>
 #include <convnet.cuh>
 
-#ifdef EXEC
-
-#include <ConvNetTest.cuh>
-
-int main(int argc, char** argv) {
-    // This line just for compiling and examining profiler output.
-//    exit(0); bwdPass_16_trans<8,16><<<0, 0>>>(NULL, NULL, NULL,0, 0, 0, 0, 0, 0);
-
-    int boardNum = get_board_lock();
-    if (boardNum == GPU_LOCK_NO_BOARD) {
-        printf("No free GPU boards!\n");
-        exit(EXIT_FAILURE);
-    } else if(boardNum == GPU_LOCK_NO_SCRIPT) {
-        printf("Running on default board.\n");
-    } else {
-        printf("Running on board %d\n", boardNum);
-    }
-    init_tests(boardNum);
-    // Put tests here
-    
-    return 0;
-}
-#else
-
 using namespace std;
 static ConvNet* model = NULL;
 
 static PyMethodDef _ConvNetMethods[] = {  { "initModel",          initModel,          METH_VARARGS },
-                                          { "startBatch",         startBatch,         METH_VARARGS },
-                                          { "finishBatch",        finishBatch,        METH_VARARGS },
-                                          { "checkGradients",     checkGradients,     METH_VARARGS },
-                                          { "startMultiviewTest", startMultiviewTest, METH_VARARGS },
-                                          { "syncWithHost",       syncWithHost,       METH_VARARGS },
-                                          { NULL, NULL }
+                                              { "startBatch",         startBatch,         METH_VARARGS },
+                                              { "finishBatch",        finishBatch,        METH_VARARGS },
+                                              { "checkGradients",     checkGradients,     METH_VARARGS },
+                                              { "startMultiviewTest", startMultiviewTest, METH_VARARGS },
+                                              { "startLabeler",         startLabeler,         METH_VARARGS },
+                                              { "syncWithHost",       syncWithHost,       METH_VARARGS },
+                                              { NULL, NULL }
 };
 
 void INITNAME() {
@@ -143,6 +120,27 @@ PyObject* startMultiviewTest(PyObject *self, PyObject *args) {
 }
 
 /*
+ * Starts testing on the given batch (asynchronous -- returns immediately).
+ */
+PyObject* startLabeler(PyObject *self, PyObject *args) {
+    assert(model != NULL);
+    PyListObject* data;
+    int logregIdx;
+    if (!PyArg_ParseTuple(args, "O!i",
+        &PyList_Type, &data,
+        &logregIdx)) {
+        return NULL;
+    }
+    MatrixV& mvec = *getMatrixV((PyObject*)data);
+    Matrix& preds = *mvec.back();
+    mvec.pop_back();
+    
+    LabelWorker* wr = new LabelWorker(*model, *new CPUData(mvec), preds, logregIdx);
+    model->getWorkerQueue().enqueue(wr);
+    return Py_BuildValue("i", 0);
+}
+
+/*
  * Waits for the trainer to finish training on the batch given to startBatch.
  */
 PyObject* finishBatch(PyObject *self, PyObject *args) {
@@ -198,6 +196,4 @@ PyObject* syncWithHost(PyObject *self, PyObject *args) {
     delete res;
     return Py_BuildValue("i", 0);
 }
-
-#endif
 

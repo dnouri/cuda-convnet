@@ -51,8 +51,8 @@ class GPUModel(IGPUModel):
         else:
             ms['layers'] = LayerParser.parse_layers(self.layer_def, self.layer_params, self)
         
-        if self.op.get_value('multiview_test'):
-            logreg_name = self.op.get_value('logreg_name')
+        logreg_name = self.op.get_value('logreg_name')
+        if logreg_name:
             try:
                 self.logreg_idx = [l['name'] for l in ms['layers']].index(logreg_name)
                 if ms['layers'][self.logreg_idx]['type'] != 'cost.logreg':
@@ -136,7 +136,7 @@ class GPUModel(IGPUModel):
         op.add_option("layer-def", "layer_def", StringOptionParser, "Layer definition file", set_once=True)
         op.add_option("layer-params", "layer_params", StringOptionParser, "Layer parameter file")
         op.add_option("check-grads", "check_grads", BooleanOptionParser, "Check gradients and quit?", default=0, excuses=['data_path','save_path','train_batch_range','test_batch_range'])
-        op.add_option("multiview-test", "multiview_test", BooleanOptionParser, "Cropped DP: test on multiple patches?", default=0)
+        op.add_option("multiview-test", "multiview_test", BooleanOptionParser, "Cropped DP: test on multiple patches?", default=0, requires=['logreg_name'])
         op.add_option("crop-border", "crop_border", IntegerOptionParser, "Cropped DP: crop border size", default=4)
         op.add_option("logreg-name", "logreg_name", StringOptionParser, "Cropped DP: logreg layer name", default="")
         
@@ -146,16 +146,16 @@ class GPUModel(IGPUModel):
         op.options["num_epochs"].default = 50000
         op.options['dp_type'].default = None
         
+        DataProvider.register_data_provider('cifar', 'CIFAR', CIFARDataProvider)
+        DataProvider.register_data_provider('dummy-cn-n', 'Dummy ConvNet', DummyConvNetDataProvider)
+        DataProvider.register_data_provider('cifar-cropped', 'Cropped CIFAR', CroppedCIFARDataProvider)
+        
         return op
     
 if __name__ == "__main__":
     #nr.seed(5)
     op = GPUModel.get_options_parser()
-    
-    DataProvider.register_data_provider('cifar', 'CIFAR', CIFARDataProvider)
-    DataProvider.register_data_provider('dummy-cn-n', 'Dummy ConvNet', DummyConvNetDataProvider)
-    DataProvider.register_data_provider('cifar-cropped', 'Cropped CIFAR', CroppedCIFARDataProvider)
-    
+
     op, load_dic = IGPUModel.parse_options(op)
     model = GPUModel("ConvNet", op, load_dic)
     model.start()

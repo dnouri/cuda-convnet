@@ -30,13 +30,13 @@ import random as r
 class CIFARDataProvider(LabeledMemoryDataProvider):
     def __init__(self, data_dir, batch_range, init_epoch=1, init_batchnum=None, dp_params={}, test=False):
         LabeledMemoryDataProvider.__init__(self, data_dir, batch_range, init_epoch, init_batchnum, dp_params, test)
-        data_mean = self.batch_meta['data_mean']
-        
+        self.data_mean = self.batch_meta['data_mean']
+        self.num_colors = 3
         # Subtract the mean from the data and make sure that both data and
         # labels are in single-precision floating point.
         for d in self.data_dic:
             # This converts the data matrix to single precision and makes sure that it is C-ordered
-            d['data'] = n.require((d['data'] - data_mean), dtype=n.single, requirements='C')
+            d['data'] = n.require((d['data'] - self.data_mean), dtype=n.single, requirements='C')
             d['labels'] = n.require(d['labels'].reshape((1, d['data'].shape[1])), dtype=n.single)
 
     def get_next_batch(self):
@@ -55,6 +55,7 @@ class CroppedCIFARDataProvider(LabeledMemoryDataProvider):
         self.multiview = dp_params['multiview_test'] and test
         self.num_views = 9
         self.data_mult = self.num_views if self.multiview else 1
+        self.num_colors = 3
         
         for d in self.data_dic:
             d['data'] = n.require(d['data'], requirements='C')

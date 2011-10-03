@@ -162,3 +162,38 @@ void MultiviewTestWorker::run() {
     batchCost /= numCasesReal;
     _convNet->getResultQueue().enqueue(new WorkResult(WorkResult::BATCH_DONE, batchCost));
 }
+
+/* 
+ * ====================
+ * LabelWorker
+ * ====================
+ */
+LabelWorker::LabelWorker(ConvNet& convNet, CPUData& data, Matrix& preds, int logregIdx) 
+    : Worker(convNet), _data(&data), _preds(&preds), _logregIdx(logregIdx) {
+    assert(preds.getNumRows() == data.getNumCases());
+    assert(!preds.isTrans());
+}
+
+void LabelWorker::run() {
+    _convNet->setData(*_data);
+    DataProvider& dp = _convNet->getDataProvider();
+    Layer& softmaxLayer = *_convNet->getLayer(_logregIdx).getPrev()[1];
+
+    Cost& batchCost = *new Cost();
+    for (int i = 0; i < dp.getNumMinibatches(); i++) {
+        _convNet->fprop(i, PASS_TEST);
+        _convNet->getCost(batchCost);
+        
+        Matrix& miniPreds = _preds->sliceRows(i * dp.getMinibatchSize(),
+                                              min(dp.getNumCases(), (i + 1) * dp.getMinibatchSize()));
+        NVMatrix softmaxActs_T;
+        softmaxLayer.getActs().transpose(softmaxActs_T);
+        softmaxActs_T.copyToHost(miniPreds);
+        delete &miniPreds;
+    }
+    cudaThreadSynchronize();
+
+    batchCost /= _data->getNumCases();
+    delete _preds;
+    _convNet->getResultQueue().enqueue(new WorkResult(WorkResult::BATCH_DONE, batchCost));
+}

@@ -150,7 +150,7 @@ class OptionsParser:
             # check requirements
             if o.prefixed_letter in dic:
                 for o2 in self.get_options_list(sort_order=self.SORT_LETTER):
-                    if o2.name in o.requires and o2.prefixed_letter not in dic and o2.default is None:
+                    if o2.name in o.requires and o2.prefixed_letter not in dic:
                         raise OptionMissingException("Option %s (%s) requires option %s (%s)" % (o.prefixed_letter, o.desc,
                                                                                                  o2.prefixed_letter, o2.desc))
         if eval_expr_defaults:
