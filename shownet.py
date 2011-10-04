@@ -50,7 +50,12 @@ class ShowGPUModel(GPUModel):
     def import_model(self):
         if self.op.get_value('show_preds'):
             GPUModel.import_model(self)
-        
+            
+    def init_model_state(self):
+        GPUModel.init_model_state(self)
+        if self.op.get_value('show_preds'):
+            self.sotmax_idx = self.get_layer_idx(self.op.get_value('show_preds'), check_type='softmax')
+            
     def init_model_lib(self):
         if self.op.get_value('show_preds'):
             GPUModel.init_model_lib(self)
@@ -176,7 +181,7 @@ class ShowGPUModel(GPUModel):
             data[0] = n.require(data[0][:,img_indices], requirements='C')
             data[1] = n.require(data[1][:,img_indices], requirements='C')
         data += [preds]
-        self.libmodel.startLabeler(data, self.logreg_idx)
+        self.libmodel.startLabeler(data, self.sotmax_idx)
         self.finish_batch()
         fig = pl.figure(3)
         fig.text(.4, .95, '%s test case predictions' % ('Mistaken' if self.only_errors else 'Random'))
@@ -225,7 +230,7 @@ class ShowGPUModel(GPUModel):
         op.add_option("input-idx", "input_idx", IntegerOptionParser, "Input index for layer given to --show-filters (fully-connected layers only)", default=0)
         op.add_option("no-rgb", "no_rgb", BooleanOptionParser, "Don't combine filter channels into RGB in layer given to --show-filters", default=False)
         op.add_option("channels", "channels", IntegerOptionParser, "Number of channels in layer given to --show-filters (fully-connected layers only)", default=0)
-        op.add_option("show-preds", "show_preds", BooleanOptionParser, "Show predictions made on test set", default=False, requires=['logreg_name'])
+        op.add_option("show-preds", "show_preds", StringOptionParser, "Show predictions made by given softmax on test set", default="")
         op.add_option("only-errors", "only_errors", BooleanOptionParser, "Show only mistaken predictions", default=False, requires=['show_preds'])
 
         return op

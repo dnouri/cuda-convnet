@@ -125,17 +125,17 @@ PyObject* startMultiviewTest(PyObject *self, PyObject *args) {
 PyObject* startLabeler(PyObject *self, PyObject *args) {
     assert(model != NULL);
     PyListObject* data;
-    int logregIdx;
+    int softmaxIdx;
     if (!PyArg_ParseTuple(args, "O!i",
         &PyList_Type, &data,
-        &logregIdx)) {
+        &softmaxIdx)) {
         return NULL;
     }
     MatrixV& mvec = *getMatrixV((PyObject*)data);
     Matrix& preds = *mvec.back();
     mvec.pop_back();
     
-    LabelWorker* wr = new LabelWorker(*model, *new CPUData(mvec), preds, logregIdx);
+    LabelWorker* wr = new LabelWorker(*model, *new CPUData(mvec), preds, softmaxIdx);
     model->getWorkerQueue().enqueue(wr);
     return Py_BuildValue("i", 0);
 }

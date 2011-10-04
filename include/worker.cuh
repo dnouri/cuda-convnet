@@ -96,9 +96,9 @@ public:
 class LabelWorker : public DataWorker {
 protected:
     Matrix* _preds;
-    int _logregIdx;
+    int _softmaxIdx;
 public:
-    LabelWorker(ConvNet& convNet, CPUData& data, Matrix& preds, int logregIdx);
+    LabelWorker(ConvNet& convNet, CPUData& data, Matrix& preds, int softmaxIdx);
     ~LabelWorker();
     void run();
 };

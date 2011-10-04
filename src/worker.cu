@@ -180,8 +180,8 @@ void MultiviewTestWorker::run() {
  * LabelWorker
  * ====================
  */
-LabelWorker::LabelWorker(ConvNet& convNet, CPUData& data, Matrix& preds, int logregIdx) 
-    : DataWorker(convNet, data), _preds(&preds), _logregIdx(logregIdx) {
+LabelWorker::LabelWorker(ConvNet& convNet, CPUData& data, Matrix& preds, int softmaxIdx) 
+    : DataWorker(convNet, data), _preds(&preds), _softmaxIdx(softmaxIdx) {
     assert(preds.getNumRows() == data.getNumCases());
     assert(!preds.isTrans());
 }
@@ -192,7 +192,7 @@ LabelWorker::~LabelWorker() {
 
 void LabelWorker::run() {
     _dp->setData(*_data);
-    Layer& softmaxLayer = *_convNet->getLayer(_logregIdx).getPrev()[1];
+    Layer& softmaxLayer = _convNet->getLayer(_softmaxIdx);
 
     Cost& batchCost = *new Cost();
     for (int i = 0; i < _dp->getNumMinibatches(); i++) {

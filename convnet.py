@@ -53,12 +53,18 @@ class GPUModel(IGPUModel):
         
         logreg_name = self.op.get_value('logreg_name')
         if logreg_name:
-            try:
-                self.logreg_idx = [l['name'] for l in ms['layers']].index(logreg_name)
-                if ms['layers'][self.logreg_idx]['type'] != 'cost.logreg':
-                    raise ModelStateException("Layer name '%s' given to --logreg-name argument not a logreg layer." % logreg_name)
-            except ValueError:
-                raise ModelStateException("Layer name '%s' given to --logreg-name parameter not defined." % logreg_name)
+            self.logreg_idx = self.get_layer_idx(logreg_name, check_type='cost.logreg')
+    
+    def get_layer_idx(self, layer_name, check_type=None):
+        try:
+            layer_idx = [l['name'] for l in self.model_state['layers']].index(layer_name)
+            if check_type:
+                layer_type = self.model_state['layers'][layer_idx]['type']
+                if layer_type != check_type:
+                    raise ModelStateException("Layer with name '%s' has type '%s'; should be '%s'." % (layer_name, layer_type, check_type))
+            return layer_idx
+        except ValueError:
+            raise ModelStateException("Layer with name '%s' not defined." % layer_name)
             
     def fill_excused_options(self):
         if self.op.get_value('check_grads'):
