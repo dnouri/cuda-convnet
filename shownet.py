@@ -179,13 +179,12 @@ class ShowGPUModel(GPUModel):
         self.libmodel.startLabeler(data, self.logreg_idx)
         self.finish_batch()
         fig = pl.figure(3)
-        fig.text(.4, .95, 'Random test case predictions')
+        fig.text(.4, .95, '%s test case predictions' % ('Mistaken' if self.only_errors else 'Random'))
         if self.only_errors:
             err_idx = n.where(preds.argmax(axis=1) != data[1][0,:])[0] # what the net got wrong
             data[0], data[1], preds = data[0][:,err_idx], data[1][:,err_idx], preds[err_idx,:]
         data[0] += self.test_data_provider.data_mean
         data[0] /= 255.0
-        #print [sum(x == i for x in data[1][0,:]) for i in range(16)]
         for r in xrange(NUM_ROWS):
             for c in xrange(NUM_COLS):
                 img_idx = nr.randint(data[0].shape[1]) if self.only_errors else r * NUM_COLS + c
@@ -196,11 +195,9 @@ class ShowGPUModel(GPUModel):
                 pl.imshow(img, interpolation='nearest')
                 true_label = int(data[1][0,img_idx])
 
-                img_labels = sorted(zip(list(preds[img_idx,:]), label_names), key=lambda x: x[0], reverse=True)[:NUM_TOP_CLASSES]
-                img_labels.reverse()
+                img_labels = sorted(zip(preds[img_idx,:], label_names), key=lambda x: x[0])[-NUM_TOP_CLASSES:]
                 pl.subplot(NUM_ROWS*2, NUM_COLS, (r * 2 + 1) * NUM_COLS + c + 1, aspect='equal')
-                #pl.pie([l[0] for l in img_labels],
-                #       labels=[l[1] for l in img_labels])
+
                 ylocs = n.array(range(NUM_TOP_CLASSES)) + 0.5
                 height = 0.5
                 width = max(ylocs)
