@@ -83,6 +83,7 @@ public:
     DataProvider(int minibatchSize);
     GPUData& operator[](int idx);
     void setData(CPUData&);
+    void clearData();
     GPUData& getMinibatch(int idx);
     GPUData& getDataSlice(int startCase, int endCase);
     int getNumMinibatches();

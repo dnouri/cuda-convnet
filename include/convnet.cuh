@@ -74,9 +74,6 @@ public:
     Queue<WorkResult*>& getResultQueue();
     DataProvider& getDataProvider();
     
-    // DP wrappers
-    void setData(CPUData& data);
-    
     Layer& operator[](int idx);
     Layer& getLayer(int idx);
     void copyToCPU();

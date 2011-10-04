@@ -216,10 +216,6 @@ void ConvNet::fprop(int miniIdx, PASS_TYPE passType) {
     fprop(passType);
 }
 
-void ConvNet::setData(CPUData& data) {
-    _dp->setData(data);
-}
-
 Cost& ConvNet::getCost() {
     return *new Cost(_costs);
 }

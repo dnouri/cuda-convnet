@@ -56,10 +56,18 @@ public:
     virtual void run() = 0;
 };
 
-class TrainingWorker : public Worker {
+class DataWorker : public Worker {
+protected:
+    CPUData* _data;
+    DataProvider* _dp;
+public:
+    DataWorker(ConvNet& convNet, CPUData& data);
+    virtual ~DataWorker();
+};
+
+class TrainingWorker : public DataWorker {
 protected:
     bool _test;
-    CPUData* _data;
 public:
     TrainingWorker(ConvNet& convNet, CPUData& data, bool test);
     void run();
@@ -71,30 +79,27 @@ public:
     void run();
 };
 
-class GradCheckWorker : public Worker {
-protected:
-    CPUData* _data;
+class GradCheckWorker : public DataWorker {
 public:
     GradCheckWorker(ConvNet& convNet, CPUData& data);
     void run();
 };
 
-class MultiviewTestWorker : public Worker {
+class MultiviewTestWorker : public DataWorker {
 protected:
-    CPUData* _data;
     int _numViews, _logregIdx;
 public:
     MultiviewTestWorker(ConvNet& convNet, CPUData& data, int numViews, int logregIdx);
     void run();
 };
 
-class LabelWorker : public Worker {
+class LabelWorker : public DataWorker {
 protected:
-    CPUData* _data;
     Matrix* _preds;
     int _logregIdx;
 public:
     LabelWorker(ConvNet& convNet, CPUData& data, Matrix& preds, int logregIdx);
+    ~LabelWorker();
     void run();
 };
 

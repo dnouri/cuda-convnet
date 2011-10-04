@@ -63,19 +63,32 @@ Worker::Worker(ConvNet& convNet) : _convNet(&convNet) {
 
 /* 
  * ====================
+ * DataWorker
+ * ====================
+ */
+DataWorker::DataWorker(ConvNet& convNet, CPUData& data) : Worker(convNet), _data(&data) {
+    _dp = &convNet.getDataProvider();
+}
+
+DataWorker::~DataWorker() {
+    _dp->clearData();
+}
+
+/* 
+ * ====================
  * TrainingWorker
  * ====================
  */
 TrainingWorker::TrainingWorker(ConvNet& convNet, CPUData& data, bool test) 
-    : Worker(convNet), _data(&data), _test(test) {
+    : DataWorker(convNet, data), _test(test) {
 }
 
 // Need to setData here (as opposed to the constructor) because the constructor executes in
 // the original CPU thread, which is not the one with GPU access.
 void TrainingWorker::run() {
-    _convNet->setData(*_data);
+    _dp->setData(*_data);
     Cost& batchCost = *new Cost();
-    for (int i = 0; i < _convNet->getDataProvider().getNumMinibatches(); i++) {
+    for (int i = 0; i < _dp->getNumMinibatches(); i++) {
         _convNet->fprop(i, _test ? PASS_TEST : PASS_TRAIN);
         _convNet->getCost(batchCost);
         
@@ -109,11 +122,11 @@ void SyncWorker::run() {
  * ====================
  */
 GradCheckWorker::GradCheckWorker(ConvNet& convNet, CPUData& data) 
-    : Worker(convNet), _data(&data) {
+    : DataWorker(convNet, data) {
 }
 
 void GradCheckWorker::run() {
-    _convNet->setData(*_data);
+    _dp->setData(*_data);
     _convNet->checkGradients();
     exit(0);
 }
@@ -124,23 +137,22 @@ void GradCheckWorker::run() {
  * ====================
  */
 MultiviewTestWorker::MultiviewTestWorker(ConvNet& convNet, CPUData& data, int numViews, int logregIdx) 
-    : Worker(convNet), _data(&data), _numViews(numViews), _logregIdx(logregIdx) {
+    : DataWorker(convNet, data), _numViews(numViews), _logregIdx(logregIdx) {
     assert(_data->getNumCases() % _numViews == 0);
 }
 
 void MultiviewTestWorker::run() {
-    _convNet->setData(*_data);
-    DataProvider& dp = _convNet->getDataProvider();
+    _dp->setData(*_data);
     Layer& logregLayer = _convNet->getLayer(_logregIdx);
     Cost& batchCost = *new Cost();
     
-    int numCasesReal = dp.getNumCases() / _numViews;
-    int numMiniReal = DIVUP(numCasesReal, dp.getMinibatchSize());
+    int numCasesReal = _dp->getNumCases() / _numViews;
+    int numMiniReal = DIVUP(numCasesReal, _dp->getMinibatchSize());
     for (int i = 0; i < numMiniReal; i++) {
         NVMatrix softmaxActs;
         for (int v = 0; v < _numViews; v++) {
-            GPUData& mini = dp.getDataSlice(v * numCasesReal + i * dp.getMinibatchSize(),
-                                            min((v + 1) * numCasesReal, v * numCasesReal + (i + 1) * dp.getMinibatchSize()));
+            GPUData& mini = _dp->getDataSlice(v * numCasesReal + i * _dp->getMinibatchSize(),
+                                              min((v + 1) * numCasesReal, v * numCasesReal + (i + 1) * _dp->getMinibatchSize()));
             _convNet->fprop(mini, PASS_TEST);
             if (v == 0) {
                 logregLayer.getPrev()[1]->getActs().copy(softmaxActs);
@@ -169,23 +181,26 @@ void MultiviewTestWorker::run() {
  * ====================
  */
 LabelWorker::LabelWorker(ConvNet& convNet, CPUData& data, Matrix& preds, int logregIdx) 
-    : Worker(convNet), _data(&data), _preds(&preds), _logregIdx(logregIdx) {
+    : DataWorker(convNet, data), _preds(&preds), _logregIdx(logregIdx) {
     assert(preds.getNumRows() == data.getNumCases());
     assert(!preds.isTrans());
 }
 
+LabelWorker::~LabelWorker() {
+    delete _preds;
+}
+
 void LabelWorker::run() {
-    _convNet->setData(*_data);
-    DataProvider& dp = _convNet->getDataProvider();
+    _dp->setData(*_data);
     Layer& softmaxLayer = *_convNet->getLayer(_logregIdx).getPrev()[1];
 
     Cost& batchCost = *new Cost();
-    for (int i = 0; i < dp.getNumMinibatches(); i++) {
+    for (int i = 0; i < _dp->getNumMinibatches(); i++) {
         _convNet->fprop(i, PASS_TEST);
         _convNet->getCost(batchCost);
         
-        Matrix& miniPreds = _preds->sliceRows(i * dp.getMinibatchSize(),
-                                              min(dp.getNumCases(), (i + 1) * dp.getMinibatchSize()));
+        Matrix& miniPreds = _preds->sliceRows(i * _dp->getMinibatchSize(),
+                                              min(_dp->getNumCases(), (i + 1) * _dp->getMinibatchSize()));
         NVMatrix softmaxActs_T;
         softmaxLayer.getActs().transpose(softmaxActs_T);
         softmaxActs_T.copyToHost(miniPreds);
@@ -194,6 +209,5 @@ void LabelWorker::run() {
     cudaThreadSynchronize();
 
     batchCost /= _data->getNumCases();
-    delete _preds;
     _convNet->getResultQueue().enqueue(new WorkResult(WorkResult::BATCH_DONE, batchCost));
 }

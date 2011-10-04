@@ -38,10 +38,15 @@ GPUData& DataProvider::operator[](int idx) {
     return getMinibatch(idx);
 }
 
-void DataProvider::setData(CPUData& hData) {
-    assert(&hData != NULL);
+void DataProvider::clearData() {
+    delete _hData;
+    _hData = NULL;
+    _dataSize = 0;
+}
 
-    delete _hData; // Delete old CPU matrices
+void DataProvider::setData(CPUData& hData) {
+    // This is now deleted by the DataWorker's destructor
+//    delete _hData; // Delete old CPU matrices
 
     _hData = &hData;
     _dataSize = 0;
@@ -93,6 +98,7 @@ GPUData& DataProvider::getDataSlice(int startCase, int endCase) {
 }
 
 int DataProvider::getNumMinibatches() {
+    assert(_hData != NULL);
     assert(_hData->getNumCases() > 0);
     return DIVUP(_hData->getNumCases(), _minibatchSize);
 }
@@ -102,11 +108,13 @@ int DataProvider::getMinibatchSize() {
 }
 
 int DataProvider::getNumCases() {
+    assert(_hData != NULL);
     assert(_hData->getNumCases() > 0);
     return _hData->getNumCases();
 }
 
 int DataProvider::getNumCasesInMinibatch(int idx) {
+    assert(_hData != NULL);
     assert(_hData->getNumCases() > 0);
     assert(idx >= 0 && idx < getNumMinibatches());
     return min(_minibatchSize, max(0, _hData->getNumCases() - idx * _minibatchSize));
