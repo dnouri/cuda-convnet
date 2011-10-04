@@ -169,7 +169,6 @@ class ShowGPUModel(GPUModel):
         NUM_IMGS = NUM_ROWS * NUM_COLS
         NUM_TOP_CLASSES = min(num_classes, 4) # show this many top labels
         
-        img_size = int(sqrt(self.test_data_provider.get_data_dims() / 3))
         label_names = self.test_data_provider.batch_meta['label_names']
         if self.only_errors:
             preds = n.zeros((data[0].shape[1], num_classes), dtype=n.single)
@@ -184,15 +183,15 @@ class ShowGPUModel(GPUModel):
         fig = pl.figure(3)
         fig.text(.4, .95, '%s test case predictions' % ('Mistaken' if self.only_errors else 'Random'))
         if self.only_errors:
-            err_idx = n.where(preds.argmax(axis=1) != data[1][0,:])[0] # what the net got wrong
+            err_idx = nr.permutation(n.where(preds.argmax(axis=1) != data[1][0,:])[0])[:NUM_IMGS] # what the net got wrong
             data[0], data[1], preds = data[0][:,err_idx], data[1][:,err_idx], preds[err_idx,:]
-            rand_idx = nr.randint(0, data[0].shape[1], NUM_IMGS)
-            data[0], data[1], preds = data[0][:,rand_idx], data[1][:,rand_idx], preds[rand_idx,:]
             
         data[0] = self.test_data_provider.get_plottable_data(data[0])
         for r in xrange(NUM_ROWS):
             for c in xrange(NUM_COLS):
                 img_idx = r * NUM_COLS + c
+                if data[0].shape[0] <= img_idx:
+                    break
                 pl.subplot(NUM_ROWS*2, NUM_COLS, r * 2 * NUM_COLS + c + 1)
                 pl.xticks([])
                 pl.yticks([])
