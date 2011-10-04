@@ -162,8 +162,6 @@ class ShowGPUModel(GPUModel):
         self.make_filter_fig(filters, filter_start, 2, 'Layer %s' % self.show_filters, num_filters, combine_chans)
     
     def plot_predictions(self):
-        if self.test_data_provider.num_colors != 3:
-            raise ShowNetError("Can only show color images")
         data = self.get_next_batch(train=False)[2] # get a test batch
         num_classes = self.test_data_provider.get_num_classes()
         NUM_ROWS = 2
@@ -177,9 +175,9 @@ class ShowGPUModel(GPUModel):
             preds = n.zeros((data[0].shape[1], num_classes), dtype=n.single)
         else:
             preds = n.zeros((NUM_IMGS, num_classes), dtype=n.single)
-            img_indices = nr.randint(0, data[0].shape[1], NUM_IMGS)
-            data[0] = n.require(data[0][:,img_indices], requirements='C')
-            data[1] = n.require(data[1][:,img_indices], requirements='C')
+            rand_idx = nr.randint(0, data[0].shape[1], NUM_IMGS)
+            data[0] = n.require(data[0][:,rand_idx], requirements='C')
+            data[1] = n.require(data[1][:,rand_idx], requirements='C')
         data += [preds]
         self.libmodel.startLabeler(data, self.sotmax_idx)
         self.finish_batch()
@@ -188,15 +186,17 @@ class ShowGPUModel(GPUModel):
         if self.only_errors:
             err_idx = n.where(preds.argmax(axis=1) != data[1][0,:])[0] # what the net got wrong
             data[0], data[1], preds = data[0][:,err_idx], data[1][:,err_idx], preds[err_idx,:]
-        data[0] += self.test_data_provider.data_mean
-        data[0] /= 255.0
+            rand_idx = nr.randint(0, data[0].shape[1], NUM_IMGS)
+            data[0], data[1], preds = data[0][:,rand_idx], data[1][:,rand_idx], preds[rand_idx,:]
+            
+        data[0] = self.test_data_provider.get_plottable_data(data[0])
         for r in xrange(NUM_ROWS):
             for c in xrange(NUM_COLS):
-                img_idx = nr.randint(data[0].shape[1]) if self.only_errors else r * NUM_COLS + c
+                img_idx = r * NUM_COLS + c
                 pl.subplot(NUM_ROWS*2, NUM_COLS, r * 2 * NUM_COLS + c + 1)
                 pl.xticks([])
                 pl.yticks([])
-                img = data[0][:, img_idx].reshape(3, img_size, img_size).swapaxes(0,2).swapaxes(0,1)
+                img = data[0][img_idx,:,:,:]
                 pl.imshow(img, interpolation='nearest')
                 true_label = int(data[1][0,img_idx])
 
