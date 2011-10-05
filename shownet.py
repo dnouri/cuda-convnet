@@ -205,7 +205,8 @@ class ShowGPUModel(GPUModel):
                 ylocs = n.array(range(NUM_TOP_CLASSES)) + 0.5
                 height = 0.5
                 width = max(ylocs)
-                pl.barh(ylocs, [l[0]*width for l in img_labels], height=height)
+                pl.barh(ylocs, [l[0]*width for l in img_labels], height=height, \
+                        color=['r' if l[1] == label_names[true_label] else 'b' for l in img_labels])
                 pl.title(label_names[true_label])
                 pl.yticks(ylocs + height/2, [l[1] for l in img_labels])
                 pl.xticks([width/2.0, width], ['50%', '100%'])
