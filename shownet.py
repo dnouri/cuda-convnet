@@ -180,8 +180,10 @@ class ShowGPUModel(GPUModel):
             data[1] = n.require(data[1][:,rand_idx], requirements='C')
         data += [preds]
 
+        # Run the model
         self.libmodel.startLabeler(data, self.sotmax_idx)
         self.finish_batch()
+        
         fig = pl.figure(3)
         fig.text(.4, .95, '%s test case predictions' % ('Mistaken' if self.only_errors else 'Random'))
         if self.only_errors:
@@ -227,14 +229,17 @@ class ShowGPUModel(GPUModel):
     @classmethod
     def get_options_parser(cls):
         op = GPUModel.get_options_parser()
+        for option in list(op.options):
+            if option not in ('gpu', 'load_file'):
+                op.delete_option(option)
         op.add_option("show-cost", "show_cost", StringOptionParser, "Show specified objective function", default="")
         op.add_option("show-filters", "show_filters", StringOptionParser, "Show learned filters in specified layer", default="")
         op.add_option("input-idx", "input_idx", IntegerOptionParser, "Input index for layer given to --show-filters (fully-connected layers only)", default=0)
         op.add_option("no-rgb", "no_rgb", BooleanOptionParser, "Don't combine filter channels into RGB in layer given to --show-filters", default=False)
         op.add_option("channels", "channels", IntegerOptionParser, "Number of channels in layer given to --show-filters (fully-connected layers only)", default=0)
         op.add_option("show-preds", "show_preds", StringOptionParser, "Show predictions made by given softmax on test set", default="")
-        op.add_option("only-errors", "only_errors", BooleanOptionParser, "Show only mistaken predictions", default=False, requires=['show_preds'])
-
+        op.add_option("only-errors", "only_errors", BooleanOptionParser, "Show only mistaken predictions (to be used with --show-preds)", default=False, requires=['show_preds'])
+        op.options['load_file'].default = None
         return op
     
 if __name__ == "__main__":

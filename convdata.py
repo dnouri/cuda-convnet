@@ -51,7 +51,7 @@ class CIFARDataProvider(LabeledMemoryDataProvider):
     # Returns a (numCases, imgSize, imgSize, 3) array which can be
     # fed to pylab for plotting.
     def get_plottable_data(self, data):
-        return n.require((data + self.data_mean).T.reshape(data.shape[1], 3, self.img_size, self.img_size).swapaxes(1,3).swapaxes(1,2) / 255.0, requirements='C', dtype=n.single)
+        return n.require((data + self.data_mean).T.reshape(data.shape[1], 3, self.img_size, self.img_size).swapaxes(1,3).swapaxes(1,2) / 255.0, dtype=n.single)
     
 class CroppedCIFARDataProvider(LabeledMemoryDataProvider):
     def __init__(self, data_dir, batch_range=None, init_epoch=1, init_batchnum=None, dp_params=None, test=False):
@@ -90,7 +90,7 @@ class CroppedCIFARDataProvider(LabeledMemoryDataProvider):
     # Returns a (numCases, imgSize, imgSize, 3) array which can be
     # fed to pylab for plotting.
     def get_plottable_data(self, data):
-        return n.require((data + self.data_mean).T.reshape(data.shape[1], 3, self.inner_size, self.inner_size).swapaxes(1,3).swapaxes(1,2) / 255.0, requirements='C', dtype=n.single)
+        return n.require((data + self.data_mean).T.reshape(data.shape[1], 3, self.inner_size, self.inner_size).swapaxes(1,3).swapaxes(1,2) / 255.0, dtype=n.single)
     
     def __trim_borders(self, x, target):
         y = x.reshape(3, 32, 32, x.shape[1])

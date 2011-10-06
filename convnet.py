@@ -143,7 +143,7 @@ class GPUModel(IGPUModel):
         op.add_option("layer-params", "layer_params", StringOptionParser, "Layer parameter file")
         op.add_option("check-grads", "check_grads", BooleanOptionParser, "Check gradients and quit?", default=0, excuses=['data_path','save_path','train_batch_range','test_batch_range'])
         op.add_option("multiview-test", "multiview_test", BooleanOptionParser, "Cropped DP: test on multiple patches?", default=0, requires=['logreg_name'])
-        op.add_option("crop-border", "crop_border", IntegerOptionParser, "Cropped DP: crop border size", default=4)
+        op.add_option("crop-border", "crop_border", IntegerOptionParser, "Cropped DP: crop border size", default=4, set_once=True)
         op.add_option("logreg-name", "logreg_name", StringOptionParser, "Cropped DP: logreg layer name", default="")
         
         op.delete_option('max_test_err')
