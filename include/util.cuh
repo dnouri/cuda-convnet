@@ -55,6 +55,7 @@ enum PASS_TYPE {PASS_TRAIN, PASS_TEST, PASS_GC};
 typedef std::vector<Matrix*> MatrixV;
 typedef std::vector<NVMatrix*> NVMatrixV;
 typedef std::map<std::string,std::vector<double>*> CostMap;
+typedef std::map<std::string,double> CostCoeffMap;
 typedef std::vector<double> doublev;
 typedef std::vector<float> floatv;
 typedef std::vector<int> intv;

@@ -156,8 +156,9 @@ class ShowGPUModel(GPUModel):
         filters = filters.reshape(channels, filters.shape[0]/channels, filters.shape[1])
         combine_chans = not self.no_rgb and channels == 3
         
-        filters -= filters.min()
-        filters /= filters.max()
+        # Make sure you don't modify the backing array itself here -- so no -= or /=
+        filters = filters - filters.min()
+        filters = filters / filters.max()
 
         self.make_filter_fig(filters, filter_start, 2, 'Layer %s' % self.show_filters, num_filters, combine_chans)
     
@@ -178,6 +179,7 @@ class ShowGPUModel(GPUModel):
             data[0] = n.require(data[0][:,rand_idx], requirements='C')
             data[1] = n.require(data[1][:,rand_idx], requirements='C')
         data += [preds]
+
         self.libmodel.startLabeler(data, self.sotmax_idx)
         self.finish_batch()
         fig = pl.figure(3)

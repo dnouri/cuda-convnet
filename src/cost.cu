@@ -53,6 +53,10 @@ CostMap& Cost::getCostMap() {
     return _costMap;
 }
 
+CostCoeffMap& Cost::getCostCoeffMap() {
+    return _costCoeffMap;
+}
+
 double Cost::getValue() {
     double val = 0;
     for (CostMap::iterator it = _costMap.begin(); it != _costMap.end(); ++it) {
@@ -63,9 +67,11 @@ double Cost::getValue() {
 
 Cost& Cost::operator += (Cost& er) {
     CostMap& otherMap = er.getCostMap();
+    CostCoeffMap& otherCoeffMap = er.getCostCoeffMap();
     for (CostMap::const_iterator it = otherMap.begin(); it != otherMap.end(); ++it) {
         if (_costMap.count(it->first) == 0) {
             _costMap[it->first] = new doublev();
+            _costCoeffMap[it->first] = otherCoeffMap[it->first];
         }
         
         vector<double>& myVec = *_costMap[it->first];

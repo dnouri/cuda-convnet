@@ -693,7 +693,6 @@ void LogregCostLayer::fpropActs(NVMatrixV& v, PASS_TYPE passType) {
     NVMatrix& labels = *v[0];
     NVMatrix& probs = *v[1];
     int numCases = labels.getNumElements();
-    
     NVMatrix& trueLabelLogProbs = _outputs, correctProbs;
     computeLogregCost(labels, probs, trueLabelLogProbs, correctProbs);
     _costv.clear();

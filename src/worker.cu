@@ -193,12 +193,11 @@ LabelWorker::~LabelWorker() {
 void LabelWorker::run() {
     _dp->setData(*_data);
     Layer& softmaxLayer = _convNet->getLayer(_softmaxIdx);
-
     Cost& batchCost = *new Cost();
     for (int i = 0; i < _dp->getNumMinibatches(); i++) {
         _convNet->fprop(i, PASS_TEST);
         _convNet->getCost(batchCost);
-        
+
         Matrix& miniPreds = _preds->sliceRows(i * _dp->getMinibatchSize(),
                                               min(_dp->getNumCases(), (i + 1) * _dp->getMinibatchSize()));
         NVMatrix softmaxActs_T;
@@ -207,7 +206,7 @@ void LabelWorker::run() {
         delete &miniPreds;
     }
     cudaThreadSynchronize();
-
     batchCost /= _data->getNumCases();
+    
     _convNet->getResultQueue().enqueue(new WorkResult(WorkResult::BATCH_DONE, batchCost));
 }

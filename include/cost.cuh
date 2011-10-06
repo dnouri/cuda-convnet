@@ -42,12 +42,13 @@ class CostLayer;
 class Cost {
 private:
     CostMap _costMap;
-    std::map<std::string,double> _costCoeffMap;
+    CostCoeffMap _costCoeffMap;
 public:
     Cost();
     Cost(std::vector<CostLayer*>& costs);
     doublev& operator [](const std::string s);
     CostMap& getCostMap();
+    CostCoeffMap& getCostCoeffMap();
     /*
      * Returns sum of first values returned by all the costs, weighted by the cost coefficients.
      */
