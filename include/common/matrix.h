@@ -197,7 +197,7 @@ public:
      * Use transpose() if you want to get the transpose of this matrix.
      */
     inline void setTrans(bool trans) {
-        assert(!isView());
+        assert(isTrans() == trans || !isView());
         _trans = trans ? CblasTrans : CblasNoTrans;
     }
 

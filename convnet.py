@@ -30,7 +30,7 @@ from options import *
 from gpumodel import *
 import sys
 import math as m
-from layer import LayerParser, LayerParsingError
+import layer as lay
 from convdata import *
 from os import linesep as NL
 
@@ -47,14 +47,20 @@ class GPUModel(IGPUModel):
     def init_model_state(self):
         ms = self.model_state
         if self.load_file:
-            ms['layers'] = LayerParser.parse_layers(self.layer_def, self.layer_params, self, ms['layers'])
+            ms['layers'] = lay.LayerParser.parse_layers(self.layer_def, self.layer_params, self, ms['layers'])
         else:
-            ms['layers'] = LayerParser.parse_layers(self.layer_def, self.layer_params, self)
+            ms['layers'] = lay.LayerParser.parse_layers(self.layer_def, self.layer_params, self)
         
         logreg_name = self.op.get_value('logreg_name')
         if logreg_name:
             self.logreg_idx = self.get_layer_idx(logreg_name, check_type='cost.logreg')
-    
+        
+        # Convert convolutional layers to local
+        if self.op.get_value('unshare_conv'):
+            for layer in ms['layers']:
+                if layer['type'] == 'conv':
+                    lay.LocalLayerParser.conv_to_local(layer)
+                        
     def get_layer_idx(self, layer_name, check_type=None):
         try:
             layer_idx = [l['name'] for l in self.model_state['layers']].index(layer_name)
@@ -145,6 +151,7 @@ class GPUModel(IGPUModel):
         op.add_option("multiview-test", "multiview_test", BooleanOptionParser, "Cropped DP: test on multiple patches?", default=0, requires=['logreg_name'])
         op.add_option("crop-border", "crop_border", IntegerOptionParser, "Cropped DP: crop border size", default=4, set_once=True)
         op.add_option("logreg-name", "logreg_name", StringOptionParser, "Cropped DP: logreg layer name", default="")
+        op.add_option("unshare-conv", "unshare_conv", BooleanOptionParser, "Convert all convolutional layers to unshared locally-connected?", default=False)
         
         op.delete_option('max_test_err')
         op.options["max_filesize_mb"].default = 0

@@ -288,6 +288,16 @@ class LocalLayerParser(LayerWithInputParser):
     def __init__(self):
         LayerWithInputParser.__init__(self, num_inputs=1)
     
+    @staticmethod
+    def conv_to_local(layer):
+        for w in ('weights', 'weightsInc'):
+            layer[w] = n.require(n.reshape(n.tile(n.reshape(layer[w], (1, n.prod(layer[w].shape))), (layer['modules'], 1)), (layer['modules'] * layer['channels'] * layer['filterPixels'], layer['filters'])), requirements='C')
+        if layer['sharedBiases']:
+            for b in ('biases', 'biasesInc'):
+                layer[b] = n.require(n.tile(layer[b], (layer['modules'], 1)), requirements='C')
+        layer['type'] = 'local'
+        return layer
+        
     def requires_params(self):
         return True
     

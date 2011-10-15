@@ -74,7 +74,8 @@ class ShowGPUModel(GPUModel):
         test_errors = numpy.row_stack(test_errors)
         test_errors = numpy.tile(test_errors, (1, self.testing_freq))
         test_errors = list(test_errors.flatten())
-        test_errors += [test_errors[-1]] * (len(train_errors) - len(test_errors))
+        test_errors += [test_errors[-1]] * max(0,len(train_errors) - len(test_errors))
+        test_errors = test_errors[:len(train_errors)]
 
         numepochs = len(train_errors) / float(numbatches)
         pl.figure(1)
