@@ -98,7 +98,6 @@ void TrainingWorker::run() {
         }
     }
     cudaThreadSynchronize();
-    
     batchCost /= _data->getNumCases();
     _convNet->getResultQueue().enqueue(new WorkResult(WorkResult::BATCH_DONE, batchCost));
 }
@@ -177,32 +176,39 @@ void MultiviewTestWorker::run() {
 
 /* 
  * ====================
- * LabelWorker
+ * FeatureWorker
  * ====================
  */
-LabelWorker::LabelWorker(ConvNet& convNet, CPUData& data, Matrix& preds, int softmaxIdx) 
-    : DataWorker(convNet, data), _preds(&preds), _softmaxIdx(softmaxIdx) {
-    assert(preds.getNumRows() == data.getNumCases());
-    assert(!preds.isTrans());
+FeatureWorker::FeatureWorker(ConvNet& convNet, CPUData& data, Matrix& ftrs, int layerIdx)
+    : DataWorker(convNet, data), _ftrs(&ftrs), _layerIdx(layerIdx) {
+    assert(ftrs.getNumRows() == data.getNumCases());
+    assert(!ftrs.isTrans());
 }
 
-LabelWorker::~LabelWorker() {
-    delete _preds;
+FeatureWorker::~FeatureWorker() {
+    delete _ftrs;
 }
 
-void LabelWorker::run() {
+void FeatureWorker::run() {
     _dp->setData(*_data);
-    Layer& softmaxLayer = _convNet->getLayer(_softmaxIdx);
+    Layer& ftrLayer = _convNet->getLayer(_layerIdx);
     Cost& batchCost = *new Cost();
     for (int i = 0; i < _dp->getNumMinibatches(); i++) {
         _convNet->fprop(i, PASS_TEST);
         _convNet->getCost(batchCost);
-        Matrix& miniPreds = _preds->sliceRows(i * _dp->getMinibatchSize(),
-                                              min(_dp->getNumCases(), (i + 1) * _dp->getMinibatchSize()));
-        NVMatrix softmaxActs_T;
-        softmaxLayer.getActs().transpose(softmaxActs_T);
-        softmaxActs_T.copyToHost(miniPreds);
-        delete &miniPreds;
+        Matrix& miniFtrs = _ftrs->sliceRows(i * _dp->getMinibatchSize(),
+                                            min(_dp->getNumCases(), (i + 1) * _dp->getMinibatchSize()));
+        NVMatrix& acts = ftrLayer.getActs();
+        NVMatrix acts_T;
+        if (acts.isTrans()) {
+            NVMatrix& soft_T = acts.getTranspose();
+            soft_T.transpose(acts_T);
+            delete &soft_T;
+        } else {
+            acts.transpose(acts_T);
+        }
+        acts_T.copyToHost(miniFtrs);
+        delete &miniFtrs;
     }
     cudaThreadSynchronize();
     batchCost /= _data->getNumCases();

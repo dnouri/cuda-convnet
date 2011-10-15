@@ -93,13 +93,13 @@ public:
     void run();
 };
 
-class LabelWorker : public DataWorker {
+class FeatureWorker : public DataWorker {
 protected:
-    Matrix* _preds;
-    int _softmaxIdx;
+    Matrix* _ftrs;
+    int _layerIdx;
 public:
-    LabelWorker(ConvNet& convNet, CPUData& data, Matrix& preds, int softmaxIdx);
-    ~LabelWorker();
+    FeatureWorker(ConvNet& convNet, CPUData& data, Matrix& ftrs, int layerIdx);
+    ~FeatureWorker();
     void run();
 };
 

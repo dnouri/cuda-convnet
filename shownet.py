@@ -47,23 +47,26 @@ class ShowGPUModel(GPUModel):
     def __init__(self, model_name, op, load_dic):
         GPUModel.__init__(self, model_name, op, load_dic)
     
+    def get_gpus(self):
+        self.need_gpu = self.op.get_value('show_preds') or self.op.get_value('write_features')
+        if self.need_gpu:
+            GPUModel.get_gpus(self)
+    
     def import_model(self):
-        if self.op.get_value('show_preds'):
+        if self.need_gpu:
             GPUModel.import_model(self)
             
     def init_model_state(self):
         GPUModel.init_model_state(self)
         if self.op.get_value('show_preds'):
             self.sotmax_idx = self.get_layer_idx(self.op.get_value('show_preds'), check_type='softmax')
+        if self.op.get_value('write_features'):
+            self.ftr_layer_idx = self.get_layer_idx(self.op.get_value('write_features'))
             
     def init_model_lib(self):
-        if self.op.get_value('show_preds'):
+        if self.need_gpu:
             GPUModel.init_model_lib(self)
-        
-    def get_gpus(self):
-        if self.op.get_value('show_preds'):
-            GPUModel.get_gpus(self)
-    
+
     def plot_cost(self):
         if self.show_cost not in self.train_outputs[0]:
             raise ShowNetError("Cost function with name '%s' not defined by given convnet." % self.show_cost)
@@ -182,7 +185,7 @@ class ShowGPUModel(GPUModel):
         data += [preds]
 
         # Run the model
-        self.libmodel.startLabeler(data, self.sotmax_idx)
+        self.libmodel.startFeatureWriter(data, self.sotmax_idx)
         self.finish_batch()
         
         fig = pl.figure(3)
@@ -217,6 +220,29 @@ class ShowGPUModel(GPUModel):
                 pl.xticks([width/2.0, width], ['50%', '100%'])
                 pl.ylim(0, ylocs[-1] + height*2)
     
+    def do_write_features(self):
+        if not os.path.exists(self.feature_path):
+            os.makedirs(self.feature_path)
+        next_data = self.get_next_batch()
+        b1 = next_data[1]
+        num_ftrs = self.layers[self.ftr_layer_idx]['outputs']
+        while True:
+            batch = next_data[1]
+            data = next_data[2]
+            ftrs = n.zeros((data[0].shape[1], num_ftrs), dtype=n.single)
+            self.libmodel.startFeatureWriter(data + [ftrs], self.ftr_layer_idx)
+            
+            # load the next batch while the current one is computing
+            next_data = self.get_next_batch()
+            self.finish_batch()
+            path_out = os.path.join(self.feature_path, 'data_batch_%d' % batch)
+            pickle(path_out, {'data': ftrs})
+            print "Wrote feature file %s" % path_out
+            if next_data[1] == b1:
+                break
+        pickle(os.path.join(self.feature_path, 'batches.meta'), {'source_model':self.load_file,
+                                                                 'num_vis':num_ftrs})
+                
     def start(self):
         if self.show_cost:
             self.plot_cost()
@@ -224,6 +250,8 @@ class ShowGPUModel(GPUModel):
             self.plot_filters()
         if self.show_preds:
             self.plot_predictions()
+        if self.write_features:
+            self.do_write_features()
         pl.show()
         sys.exit(0)
             
@@ -231,7 +259,7 @@ class ShowGPUModel(GPUModel):
     def get_options_parser(cls):
         op = GPUModel.get_options_parser()
         for option in list(op.options):
-            if option not in ('gpu', 'load_file'):
+            if option not in ('gpu', 'load_file', 'train_batch_range'):
                 op.delete_option(option)
         op.add_option("show-cost", "show_cost", StringOptionParser, "Show specified objective function", default="")
         op.add_option("show-filters", "show_filters", StringOptionParser, "Show learned filters in specified layer", default="")
@@ -240,6 +268,9 @@ class ShowGPUModel(GPUModel):
         op.add_option("channels", "channels", IntegerOptionParser, "Number of channels in layer given to --show-filters (fully-connected layers only)", default=0)
         op.add_option("show-preds", "show_preds", StringOptionParser, "Show predictions made by given softmax on test set", default="")
         op.add_option("only-errors", "only_errors", BooleanOptionParser, "Show only mistaken predictions (to be used with --show-preds)", default=False, requires=['show_preds'])
+        op.add_option("write-features", "write_features", StringOptionParser, "Write training data features from given layer", default="", requires=['feature-path'])
+        op.add_option("feature-path", "feature_path", StringOptionParser, "Write training data features to this path (to be used with --write-features)", default="")
+        
         op.options['load_file'].default = None
         return op
     

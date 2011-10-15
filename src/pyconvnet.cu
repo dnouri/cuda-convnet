@@ -49,7 +49,7 @@ static PyMethodDef _ConvNetMethods[] = {  { "initModel",          initModel,    
                                               { "finishBatch",        finishBatch,        METH_VARARGS },
                                               { "checkGradients",     checkGradients,     METH_VARARGS },
                                               { "startMultiviewTest", startMultiviewTest, METH_VARARGS },
-                                              { "startLabeler",         startLabeler,         METH_VARARGS },
+                                              { "startFeatureWriter",  startFeatureWriter,         METH_VARARGS },
                                               { "syncWithHost",       syncWithHost,       METH_VARARGS },
                                               { NULL, NULL }
 };
@@ -119,23 +119,20 @@ PyObject* startMultiviewTest(PyObject *self, PyObject *args) {
     return Py_BuildValue("i", 0);
 }
 
-/*
- * Starts testing on the given batch (asynchronous -- returns immediately).
- */
-PyObject* startLabeler(PyObject *self, PyObject *args) {
+PyObject* startFeatureWriter(PyObject *self, PyObject *args) {
     assert(model != NULL);
     PyListObject* data;
-    int softmaxIdx;
+    int layerIdx;
     if (!PyArg_ParseTuple(args, "O!i",
         &PyList_Type, &data,
-        &softmaxIdx)) {
+        &layerIdx)) {
         return NULL;
     }
     MatrixV& mvec = *getMatrixV((PyObject*)data);
-    Matrix& preds = *mvec.back();
+    Matrix& ftrs = *mvec.back();
     mvec.pop_back();
     
-    LabelWorker* wr = new LabelWorker(*model, *new CPUData(mvec), preds, softmaxIdx);
+    FeatureWorker* wr = new FeatureWorker(*model, *new CPUData(mvec), ftrs, layerIdx);
     model->getWorkerQueue().enqueue(wr);
     return Py_BuildValue("i", 0);
 }
