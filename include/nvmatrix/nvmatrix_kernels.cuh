@@ -79,10 +79,30 @@ __global__ void kTile(const float* src, float* tgt, const uint srcWidth, const u
 __global__ void kDotProduct_r(float* a, float* b, float* target, const uint numCols, const uint numElements);
 __global__ void kSetupCurand(curandState *state, unsigned long long seed);
 
+
+/*
+ * For now this is supported only for arrays with the same transposedness.
+ */
+template<class Op>
+__global__ void kEltwiseTernaryOp(const float* a, const float* b, const float* c, float* const dest,
+                                  const uint height, const uint width, uint strideA, const uint strideB, const uint strideC,
+                                  const uint strideDest, Op op) {
+    const uint idxX = blockIdx.x * ELTWISE_THREADS_X + threadIdx.x;
+    const uint idxY = blockIdx.y * ELTWISE_THREADS_Y + threadIdx.y;
+
+    for (uint y = idxY; y < height; y += gridDim.y * ELTWISE_THREADS_Y) {
+        for (uint x = idxX; x < width; x += gridDim.x * ELTWISE_THREADS_X) {
+            dest[y * strideDest + x] = op(a[y * strideA + x], b[y * strideB + x], c[y * strideC + x]);
+        }
+    }
+}
+
 /*
  * dest here is assumed to be "not transposed" -- height and width correspond to it.
  * b is assumed to be transposed.
  * a can be either transposed or not -- depending on parameter.
+ * 
+ * Performs dest := op(a, b)
  */
 template<class Op, bool checkBounds, bool aTrans, bool reverse>
 __global__ void kEltwiseBinaryOpTrans(const float* a, const float* b, float* const dest,
@@ -244,8 +264,8 @@ __global__ void kColVectorOp(const float* mat, const float* vec, float* const tg
  * This one gets coalesced reads but computes only a partial sum which
  * must either be summed again (recursively) or summed on the host.
  */
-template<class Agg, int blockSize>
-__global__ void kAggRows(const float* mat, float* matSum, const uint width, const uint height, const uint sumWidth, Agg agg) {
+template<class Agg, class BinaryOp, int blockSize>
+__global__ void kAggRows(const float* mat, float* matSum, const uint width, const uint height, const uint sumWidth, Agg agg, BinaryOp op) {
     const int idxX = blockIdx.x * blockSize*2 + threadIdx.x;
 
     __shared__ float accum[blockSize*2];
@@ -299,7 +319,7 @@ __global__ void kAggRows(const float* mat, float* matSum, const uint width, cons
         }
 
         if (threadIdx.x == 0) {
-            matSum[0] = myAccum[0];
+            matSum[0] = op(matSum[0], myAccum[0]);
             matSum += gridDim.y * sumWidth;
         }
         __syncthreads();
@@ -307,8 +327,8 @@ __global__ void kAggRows(const float* mat, float* matSum, const uint width, cons
     }
 }
 
-template<class Agg>
-__global__ void kAggRows_wholerow(const float* mat, float* matSum, const uint width, const uint height, Agg agg) {
+template<class Agg, class BinaryOp>
+__global__ void kAggRows_wholerow(const float* mat, float* matSum, const uint width, const uint height, Agg agg, BinaryOp op) {
     const int tidx = threadIdx.x;
 
     __shared__ float accum[AWR_NUM_THREADS];
@@ -340,7 +360,7 @@ __global__ void kAggRows_wholerow(const float* mat, float* matSum, const uint wi
             }
 
             if (tidx == 0) {
-                matSum[0] = vMyAccum[0];
+                matSum[0] = op(matSum[0], vMyAccum[0]);
                 matSum += gridDim.y;
             }
         }
@@ -353,8 +373,9 @@ __global__ void kAggRows_wholerow(const float* mat, float* matSum, const uint wi
  * Implements multiscan idea from http://www.moderngpu.com
  * Not really useful for pure reductions but neat nonetheless.
  */
-template<class Agg>
-__global__ void kAggRows_wholerow_nosync(const float* mat, float* matSum, const uint width, const uint height, Agg agg) {
+template<class Agg, class BinaryOp>
+__global__ void kAggRows_wholerow_nosync(const float* mat, float* matSum, const uint width, const uint height,
+                                         Agg agg, BinaryOp op) {
     const uint tidx = threadIdx.x;
     const uint warpIdx = tidx / WARP_SIZE;
     const uint tidxInWarp = tidx % WARP_SIZE;
@@ -391,7 +412,7 @@ __global__ void kAggRows_wholerow_nosync(const float* mat, float* matSum, const 
                 vMyFinalAccum[0] = agg(vMyFinalAccum[0], vMyFinalAccum[d]);
             }
             if (tidx == 0) {
-                matSum[0] = vMyFinalAccum[0];
+                matSum[0] = op(matSum[0], vMyFinalAccum[0]);
                 matSum += gridDim.y;
             }
         }
@@ -407,8 +428,8 @@ __global__ void kAggRows_wholerow_nosync(const float* mat, float* matSum, const 
  * TODO: try to reduce reg usage. i think this can be made faster too.
  */
 //#define AGG_SHORT_ROWS_LOOPS_X  4
-template <class Agg, int LOOPS_X, int THREADS_X>
-__global__ void kAggShortRows(const float* mat, float* matSum, const uint width, const uint height, Agg agg) {
+template <class Agg, class BinaryOp, int LOOPS_X, int THREADS_X>
+__global__ void kAggShortRows(const float* mat, float* matSum, const uint width, const uint height, Agg agg, BinaryOp op) {
     const uint shmemX = THREADS_X + 1;
     __shared__ float shmem[AGG_SHORT_ROWS_THREADS_Y*shmemX];
 
@@ -454,7 +475,7 @@ __global__ void kAggShortRows(const float* mat, float* matSum, const uint width,
                     accum = agg(accum, shmemRead[0]);
                     shmemRead++;
                 }
-                matSum[0] = accum;
+                matSum[0] = op(matSum[0], accum);
                 matSum += AGG_SHORT_ROWS_THREADS_Y;
             }
             __syncthreads();
@@ -463,8 +484,8 @@ __global__ void kAggShortRows(const float* mat, float* matSum, const uint width,
     }
 }
 
-template <class Agg>
-__global__ void kAggShortRows2(const float* mat, float* matSum, const uint width, const uint height, Agg agg) {
+template <class Agg, class BinaryOp>
+__global__ void kAggShortRows2(const float* mat, float* matSum, const uint width, const uint height, Agg agg, BinaryOp op) {
     const uint shmemX = AGG_SHORT_ROWS_THREADS_X + 1;
     __shared__ float shmem[AGG_SHORT_ROWS_THREADS_Y*shmemX];
     const uint LOOPS_X = DIVUP(width, AGG_SHORT_ROWS_THREADS_X);
@@ -503,7 +524,7 @@ __global__ void kAggShortRows2(const float* mat, float* matSum, const uint width
                     shmemRead++;
                 }
 
-                matSum[0] = accum;
+                matSum[0] = op(matSum[0], accum);
                 matSum += AGG_SHORT_ROWS_THREADS_Y;
             }
             __syncthreads();
@@ -515,8 +536,8 @@ __global__ void kAggShortRows2(const float* mat, float* matSum, const uint width
 /*
  * Bad when there are few columns.
  */
-template <class Agg>
-__global__ void kDumbAggCols(const float* mat, float* const vec, const uint width, const uint height, Agg agg) {
+template <class Agg, class BinaryOp>
+__global__ void kDumbAggCols(const float* mat, float* const vec, const uint width, const uint height, Agg agg, BinaryOp op) {
     const uint idx = blockIdx.x * blockDim.x + threadIdx.x;
     mat += idx;
     if (idx < width) {
@@ -526,7 +547,7 @@ __global__ void kDumbAggCols(const float* mat, float* const vec, const uint widt
             mx = agg(*mat, mx);
             mat += width;
         }
-        vec[idx] = mx;
+        vec[idx] = op(vec[idx], mx);
     }
 }
 

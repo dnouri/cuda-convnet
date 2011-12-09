@@ -60,7 +60,6 @@ int* getIntA(PyObject* pyList) {
     }
     return arr;
 }
-
 MatrixV* getMatrixV(PyObject* pyList) {
     if (pyList == NULL) {
         return NULL;

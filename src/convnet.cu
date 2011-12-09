@@ -50,18 +50,14 @@ ConvNet::ConvNet(PyListObject* layerParams, int minibatchSize, int deviceID) : T
             string layerType = pyDictGetString(paramsDict, "type");
             
             Layer* l = initLayer(layerType, paramsDict);
-            if (l != NULL) {
-                // Connect backward links in graph for this layer
-                intv* inputLayers = pyDictGetIntV(paramsDict, "inputs");
-                if (inputLayers != NULL) {
-                    for (int i = 0; i < inputLayers->size(); i++) {
-                        l->addPrev(&getLayer(inputLayers->at(i)));
-                    }
+            // Connect backward links in graph for this layer
+            intv* inputLayers = pyDictGetIntV(paramsDict, "inputs");
+            if (inputLayers != NULL) {
+                for (int i = 0; i < inputLayers->size(); i++) {
+                    l->addPrev(&getLayer(inputLayers->at(i)));
                 }
-                delete inputLayers;
-            } else {
-                throw string("Unknown layer type ") + layerType;
             }
+            delete inputLayers;
         }
 
         // Connect the forward links in the graph
@@ -70,6 +66,11 @@ ConvNet::ConvNet(PyListObject* layerParams, int minibatchSize, int deviceID) : T
             for (int j = 0; j < prev.size(); j++) {
                 prev[j]->addNext(_layers[i]);
             }
+        }
+         
+        // Execute post-initialization stuff
+        for (int i = 0; i < _layers.size(); i++) {
+            _layers[i]->postInit();
         }
         
         _dp = new DataProvider(minibatchSize);
@@ -84,29 +85,33 @@ ConvNet::ConvNet(PyListObject* layerParams, int minibatchSize, int deviceID) : T
  */
 Layer* ConvNet::initLayer(string& layerType, PyObject* paramsDict) {
     if (layerType == "fc") {
-        _layers.push_back(dynamic_cast<Layer*>(new FCLayer(paramsDict)));
+        _layers.push_back(new FCLayer(this, paramsDict));
     } else if (layerType == "conv") {
-        _layers.push_back(dynamic_cast<Layer*>(new ConvLayer(paramsDict)));
+        _layers.push_back(new ConvLayer(this, paramsDict));
     } else if (layerType == "local") {
-        _layers.push_back(dynamic_cast<Layer*>(new LocalUnsharedLayer(paramsDict)));
+        _layers.push_back(new LocalUnsharedLayer(this, paramsDict));
     } else if (layerType == "pool") {
-        _layers.push_back(dynamic_cast<Layer*>(&PoolLayer::makePoolLayer(paramsDict)));
+        _layers.push_back(&PoolLayer::makePoolLayer(this, paramsDict));
     } else if (layerType == "rnorm") {
-        _layers.push_back(dynamic_cast<Layer*>(new ResponseNormLayer(paramsDict)));
+        _layers.push_back(new ResponseNormLayer(this, paramsDict));
     } else if (layerType == "cnorm") {
-        _layers.push_back(dynamic_cast<Layer*>(new ContrastNormLayer(paramsDict)));
-    } else if (layerType == "data") {
-        DataLayer *d = new DataLayer(paramsDict);
-        _layers.push_back(dynamic_cast<Layer*>(d));
-        _dataLayers.push_back(d);
+        _layers.push_back(new ContrastNormLayer(this, paramsDict));
     } else if (layerType == "softmax") {
-        _layers.push_back(dynamic_cast<Layer*>(new SoftmaxLayer(paramsDict)));
+        _layers.push_back(new SoftmaxLayer(this, paramsDict));
+    } else if (layerType == "sum") {
+        _layers.push_back(new SumLayer(this, paramsDict));
+    } else if (layerType == "neuron") {
+        _layers.push_back(new NeuronLayer(this, paramsDict));
+    } else if (layerType == "data") {
+        DataLayer *d = new DataLayer(this, paramsDict);
+        _layers.push_back(d);
+        _dataLayers.push_back(d);
     } else if (strncmp(layerType.c_str(), "cost.", 5) == 0) {
-        CostLayer *c = &CostLayer::makeCostLayer(layerType, paramsDict);
-        _layers.push_back(dynamic_cast<Layer*>(c));
+        CostLayer *c = &CostLayer::makeCostLayer(this, layerType, paramsDict);
+        _layers.push_back(c);
         _costs.push_back(c);
     } else {
-        return NULL;
+        throw string("Unknown layer type ") + layerType;
     }
 
     return _layers.back();
@@ -122,7 +127,7 @@ void ConvNet::initCuda() {
     NVMatrix::initRandom(time(0));
     
     // Uncomment these lines to save memory
-//    Layer::_saveActGrads = false;
+//    Layer::_saveActsGrad = false;
 //    Layer::_saveActs = false;
     
     copyToGPU();
@@ -173,7 +178,7 @@ void ConvNet::copyToGPU() {
 
 void ConvNet::updateWeights() {
     for (int i = 0; i < _layers.size(); i++) {
-        _layers[i]->updateWeights(_data->getNumCases());
+        _layers[i]->updateWeights();
     }
 }
 
@@ -246,7 +251,7 @@ void ConvNet::checkGradients() {
     bprop(PASS_GC);
     
     for (vector<Layer*>::iterator it = _layers.begin(); it != _layers.end(); ++it) {
-        (*it)->checkGradients(this);
+        (*it)->checkGradients();
     }
     
     cout << "------------------------" << endl;
@@ -289,8 +294,8 @@ bool ConvNet::checkGradient(const string& name, float eps, Weights& weights) {
     }
 
     Matrix gradCPU;
-    weights.getGrad().apply(NVMatrixOps::MultByScalar(-1.0 / _data->getNumCases()));
     weights.getGrad().copyToHost(gradCPU, true);
+    gradCPU.scale(-1.0 / _data->getNumCases());
     float analNorm = gradCPU.norm();
     float numNorm = numGrad.norm();
     numGrad.subtract(gradCPU, diff);

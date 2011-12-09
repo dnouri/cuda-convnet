@@ -184,7 +184,7 @@ __global__ void filterActs_YxX_color(float* images, float* filters, float* targe
             if (!checkImgBounds || myImgIdx + g * B_X < numImages) {
                 #pragma unroll
                 for (int f = 0; f < filtersPerThread; f++) {
-                    targets[g * B_X + f * B_Y * numImages * numModulesX * numModulesX] = prod[f][g];
+                    targets[g * B_X + f * B_Y * numImages * numModulesX * numModulesX] = scaleOutputs * prod[f][g];
                 }
             }
         }
@@ -360,7 +360,7 @@ __global__ void filterActs_YxX_sparse(float* images, float* filters, float* targ
             if (!checkImgBounds || myImgIdx + g * B_X < numImages) {
                 #pragma unroll
                 for (int f = 0; f < filtersPerThread; f++) {
-                    targets[g * B_X + f * B_Y * numImages * numModules] = prod[f][g];
+                    targets[g * B_X + f * B_Y * numImages * numModules] = scaleOutputs * prod[f][g];
                 }
             }
         }
@@ -543,7 +543,7 @@ __global__ void filterActs_YxX_sparse_random(float* images, float* filters, floa
             if (!checkImgBounds || myImgIdx + g * B_X < numImages) {
                 #pragma unroll
                 for (int f = 0; f < filtersPerThread; f++) {
-                    targets[g * B_X + f * B_Y * numImages * numModules] = prod[f][g];
+                    targets[g * B_X + f * B_Y * numImages * numModules] = scaleOutputs * prod[f][g];
                 }
             }
         }
@@ -599,7 +599,7 @@ __global__ void filterActs_YxX_sparse_random(float* images, float* filters, floa
                                                : dim3(DIVUP(numImages, 32 * 4), (numModules * numFilters) / (4 * 4));
     dim3 threads(32, 4);
     bool checkImgBounds = numImages % 128 != 0;
-    if (scaleTargets == 0 && scaleOutput == 1) {
+    if (scaleTargets == 0) {
         targets.resize(numFilters * numModules, numImages);
     } else {
         assert(targets.getNumRows() == numFilters * numModules);
@@ -609,7 +609,7 @@ __global__ void filterActs_YxX_sparse_random(float* images, float* filters, floa
 
     if (numImgColors <= 3) {
         assert(numGroups == 1); // It has to be based on above definitions, but just to be sure.
-        if (scaleTargets == 0 && scaleOutput == 1) { // don't scale
+        if (scaleTargets == 0) { // don't scale
             if (numImgColors == 1) {
                 if (checkImgBounds) {
                     if (numFilters % 32 == 0) {
@@ -747,7 +747,7 @@ __global__ void filterActs_YxX_sparse_random(float* images, float* filters, floa
             }
         }
     } else {
-        if (scaleTargets == 0 && scaleOutput == 1) { // don't scale
+        if (scaleTargets == 0) { // don't scale
             if (checkImgBounds) {
                 if (numFiltersPerGroup % 32 == 0) {
                     cudaFuncSetCacheConfig(filterActs_YxX_sparse< 4, 32, 4, 8, 2, false, true >, cudaFuncCachePreferShared);
@@ -874,14 +874,14 @@ void _filterActsSparse(NVMatrix& images, NVMatrix& filters, NVMatrix& targets, i
                                                : dim3(DIVUP(numImages, 32 * 4), (numModules * numFilters) / (4 * 4));
     dim3 threads(32, 4);
     bool checkImgBounds = numImages % 128 != 0;
-    if (scaleTargets == 0 && scaleOutput == 1) {
+    if (scaleTargets == 0) {
         targets.resize(numFilters * numModules, numImages);
     } else {
         assert(targets.getNumRows() == numFilters * numModules);
         assert(targets.getNumCols() == numImages);
     }
     
-    if (scaleTargets == 0 && scaleOutput == 1) { // don't scale
+    if (scaleTargets == 0) { // don't scale
         if (checkImgBounds) {
             if (numFiltersPerGroup % 32 == 0) {
                 cudaFuncSetCacheConfig(filterActs_YxX_sparse_random< 4, 32, 4, 8, 2, false, true >, cudaFuncCachePreferShared);

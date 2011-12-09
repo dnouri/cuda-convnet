@@ -33,6 +33,7 @@ import math as m
 import layer as lay
 from convdata import *
 from os import linesep as NL
+#import pylab as pl
 
 class GPUModel(IGPUModel):
     def __init__(self, model_name, op, load_dic, dp_params={}):
@@ -50,17 +51,33 @@ class GPUModel(IGPUModel):
             ms['layers'] = lay.LayerParser.parse_layers(self.layer_def, self.layer_params, self, ms['layers'])
         else:
             ms['layers'] = lay.LayerParser.parse_layers(self.layer_def, self.layer_params, self)
+        self.layers_dic = dict(zip([l['name'] for l in ms['layers']], ms['layers']))
         
         logreg_name = self.op.get_value('logreg_name')
         if logreg_name:
             self.logreg_idx = self.get_layer_idx(logreg_name, check_type='cost.logreg')
         
         # Convert convolutional layers to local
-        if self.op.get_value('unshare_conv'):
-            for layer in ms['layers']:
-                if layer['type'] == 'conv':
-                    lay.LocalLayerParser.conv_to_local(layer)
-                        
+        if len(self.op.get_value('conv_to_local')) > 0:
+            for i, layer in enumerate(ms['layers']):
+                if layer['type'] == 'conv' and layer['name'] in self.op.get_value('conv_to_local'):
+                    lay.LocalLayerParser.conv_to_local(ms['layers'], i)
+        # Decouple weight matrices
+        if len(self.op.get_value('unshare_weights')) > 0:
+            for name_str in self.op.get_value('unshare_weights'):
+                if name_str:
+                    name = lay.WeightLayerParser.get_layer_name(name_str)
+                    if name is not None:
+                        name, idx = name[0], name[1]
+                        if name not in self.layers_dic:
+                            raise ModelStateException("Layer '%s' does not exist; unable to unshare" % name)
+                        layer = self.layers_dic[name]
+                        lay.WeightLayerParser.unshare_weights(layer, ms['layers'], matrix_idx=idx)
+                    else:
+                        raise ModelStateException("Invalid layer name '%s'; unable to unshare." % name_str)
+        self.op.set_value('conv_to_local', [], parse=False)
+        self.op.set_value('unshare_weights', [], parse=False)
+    
     def get_layer_idx(self, layer_name, check_type=None):
         try:
             layer_idx = [l['name'] for l in self.model_state['layers']].index(layer_name)
@@ -71,7 +88,7 @@ class GPUModel(IGPUModel):
             return layer_idx
         except ValueError:
             raise ModelStateException("Layer with name '%s' not defined." % layer_name)
-            
+
     def fill_excused_options(self):
         if self.op.get_value('check_grads'):
             self.op.set_value('save_path', '')
@@ -126,6 +143,7 @@ class GPUModel(IGPUModel):
                 elif type(l['weights']) == list:
                     print ""
                     print NL.join("Layer '%s' weights[%d]: %e [%e]" % (l['name'], i, n.mean(n.abs(w)), n.mean(n.abs(wi))) for i,(w,wi) in enumerate(zip(l['weights'],l['weightsInc']))),
+                print "%sLayer '%s' biases: %e [%e]" % (NL, l['name'], n.mean(n.abs(l['biases'])), n.mean(n.abs(l['biasesInc']))),
         print ""
         
     def conditional_save(self):
@@ -150,8 +168,9 @@ class GPUModel(IGPUModel):
         op.add_option("check-grads", "check_grads", BooleanOptionParser, "Check gradients and quit?", default=0, excuses=['data_path','save_path','train_batch_range','test_batch_range'])
         op.add_option("multiview-test", "multiview_test", BooleanOptionParser, "Cropped DP: test on multiple patches?", default=0, requires=['logreg_name'])
         op.add_option("crop-border", "crop_border", IntegerOptionParser, "Cropped DP: crop border size", default=4, set_once=True)
-        op.add_option("logreg-name", "logreg_name", StringOptionParser, "Cropped DP: logreg layer name", default="")
-        op.add_option("unshare-conv", "unshare_conv", BooleanOptionParser, "Convert all convolutional layers to unshared locally-connected?", default=False)
+        op.add_option("logreg-name", "logreg_name", StringOptionParser, "Cropped DP: logreg layer name (for --multiview-test)", default="")
+        op.add_option("conv-to-local", "conv_to_local", ListOptionParser(StringOptionParser), "Convert given conv layers to unshared local", default=[])
+        op.add_option("unshare-weights", "unshare_weights", ListOptionParser(StringOptionParser), "Unshare weight matrices in given layers", default=[])
         
         op.delete_option('max_test_err')
         op.options["max_filesize_mb"].default = 0

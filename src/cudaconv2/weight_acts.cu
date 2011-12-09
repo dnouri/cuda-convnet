@@ -61,7 +61,7 @@ __global__ void conv_weight_acts_c(float* images, float* hidActs, float* targets
                                    const int imgSize, const int filterSize,
                                    const int paddingStart, const int moduleStride, const int imgStride,
                                    const int partialSum,
-                                   const float scaleTargets, const float scaleOutput) {
+                                   const float scaleTargets, const float scaleOutputs) {
     __shared__ float shImages[pixelsPerThread * B_Y * numColors][preloadCases]; // preload preloadCases cases of B_Y * pixelsPerThread pixels
     __shared__ float shHidActs[B_X][preloadCases + 1]; // preload preloadCases cases of B_X hidActs
 
@@ -183,7 +183,7 @@ __global__ void conv_weight_acts_c(float* images, float* hidActs, float* targets
             if (blockPixelOffset + p * B_Y + threadIdx.y < filterPixels) {
                 #pragma unroll
                 for (int c = 0; c < numColors; c++) {
-                    targets[p * B_Y * numFilters + c * filterPixels * numFilters] = scaleTargets * targets[p * B_Y * numFilters + c * filterPixels * numFilters] + scaleOutput * prod[c][p];
+                    targets[p * B_Y * numFilters + c * filterPixels * numFilters] = scaleTargets * targets[p * B_Y * numFilters + c * filterPixels * numFilters] + scaleOutputs * prod[c][p];
                 }
             }
         }
@@ -193,7 +193,7 @@ __global__ void conv_weight_acts_c(float* images, float* hidActs, float* targets
             if (blockPixelOffset + p * B_Y + threadIdx.y < filterPixels) {
                 #pragma unroll
                 for (int c = 0; c < numColors; c++) {
-                    targets[p * B_Y * numFilters + c * filterPixels * numFilters] = prod[c][p];
+                    targets[p * B_Y * numFilters + c * filterPixels * numFilters] = scaleOutputs * prod[c][p];
                 }
             }
         }
@@ -237,7 +237,7 @@ __global__ void conv_weight_acts_mc_mf(float* images, float* hidActs, float* tar
                                        const int imgSize, const int filterSize,
                                        const int paddingStart, const int moduleStride, const int imgStride,
                                        const int numImgColors, const int numGroups, const int partialSum,
-                                       const float scaleTargets, const float scaleOutput) {
+                                       const float scaleTargets, const float scaleOutputs) {
     __shared__ float shImages[colorsPerThread * B_Y][preloadCases]; // preload preloadCases cases of B_Y * pixelsPerThread pixels
     __shared__ float shHidActs[filtersPerThread * B_X][preloadCases + 1]; // preload preloadCases cases of B_X hidacts
 
@@ -364,7 +364,7 @@ __global__ void conv_weight_acts_mc_mf(float* images, float* hidActs, float* tar
             for (int f = 0; f < filtersPerThread; f++) {
                 #pragma unroll
                 for (int c = 0; c < colorsPerThread; c++) {
-                    targets[c * filterPixels * numFilters + f * B_X] = scaleTargets * targets[c * filterPixels * numFilters + f * B_X] + scaleOutput * prod[c][f];
+                    targets[c * filterPixels * numFilters + f * B_X] = scaleTargets * targets[c * filterPixels * numFilters + f * B_X] + scaleOutputs * prod[c][f];
                 }
             }
         } else {
@@ -372,7 +372,7 @@ __global__ void conv_weight_acts_mc_mf(float* images, float* hidActs, float* tar
             for (int f = 0; f < filtersPerThread; f++) {
                 #pragma unroll
                 for (int c = 0; c < colorsPerThread; c++) {
-                    targets[c * filterPixels * numFilters + f * B_X] = prod[c][f];
+                    targets[c * filterPixels * numFilters + f * B_X] = scaleOutputs * prod[c][f];
                 }
             }
         }
@@ -417,7 +417,7 @@ __global__ void conv_weight_acts_mc_mf_rand(float* images, float* hidActs, float
                                            const int imgSize, const int filterSize,
                                            const int paddingStart, const int moduleStride, const int imgStride,
                                            const int numFilterColors, const int numGroups, const int partialSum,
-                                           const float scaleTargets, const float scaleOutput) {
+                                           const float scaleTargets, const float scaleOutputs) {
     __shared__ float shImages[colorsPerThread * B_Y][preloadCases]; // preload preloadCases cases of B_Y * pixelsPerThread pixels
     __shared__ float shHidActs[filtersPerThread * B_X][preloadCases + 1]; // preload preloadCases cases of B_X hidacts
     __shared__ int shColors[colorsPerThread];
@@ -547,7 +547,7 @@ __global__ void conv_weight_acts_mc_mf_rand(float* images, float* hidActs, float
             for (int f = 0; f < filtersPerThread; f++) {
                 #pragma unroll
                 for (int c = 0; c < colorsPerThread; c++) {
-                    targets[c * filterPixels * numFilters + f * B_X] = scaleTargets * targets[c * filterPixels * numFilters + f * B_X] + scaleOutput * prod[c][f];
+                    targets[c * filterPixels * numFilters + f * B_X] = scaleTargets * targets[c * filterPixels * numFilters + f * B_X] + scaleOutputs * prod[c][f];
                 }
             }
         } else {
@@ -555,7 +555,7 @@ __global__ void conv_weight_acts_mc_mf_rand(float* images, float* hidActs, float
             for (int f = 0; f < filtersPerThread; f++) {
                 #pragma unroll
                 for (int c = 0; c < colorsPerThread; c++) {
-                    targets[c * filterPixels * numFilters + f * B_X] = prod[c][f];
+                    targets[c * filterPixels * numFilters + f * B_X] = scaleOutputs * prod[c][f];
                 }
             }
         }
@@ -633,14 +633,14 @@ void _weightActs(NVMatrix& images, NVMatrix& hidActs, NVMatrix& targets,
     threads = dim3(bx, by);
     bool checkCaseBounds = numImages % 32 != 0;
     
-    if (scaleTargets == 0 && scaleOutput == 1) {
+    if (scaleTargets == 0) {
         targets.resize((numModules/partialSum) * numFilterColors*filterPixels, numFilters);
     } else {
         assert(targets.getNumRows() == (numModules/partialSum) * numFilterColors*filterPixels);
         assert(targets.getNumCols() == numFilters);
     }
     if (numFilterColors > 3) {
-        if (scaleTargets == 0 && scaleOutput == 1) { // do not scale
+        if (scaleTargets == 0) { // do not scale
             if (numFiltersPerGroup % 64 == 0) {
                 if (numFilterColors % 8 == 0) {
                     if (checkCaseBounds) {
@@ -803,7 +803,7 @@ void _weightActs(NVMatrix& images, NVMatrix& hidActs, NVMatrix& targets,
             }
         }
     } else { // numColors in 1,2,3
-        if (scaleTargets == 0 && scaleOutput == 1) { // do not scale
+        if (scaleTargets == 0) { // do not scale
             if (numFilterColors == 1) {
                 if (checkCaseBounds) {
                     if (numFilters % 32 == 0) {
@@ -964,7 +964,8 @@ void localWeightActs(NVMatrix& images, NVMatrix& hidActs, NVMatrix& targets,
 void localWeightActs(NVMatrix& images, NVMatrix& hidActs, NVMatrix& targets,
                     int numModulesX, int filterSize, int paddingStart, int moduleStride,
                     int numImgColors, int numGroups, float scaleTargets, float scaleOutput) {
-    _weightActs(images, hidActs, targets, numModulesX, filterSize, paddingStart, moduleStride, numImgColors, numGroups, 1, scaleTargets, scaleOutput);
+    _weightActs(images, hidActs, targets, numModulesX, filterSize, paddingStart, moduleStride, numImgColors, numGroups, 1,
+                scaleTargets, scaleOutput);
 }
 
 /*
@@ -1028,14 +1029,14 @@ void _weightActsSparse(NVMatrix& images, NVMatrix& hidActs, NVMatrix& targets, i
     threads = dim3(bx, by);
     bool checkCaseBounds = numImages % 32 != 0;
     
-    if (scaleTargets == 0 && scaleOutput == 1) {
+    if (scaleTargets == 0) {
         targets.resize((numModules/partialSum) * numFilterColors*filterPixels, numFilters);
     } else {
         assert(targets.getNumRows() == (numModules/partialSum) * numFilterColors*filterPixels);
         assert(targets.getNumCols() == numFilters);
     }
     
-    if (scaleTargets == 0 && scaleOutput == 1) { // do not scale
+    if (scaleTargets == 0) { // do not scale
         if (numFiltersPerGroup % 64 == 0) {
             if (numFilterColors % 8 == 0) {
                 if (checkCaseBounds) {

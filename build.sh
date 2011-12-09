@@ -14,10 +14,10 @@ export CUDA_SDK_PATH=/home/spoon/NVIDIA_GPU_Computing_SDK
 export PYTHON_INCLUDE_PATH=/usr/include/python2.7
 
 # Numpy include directory. This should contain the file arrayobject.h, among others.
-export NUMPY_INCLUDE_PATH=/usr/lib64/python2.7/site-packages/numpy/core/include/numpy
+export NUMPY_INCLUDE_PATH=/usr/lib/pymodules/python2.7/numpy/core/include/numpy
 
 # ATLAS library directory. This should contain the file libcblas.so, among others.
-export ATLAS_LIB_PATH=/usr/lib64/atlas
+export ATLAS_LIB_PATH=/usr/lib/atlas-base
 
 make $*
 

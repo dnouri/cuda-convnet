@@ -57,7 +57,7 @@ class ShowGPUModel(GPUModel):
             GPUModel.import_model(self)
             
     def init_model_state(self):
-        GPUModel.init_model_state(self)
+        #GPUModel.init_model_state(self)
         if self.op.get_value('show_preds'):
             self.sotmax_idx = self.get_layer_idx(self.op.get_value('show_preds'), check_type='softmax')
         if self.op.get_value('write_features'):
@@ -105,7 +105,6 @@ class ShowGPUModel(GPUModel):
         filter_end = min(filter_start+MAX_FILTERS, num_filters)
         filter_rows = int(ceil(float(filter_end - filter_start) / f_per_row))
     
-        filter_pixels = filters.shape[1]
         filter_size = int(sqrt(filters.shape[1]))
         fig = pl.figure(fignum)
         fig.text(.5, .95, '%s %dx%d filters %d-%d' % (_title, filter_size, filter_size, filter_start, filter_end-1), horizontalalignment='center') 
@@ -143,18 +142,17 @@ class ShowGPUModel(GPUModel):
         if self.show_filters not in layer_names:
             raise ShowNetError("Layer with name '%s' not defined by given convnet." % self.show_filters)
         layer = self.layers[layer_names.index(self.show_filters)]
-        filters = layer['weights']
+        filters = layer['weights'][self.input_idx]
         if layer['type'] == 'fc': # Fully-connected layer
-            filters = filters[self.input_idx]
             num_filters = layer['outputs']
             channels = self.channels
         elif layer['type'] in ('conv', 'local'): # Conv layer
             num_filters = layer['filters']
-            channels = layer['filterChannels']
+            channels = layer['filterChannels'][self.input_idx]
             if layer['type'] == 'local':
-                filters = filters.reshape((layer['modules'], layer['filterPixels'] * channels, layer['filters']))
-                filter_start = r.randint(0, layer['modules']-1)*layer['filters'] # pick out some random modules
-                filters = filters.swapaxes(0,1).reshape(channels * layer['filterPixels'], layer['filters'] * layer['modules'])
+                filters = filters.reshape((layer['modules'], layer['filterPixels'][self.input_idx] * channels, num_filters))
+                filter_start = r.randint(0, layer['modules']-1)*num_filters # pick out some random modules
+                filters = filters.swapaxes(0,1).reshape(channels * layer['filterPixels'][self.input_idx], num_filters * layer['modules'])
                 num_filters *= layer['modules']
 
         filters = filters.reshape(channels, filters.shape[0]/channels, filters.shape[1])
@@ -217,13 +215,13 @@ class ShowGPUModel(GPUModel):
                         color=['r' if l[1] == label_names[true_label] else 'b' for l in img_labels])
                 pl.title(label_names[true_label])
                 pl.yticks(ylocs + height/2, [l[1] for l in img_labels])
-                pl.xticks([width/2.0, width], ['50%', '100%'])
+                pl.xticks([width/2.0, width], ['50%', ''])
                 pl.ylim(0, ylocs[-1] + height*2)
     
     def do_write_features(self):
         if not os.path.exists(self.feature_path):
             os.makedirs(self.feature_path)
-        next_data = self.get_next_batch()
+        next_data = self.get_next_batch(train=False)
         b1 = next_data[1]
         num_ftrs = self.layers[self.ftr_layer_idx]['outputs']
         while True:
@@ -233,10 +231,10 @@ class ShowGPUModel(GPUModel):
             self.libmodel.startFeatureWriter(data + [ftrs], self.ftr_layer_idx)
             
             # load the next batch while the current one is computing
-            next_data = self.get_next_batch()
+            next_data = self.get_next_batch(train=False)
             self.finish_batch()
             path_out = os.path.join(self.feature_path, 'data_batch_%d' % batch)
-            pickle(path_out, {'data': ftrs})
+            pickle(path_out, {'data': ftrs, 'labels': data[1]})
             print "Wrote feature file %s" % path_out
             if next_data[1] == b1:
                 break
@@ -259,17 +257,17 @@ class ShowGPUModel(GPUModel):
     def get_options_parser(cls):
         op = GPUModel.get_options_parser()
         for option in list(op.options):
-            if option not in ('gpu', 'load_file', 'train_batch_range'):
+            if option not in ('gpu', 'load_file', 'train_batch_range', 'test_batch_range'):
                 op.delete_option(option)
         op.add_option("show-cost", "show_cost", StringOptionParser, "Show specified objective function", default="")
         op.add_option("show-filters", "show_filters", StringOptionParser, "Show learned filters in specified layer", default="")
-        op.add_option("input-idx", "input_idx", IntegerOptionParser, "Input index for layer given to --show-filters (fully-connected layers only)", default=0)
+        op.add_option("input-idx", "input_idx", IntegerOptionParser, "Input index for layer given to --show-filters", default=0)
         op.add_option("no-rgb", "no_rgb", BooleanOptionParser, "Don't combine filter channels into RGB in layer given to --show-filters", default=False)
         op.add_option("channels", "channels", IntegerOptionParser, "Number of channels in layer given to --show-filters (fully-connected layers only)", default=0)
         op.add_option("show-preds", "show_preds", StringOptionParser, "Show predictions made by given softmax on test set", default="")
         op.add_option("only-errors", "only_errors", BooleanOptionParser, "Show only mistaken predictions (to be used with --show-preds)", default=False, requires=['show_preds'])
-        op.add_option("write-features", "write_features", StringOptionParser, "Write training data features from given layer", default="", requires=['feature-path'])
-        op.add_option("feature-path", "feature_path", StringOptionParser, "Write training data features to this path (to be used with --write-features)", default="")
+        op.add_option("write-features", "write_features", StringOptionParser, "Write test data features from given layer", default="", requires=['feature-path'])
+        op.add_option("feature-path", "feature_path", StringOptionParser, "Write test data features to this path (to be used with --write-features)", default="")
         
         op.options['load_file'].default = None
         return op

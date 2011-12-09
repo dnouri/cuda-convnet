@@ -93,8 +93,8 @@ private:
     void _init(int numRows, int numCols, int stride, bool isTrans);
     void _sum_setParams(int n, dim3* blocks, dim3* threads, int* numCols);
     template<class Agg> float _totalAgg(Agg agg);
-    template<class Agg> void _aggregate(int axis, NVMatrix& target, Agg agg);
-    template<class Agg> NVMatrix& _aggregate(int axis, Agg agg);
+    template<class Agg, class BinaryOp> void _aggregate(int axis, NVMatrix& target, Agg agg, BinaryOp op);
+    template<class Agg, class BinaryOp> NVMatrix& _aggregate(int axis, Agg agg, BinaryOp op);
     template <class Randomizer> void _unaryRandomize(NVMatrix& target, Randomizer rnd);
     template <class Randomizer> void _binaryRandomize(NVMatrix& data2, NVMatrix& target, Randomizer rnd);   
 public:
@@ -281,8 +281,8 @@ public:
         dim3 threads(ELTWISE_THREADS_X, ELTWISE_THREADS_Y);
         if (target.isTrans() == isTrans() && target.isTrans() == b.isTrans()) {
             kEltwiseBinaryOp<Op><<<blocks, threads>>>(_devData, b._devData, target._devData, height, width, getStride(),
-                                      b.getStride(), target.getStride(), op);
-            cutilCheckMsg("kEltwiseOp: Kernel execution failed");
+                                                      b.getStride(), target.getStride(), op);
+            cutilCheckMsg("kEltwiseBinaryOp: Kernel execution failed");
         } else {
             //  both x here since y divides x
             bool checkBounds = !(width % ELTWISE_THREADS_X == 0 && height % ELTWISE_THREADS_X == 0);
@@ -313,6 +313,25 @@ public:
             }
             cutilCheckMsg("kEltwiseBinaryOpTrans: Kernel execution failed");
         }
+    }
+    
+    template <class Op> void applyTernary(Op op, NVMatrix& b, NVMatrix& c, NVMatrix& target) {
+        assert(this->isSameDims(b));
+        assert(this->isSameDims(c));
+        // For now ternary ops are only supported for matrices of same transposedness
+        assert(isTrans() == b.isTrans());
+        assert(isTrans() == c.isTrans());
+        if (!target.isSameDims(*this) || target.isTrans() != isTrans()) {
+            target.resize(*this);
+        }
+
+        int height = target.getFollowingDim(), width = target.getLeadingDim();
+        dim3 blocks(std::min(NUM_BLOCKS_MAX, DIVUP(width, ELTWISE_THREADS_X)),
+                    std::min(NUM_BLOCKS_MAX, DIVUP(height, ELTWISE_THREADS_Y)));
+        dim3 threads(ELTWISE_THREADS_X, ELTWISE_THREADS_Y);
+        kEltwiseTernaryOp<Op><<<blocks, threads>>>(_devData, b._devData, c._devData, target._devData, height, width,
+                                                   getStride(), b.getStride(), c.getStride(), target.getStride(), op);
+        cutilCheckMsg("kEltwiseTernaryOp: Kernel execution failed");
     }
 
     bool resize(int numRows, int numCols);
@@ -347,6 +366,7 @@ public:
     void eltwiseDivideByVector(NVMatrix& vec);
     void tile(int timesY, int timesX, NVMatrix& target);
 
+    void addSum(NVMatrix& a, int axis, float scaleThis, float scaleSum);
     void sum(int axis, NVMatrix& target);
     NVMatrix& sum(int axis);
     void max(int axis, NVMatrix& target);

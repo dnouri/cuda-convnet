@@ -29,41 +29,40 @@
 
 using namespace std;
 
-Neuron& Neuron::makeNeuron(PyObject* neuronDict, NVMatrix& inputs) {
+Neuron& Neuron::makeNeuron(PyObject* neuronDict) {
     string type = pyDictGetString(neuronDict, "type");
     PyObject* neuronParamsDict = PyDict_GetItemString(neuronDict, "params");
     
     if (type == "relu") {
-        return *new ReluNeuron(inputs);
+        return *new ReluNeuron();
     }
     
     if (type == "softrelu") {
-        return *new SoftReluNeuron(inputs);
+        return *new SoftReluNeuron();
     }
     
     if (type == "brelu") {
         float a = pyDictGetFloat(neuronParamsDict, "a");
-        return *new BoundedReluNeuron(inputs, a);
+        return *new BoundedReluNeuron(a);
     }
 
     if (type == "abs") {
-        return *new AbsNeuron(inputs);
+        return *new AbsNeuron();
     }
 
     if (type == "logistic") {
-        return *new LogisticNeuron(inputs);
+        return *new LogisticNeuron();
     }
     
-    if (type == "tanh" || type == "abstanh") {
+    if (type == "tanh") {
         float a = pyDictGetFloat(neuronParamsDict, "a");
         float b = pyDictGetFloat(neuronParamsDict, "b");
         
-        return *(type == "tanh" ? dynamic_cast<Neuron*>(new TanhNeuron(inputs, a, b)) 
-                                : dynamic_cast<Neuron*>(new AbsTanhNeuron(inputs, a, b)));
+        return *new TanhNeuron(a, b);
     }
 
     if (type == "ident") {
-        return *new Neuron(inputs);
+        return *new Neuron();
     }
     
     throw string("Unknown neuron type: ") + type;

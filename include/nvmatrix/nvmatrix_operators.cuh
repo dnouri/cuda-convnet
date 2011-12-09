@@ -33,77 +33,77 @@ class NVMatrixOps {
 public:
     class Exp {
     public:
-        __device__ inline float operator()(float a) const {
+        __device__ inline float operator()(const float a) const {
             return __expf(a);
         }
     };
 
     class Logistic {
     public:
-        __device__ inline float operator()(float a) const {
+        __device__ inline float operator()(const float a) const {
             return __fdividef(1.0f, 1.0f + __expf(-a));
         }
     };
 
     class Log {
     public:
-        __device__ inline float operator()(float a) const {
+        __device__ inline float operator()(const float a) const {
             return __logf(a);
         }
     };
 
     class Square {
     public:
-        __device__ inline float operator()(float a) const {
+        __device__ inline float operator()(const float a) const {
             return a * a;
         }
     };
 
     class Sqrt {
     public:
-        __device__ inline float operator()(float a) const {
+        __device__ inline float operator()(const float a) const {
             return sqrtf(a);
         }
     };
 
     class Reciprocal {
     public:
-        __device__ inline float operator()(float a) const {
+        __device__ inline float operator()(const float a) const {
             return 1.0f / a;
         }
     };
 
     class Abs {
     public:
-        __device__ inline float operator()(float a) const {
+        __device__ inline float operator()(const float a) const {
             return a > 0 ? a : -a;
         }
     };
 
     class Sign {
     public:
-        __device__ inline float operator()(float a) const {
+        __device__ inline float operator()(const float a) const {
             return (a > 0) - (a < 0);
         }
     };
     
     class Identity {
     public:
-        __device__ inline float operator()(float a) const {
+        __device__ inline float operator()(const float a) const {
             return a;
         }
     };
 
     class Zero {
     public:
-        __device__ inline float operator()(float a) const {
+        __device__ inline float operator()(const float a) const {
             return 0;
         }
     };
 
     class One {
     public:
-        __device__ inline float operator()(float a) const {
+        __device__ inline float operator()(const float a) const {
             return 1;
         }
     };
@@ -112,9 +112,9 @@ public:
     private:
         const float scalar;
     public:
-        SmallerThanScalar(float _scalar) : scalar(_scalar) {
+        SmallerThanScalar(const float _scalar) : scalar(_scalar) {
         }
-        __device__ inline float operator()(float a) const {
+        __device__ inline float operator()(const float a) const {
             return a < scalar;
         }
     };
@@ -123,9 +123,9 @@ public:
     private:
         const float scalar;
     public:
-        BiggerThanScalar(float _scalar) : scalar(_scalar) {
+        BiggerThanScalar(const float _scalar) : scalar(_scalar) {
         }
-        __device__ inline float operator()(float a) const {
+        __device__ inline float operator()(const float a) const {
             return a > scalar;
         }
     };
@@ -134,9 +134,9 @@ public:
     private:
         const float scalar;
     public:
-        AddScalar(float _scalar) : scalar(_scalar) {
+        AddScalar(const float _scalar) : scalar(_scalar) {
         }
-        __device__ inline float operator()(float a) const {
+        __device__ inline float operator()(const float a) const {
             return a + scalar;
         }
     };
@@ -145,9 +145,9 @@ public:
     private:
         const float weight, scalar;
     public:
-        WeightedAddScalar(float _weight, float _scalar) : weight(_weight), scalar(_scalar) {
+        WeightedAddScalar(const float _weight, const float _scalar) : weight(_weight), scalar(_scalar) {
         }
-        __device__ inline float operator()(float a) const {
+        __device__ inline float operator()(const float a) const {
             return weight * a + scalar;
         }
     };
@@ -156,9 +156,9 @@ public:
     private:
         const float scalar;
     public:
-        MultByScalar(float _scalar) : scalar(_scalar) {
+        MultByScalar(const float _scalar) : scalar(_scalar) {
         }
-        __device__ inline float operator()(float a) const {
+        __device__ inline float operator()(const float a) const {
             return a * scalar;
         }
     };
@@ -167,9 +167,9 @@ public:
     private:
         const float p;
     public:
-        Pow(float _p) : p(_p) {
+        Pow(const float _p) : p(_p) {
         }
-        __device__ inline float operator()(float a) const {
+        __device__ inline float operator()(const float a) const {
             return __powf(a, p);
         }
     };
@@ -179,9 +179,9 @@ public:
     private:
         const float lower, upper;
     public:
-        InRange(float _lower, float _upper) : lower(_lower), upper(_upper) {
+        InRange(const float _lower, const float _upper) : lower(_lower), upper(_upper) {
         }
-        __device__ inline float operator()(float a) const {
+        __device__ inline float operator()(const float a) const {
             return exclusive ? a > lower && a < upper : a >= lower && a <= upper;
         }
     };
@@ -190,9 +190,9 @@ public:
     private:
         const float scalar;
     public:
-        MinWithScalar(float _scalar) : scalar(_scalar) {
+        MinWithScalar(const float _scalar) : scalar(_scalar) {
         }
-        __device__ inline float operator()(float a) const {
+        __device__ inline float operator()(const float a) const {
             return a > scalar ? scalar : a;
         }
     };
@@ -201,9 +201,9 @@ public:
     private:
         const float scalar;
     public:
-        MaxWithScalar(float _scalar) : scalar(_scalar) {
+        MaxWithScalar(const float _scalar) : scalar(_scalar) {
         }
-        __device__ inline float operator()(float a) const {
+        __device__ inline float operator()(const float a) const {
             return a > scalar ? a : scalar;
         }
     };
@@ -213,35 +213,35 @@ class NVMatrixBinaryOps {
 public:
     class Equals {
     public:
-        __device__ inline float operator()(float a, float b) const {
+        __device__ inline float operator()(const float a, const float b) const {
             return a == b;
         }
     };
 
     class BiggerThan {
     public:
-        __device__ inline float operator()(float a, float b) const {
+        __device__ inline float operator()(const float a, const float b) const {
             return a > b;
         }
     };
 
     class Divide {
     public:
-        __device__ inline float operator()(float a, float b) const  {
+        __device__ inline float operator()(const float a, const float b) const  {
             return __fdividef(a, b);
         }
     };
 
     class Multiply {
     public:
-        __device__ inline float operator()(float a, float b) const {
+        __device__ inline float operator()(const float a, const float b) const {
             return a * b;
         }
     };
 
     class SquaredDiff {
     public:
-        __device__ inline float operator()(float a, float b) const {
+        __device__ inline float operator()(const float a, const float b) const {
             return (a - b) * (a - b);
         }
     };
@@ -250,17 +250,42 @@ public:
     private:
         const float scaleA, scaleB;
     public:
-        WeightedAdd(float _scaleA, float _scaleB) : scaleA(_scaleA), scaleB(_scaleB) {
+        WeightedAdd(const float _scaleA, const float _scaleB) : scaleA(_scaleA), scaleB(_scaleB) {
         }
-        __device__ inline float operator()(float a, float b) const {
+        __device__ inline float operator()(const float a, const float b) const {
             return a * scaleA + b * scaleB;
         }
     };
 
     class Add {
     public:
-        __device__ inline float operator()(float a, float b) const {
+        __device__ inline float operator()(const float a, const float b) const {
             return a + b;
+        }
+    };
+    
+    class First {
+    public:
+        __device__ inline float operator()(const float a, const float b) const {
+            return a;
+        }
+    };
+    
+    class Second {
+    public:
+        __device__ inline float operator()(const float a, const float b) const {
+            return b;
+        }
+    };
+    
+    class SecondScaled {
+    private:
+        const float scale;
+    public:
+        SecondScaled(const float _scale) : scale(_scale) {
+        }
+        __device__ inline float operator()(const float a, const float b) const {
+            return scale * b;
         }
     };
 };
@@ -269,7 +294,7 @@ class NVMatrixAggs {
 public:
     class Sum {
     public:
-        __device__ inline float operator()(float a, float b) const {
+        __device__ inline float operator()(const float a, const float b) const {
             return a + b;
         }
         __device__ inline float getBaseValue() {
@@ -279,7 +304,7 @@ public:
 
     class Max {
     public:
-        __device__ inline float operator()(float a, float b) const {
+        __device__ inline float operator()(const float a, const float b) const {
             return a > b ? a : b;
         }
         __device__ inline float getBaseValue() {
@@ -289,7 +314,7 @@ public:
 
     class Min {
     public:
-        __device__ inline float operator()(float a, float b) const {
+        __device__ inline float operator()(const float a, const float b) const {
             return a > b ? b : a;
         }
         __device__ inline float getBaseValue() {
@@ -304,12 +329,22 @@ public:
     public:
        ArgMax(UnaryOperator _u) : u(_u) {
        }
-       __device__ inline float operator()(float a, float b) const {
+       __device__ inline float operator()(const float a, const float b) const {
            return u(a) > u(b) ? a : b;
        }
        __device__ inline float getBaseValue() {
            return u.getArgMin();
        }
+    };
+};
+
+class NVMatrixTernaryOps {
+public:
+    class Add {
+    public:
+        __device__ inline float operator()(const float a, const float b, const float c) const {
+            return a + b + c;
+        }
     };
 };
 

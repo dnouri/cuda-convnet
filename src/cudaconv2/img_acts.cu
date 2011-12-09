@@ -178,7 +178,7 @@ __global__ void img_acts_color(const float* hidActs, const float* filters, float
                 if (!checkCaseBounds || blockCaseIdx + threadIdx.x + i * 16 < numImages) {
                     #pragma unroll
                     for (int c = 0; c < numColors; c++) {
-                        targets[c * imgPixels * numImages + i * 16] = prod[c][i];
+                        targets[c * imgPixels * numImages + i * 16] = scaleOutputs * prod[c][i];
                     }
                 }
             }
@@ -350,7 +350,7 @@ __global__ void img_acts_mediumcolor(const float* hidActs, const float* filters,
                 if (!checkCaseBounds || blockCaseIdx + threadIdx.x + i * 16 < numImages) {
                     #pragma unroll
                     for (int c = 0; c < colorsPerThread; c++) {
-                        targets[c * imgPixels * numImages + i * 16] = prod[c][i];
+                        targets[c * imgPixels * numImages + i * 16] = scaleOutputs * prod[c][i];
                     }
                 }
             }
@@ -509,7 +509,7 @@ __global__ void conv_img_acts_manycolor(const float* hidActs, const float* filte
             if (!checkCaseBounds || blockCaseIdx + threadIdx.x + i * B_X < numImages) {
                 #pragma unroll
                 for (int c = 0; c < colorsPerThread; c++) {
-                    targets[c * B_Y * imgPixels * numImages + i * B_X] = prod[c][i];
+                    targets[c * B_Y * imgPixels * numImages + i * B_X] = scaleOutputs * prod[c][i];
                 }
             }
         }
@@ -698,7 +698,7 @@ __global__ void img_acts_mediumcolor_sparse_rand(const float* hidActs, const flo
                 if (!checkCaseBounds || blockCaseIdx + threadIdx.x + i * 16 < numImages) {
                     #pragma unroll
                     for (int c = 0; c < colorsPerThread; c++) {
-                        targets[shColors[c] + i * 16] = prod[c][i];
+                        targets[shColors[c] + i * 16] = scaleOutputs * prod[c][i];
                     }
                 }
             }
@@ -878,7 +878,7 @@ __global__ void img_acts_manycolor_sparse_rand(const float* hidActs, const float
             if (!checkCaseBounds || blockCaseIdx + threadIdx.x + i * B_X < numImages) {
                 #pragma unroll
                 for (int c = 0; c < colorsPerThread; c++) {
-                    targets[shColors[c * B_Y + threadIdx.y] + i * B_X] = prod[c][i];
+                    targets[shColors[c * B_Y + threadIdx.y] + i * B_X] = scaleOutputs * prod[c][i];
                 }
             }
         }
@@ -947,7 +947,7 @@ void _imgActs(NVMatrix& hidActs, NVMatrix& filters, NVMatrix& targets,
         checkCaseBounds = numImages % (16*8) != 0;
     }
     
-    if (scaleTargets == 0 && scaleOutput == 1) { // do not scale or use targets matrix
+    if (scaleTargets == 0) { // do not scale or use targets matrix
         targets.resize(numImgColors*imgPixels, numImages);
     } else {
         assert(targets.getNumRows() == numImgColors * imgPixels);
@@ -955,7 +955,7 @@ void _imgActs(NVMatrix& hidActs, NVMatrix& filters, NVMatrix& targets,
     }
     
     if (conv) { // convolutional units
-        if (scaleTargets == 0 && scaleOutput == 1) { // do not scale or use targets matrix
+        if (scaleTargets == 0) { // do not scale or use targets matrix
             if (numFilterColors % 8 == 0) {
                 if (checkCaseBounds) {
                     if (numFilterColors % 16 == 0) {
@@ -1109,7 +1109,7 @@ void _imgActs(NVMatrix& hidActs, NVMatrix& filters, NVMatrix& targets,
             }
         }
     } else { // local, unshared units
-        if (scaleTargets == 0 && scaleOutput == 1) { // do not scale or use targets matrix
+        if (scaleTargets == 0) { // do not scale or use targets matrix
             if (numFilterColors % 8 == 0) {
                 if (checkCaseBounds) {
                     if (numFilterColors % 16 == 0) {
@@ -1356,7 +1356,7 @@ void _imgActsSparse(NVMatrix& hidActs, NVMatrix& filters, NVMatrix& targets, int
         checkCaseBounds = numImages % (16*8) != 0;
     }
     
-    if (scaleTargets == 0 && scaleOutput == 1) { // do not scale or use targets matrix
+    if (scaleTargets == 0) { // do not scale or use targets matrix
         targets.resize(overSample*numImgColors*imgPixels, numImages);
     } else {
         assert(targets.getNumRows() == overSample * numImgColors * imgPixels);
@@ -1364,7 +1364,7 @@ void _imgActsSparse(NVMatrix& hidActs, NVMatrix& filters, NVMatrix& targets, int
     }
     
     if (conv) {
-        if (scaleTargets == 0 && scaleOutput == 1) { // do not scale or use targets matrix
+        if (scaleTargets == 0) { // do not scale or use targets matrix
             if (numFilterColors % 8 == 0) {
                 if (checkCaseBounds) {
                     if (numFilterColors % 16 == 0) {
@@ -1458,7 +1458,7 @@ void _imgActsSparse(NVMatrix& hidActs, NVMatrix& filters, NVMatrix& targets, int
             }
         }
     } else {
-        if (scaleTargets == 0 && scaleOutput == 1) { // do not scale or use targets matrix
+        if (scaleTargets == 0) { // do not scale or use targets matrix
             if (numFilterColors % 8 == 0) {
                 if (checkCaseBounds) {
                     if (numFilterColors % 16 == 0) {

@@ -32,6 +32,17 @@
 #include <nvmatrix.cuh>
 #include <cutil_inline.h>
 
+template <class GradientOp>
+class AddGradientOperator {
+    GradientOp _op;
+public:
+    AddGradientOperator(GradientOp op) : _op(op) {
+    }
+    __device__ inline float operator()(const float unitActGrad, const float unitAct, const float target) const  {
+        return target + _op(unitActGrad, unitAct); 
+    }
+};
+
 /* =======================
  * Neuron
  * -----------------------
@@ -42,33 +53,44 @@
 class Neuron {
 protected:
     bool _activated;
-    NVMatrix* _inputs;
+    // Inputs and outputs potentially point to the same matrix, depending on the neuron
+    NVMatrix* _inputs, *_outputs; 
     virtual void _activate() {
+        if (_inputs != _outputs) {
+            _inputs->copy(*_outputs);
+        }
     }
-    virtual void _computeInputGrad(NVMatrix& actsGrad) {
+    virtual void _computeInputGrad(NVMatrix& actsGrad, NVMatrix& target) {
+        if (&target != &actsGrad) {
+            actsGrad.copy(target);
+        }
+    }
+    virtual void _addInputGrad(NVMatrix& actsGrad, NVMatrix& target) {
+        if (&target != &actsGrad) {
+            target.add(actsGrad);
+        }
     }
 public:
-    Neuron(NVMatrix& inputs) : _activated(false), _inputs(&inputs) {
+    Neuron() : _activated(false), _inputs(NULL), _outputs(NULL) {
     }
-    virtual void activate() {
+    virtual void activate(NVMatrix& inputs, NVMatrix& outputs) {
         _activated = true;
+        _inputs = &inputs;
+        _outputs = &outputs;
         _activate();
     }
 
-    virtual void computeInputGrad(NVMatrix& actsGrad) {
+    virtual void computeInputGrad(NVMatrix& actsGrad, NVMatrix& target, bool add) {
         assert(_activated);
-        _computeInputGrad(actsGrad);
+        if (!add) {
+            target.resize(actsGrad);
+            _computeInputGrad(actsGrad, target);
+        } else {
+            _addInputGrad(actsGrad, target);
+        }
     }
-    
-    /*
-     * By default, the neuron's output overwrites its input, so there is no special
-     * output matrix.
-     */
-    virtual NVMatrix& getActs() {
-        return *_inputs;
-    }
-    
-    static Neuron& makeNeuron(PyObject* neuronDict, NVMatrix& inputs);
+        
+    static Neuron& makeNeuron(PyObject* neuronDict);
 };
 
 /* =======================
@@ -81,23 +103,29 @@ public:
 class LogisticNeuron : public Neuron {
 protected:
     void _activate() {
-        _inputs->apply(NVMatrixOps::Logistic());
+        _inputs->apply(NVMatrixOps::Logistic(), *_outputs);
     }
 
-    void _computeInputGrad(NVMatrix& actsGrad) {
-        actsGrad.applyBinary(LogisticGradientOperator(), *_inputs);
+    void _computeInputGrad(NVMatrix& actsGrad, NVMatrix& target) {
+        actsGrad.applyBinary(LogisticGradientOperator(), *_outputs, target);
+    }
+    
+    void _addInputGrad(NVMatrix& actsGrad, NVMatrix& target) {
+        actsGrad.applyTernary(AddGradientOperator<LogisticGradientOperator>(LogisticGradientOperator()), *_outputs, target, target);
     }
 public:
     class LogisticGradientOperator {
     public:
-        __device__ float operator()(float unitActGrad, float unitAct) const  {
+        __device__ inline float operator()(float unitActGrad, float unitAct) const {
             return unitActGrad * unitAct * (1.0f - unitAct); 
         }
     };
     
-    LogisticNeuron(NVMatrix& inputs) : Neuron(inputs) {
+    LogisticNeuron() : Neuron() {
     }
 };
+
+
 
 /* =======================
  * ReluNeuron
@@ -109,28 +137,32 @@ public:
 class ReluNeuron : public Neuron {
 protected:
     void _activate() {
-        _inputs->apply(ReluOperator());
+        _inputs->apply(ReluOperator(), *_outputs);
     }
 
-    void _computeInputGrad(NVMatrix& actsGrad) {
-        actsGrad.applyBinary(ReluGradientOperator(), *_inputs);
+    void _computeInputGrad(NVMatrix& actsGrad, NVMatrix& target) {
+        actsGrad.applyBinary(ReluGradientOperator(), *_outputs, target);
+    }
+    
+    void _addInputGrad(NVMatrix& actsGrad, NVMatrix& target) {
+        actsGrad.applyTernary(AddGradientOperator<ReluGradientOperator>(ReluGradientOperator()), *_outputs, target, target);
     }
 public:
     class ReluOperator {
     public:    
-        __device__ float operator()(float x) const {
+        __device__ inline float operator()(float x) const {
             return x < 0.0f ? 0.0f : x;
         }
     };
 
     class ReluGradientOperator {
     public:
-        __device__ float operator()(float unitActGrad, float unitAct) const  {
+        __device__ inline float operator()(float unitActGrad, float unitAct) const  {
             return unitActGrad * (unitAct > 0.0f); 
         }
     };
     
-    ReluNeuron(NVMatrix& inputs) : Neuron(inputs) {
+    ReluNeuron() : Neuron() {
     }
 };
 
@@ -146,11 +178,15 @@ protected:
     float _a;
     
     void _activate() {
-        _inputs->apply(BoundedReluOperator(_a));
+        _inputs->apply(BoundedReluOperator(_a), *_outputs);
     }
 
-    void _computeInputGrad(NVMatrix& actsGrad) {
-        actsGrad.applyBinary(BoundedReluGradientOperator(_a), *_inputs);
+    void _computeInputGrad(NVMatrix& actsGrad, NVMatrix& target) {
+        actsGrad.applyBinary(BoundedReluGradientOperator(_a), *_outputs, target);
+    }
+    
+    void _addInputGrad(NVMatrix& actsGrad, NVMatrix& target) {
+        actsGrad.applyTernary(AddGradientOperator<BoundedReluGradientOperator>(BoundedReluGradientOperator(_a)), *_outputs, target, target);
     }
 public:
     class BoundedReluOperator {
@@ -159,7 +195,7 @@ public:
     public:
         BoundedReluOperator(float a) : _a(a) {
         }
-        __device__ float operator()(float x) const {
+        __device__ inline float operator()(float x) const {
             return x < 0.0f ? 0.0f : x > _a ? _a : x;
         }
     };
@@ -170,12 +206,12 @@ public:
     public:
         BoundedReluGradientOperator(float a) : _a(a) {
         }
-        __device__ float operator()(float unitActGrad, float unitAct) const  {
+        __device__ inline float operator()(float unitActGrad, float unitAct) const  {
             return unitActGrad * (unitAct > 0.0f) * (unitAct < _a); 
         }
     };
     
-    BoundedReluNeuron(NVMatrix& inputs, float a) : Neuron(inputs), _a(a) {
+    BoundedReluNeuron(float a) : Neuron(), _a(a) {
     }
 };
 
@@ -188,30 +224,27 @@ public:
  */
 class AbsNeuron : public Neuron {
 protected:
-    // Abs neuron must remember input for gradient computation,
-    // so it will put its output in this new matrix.
-    NVMatrix _acts; 
-
     void _activate() {
-        _inputs->apply(NVMatrixOps::Abs(), _acts);
+        assert(_inputs != _outputs);
+        _inputs->apply(NVMatrixOps::Abs(), *_outputs);
     }
 
-    void _computeInputGrad(NVMatrix& actsGrad) {
-        actsGrad.applyBinary(AbsGradientOperator(), *_inputs);
+    void _computeInputGrad(NVMatrix& actsGrad, NVMatrix& target) {
+        actsGrad.applyBinary(AbsGradientOperator(), *_inputs, target);
+    }
+    
+    void _addInputGrad(NVMatrix& actsGrad, NVMatrix& target) {
+        actsGrad.applyTernary(AddGradientOperator<AbsGradientOperator>(AbsGradientOperator()), *_inputs, target, target);
     }
 public:
     class AbsGradientOperator {
     public:
-        __device__ float operator()(float unitActGrad, float unitInput) const  {
+        __device__ inline float operator()(float unitActGrad, float unitInput) const  {
             return unitActGrad * (unitInput > 0.0f ? 1.0f : -1.0f); 
         }
     };
     
-    AbsNeuron(NVMatrix& inputs) : Neuron(inputs) {
-    }
-    
-    NVMatrix& getActs() {
-        return _acts;
+    AbsNeuron() : Neuron() {
     }
 };
 
@@ -227,11 +260,15 @@ protected:
     float _a, _b;
 
     void _activate() {
-        _inputs->apply(TanhOperator(_a, _b));
+        _inputs->apply(TanhOperator(_a, _b), *_outputs);
     }
 
-    void _computeInputGrad(NVMatrix& actsGrad) {
-        actsGrad.applyBinary(TanhGradientOperator(_a, _b), *_inputs);
+    void _computeInputGrad(NVMatrix& actsGrad, NVMatrix& target) {
+        actsGrad.applyBinary(TanhGradientOperator(_a, _b), *_outputs, target);
+    }
+    
+    void _addInputGrad(NVMatrix& actsGrad, NVMatrix& target) {
+        actsGrad.applyTernary(AddGradientOperator<TanhGradientOperator>(TanhGradientOperator(_a, _b)), *_outputs, target, target);
     }
 public:
     class TanhOperator {
@@ -240,7 +277,7 @@ public:
     public:
         TanhOperator(float a, float b) : _a(a), _n2b(-2*b) {
         }
-        virtual __device__ float operator()(float x) const {
+        virtual __device__ inline float operator()(float x) const {
             return _a * (__fdividef(2.0f, 1.0f + __expf(x * _n2b)) - 1.0f);
         }
     };
@@ -251,54 +288,13 @@ public:
     public:
         TanhGradientOperator(float a, float b) : _n4ab(-4*a*b), _a(a) {
         }
-        __device__ float operator()(float unitActGrad, float unitAct) const  {
+        __device__ inline float operator()(float unitActGrad, float unitAct) const  {
             const float t = (1.0f - __fdividef(unitAct, _a)) / 2.0f;
             return unitActGrad * _n4ab * (t * (t - 1.0f));
         }
     };
     
-    TanhNeuron(NVMatrix& inputs, float a, float b) : Neuron(inputs), _a(a), _b(b) {
-    }
-};
-
-/* =======================
- * AbsTanhNeuron
- * -----------------------
- * 
- * f(x) = a*abs(tanh(b*x))
- * b assumed to be positive, since abs(tanh(bx)) = abs(tanh(-bx))
- * =======================
- */
-class AbsTanhNeuron : public Neuron {
-protected:
-    NVMatrix _acts;
-    float _a, _b;
-    
-    void _activate() {
-        _inputs->apply(AbsTanhOperator(_a, _b), _acts);
-    }
-
-    void _computeInputGrad(NVMatrix& actsGrad) {
-        actsGrad.applyBinary(AbsNeuron::AbsGradientOperator(), *_inputs);
-        actsGrad.applyBinary(TanhNeuron::TanhGradientOperator(_a, _b), _acts);
-    }
-public:
-    // Computes a*abs(tanh(b*x))
-    class AbsTanhOperator : public TanhNeuron::TanhOperator {
-    public:
-        AbsTanhOperator(float a, float b) : TanhNeuron::TanhOperator(a, b) {
-        }
-        __device__ float operator()(float x) const {
-            return TanhNeuron::TanhOperator::operator ()(x) * (x > 0.0f ? 1.0f : -1.0f);
-        }
-    };
-    
-    AbsTanhNeuron(NVMatrix& inputs, float a, float b) : Neuron(inputs), _a(a), _b(b) {
-        assert(_b >= 0);
-    }
-    
-    NVMatrix& getActs() {
-        return _acts;
+    TanhNeuron(float a, float b) : Neuron(), _a(a), _b(b) {
     }
 };
 
@@ -311,19 +307,22 @@ public:
  */
 class SoftReluNeuron : public Neuron {
 protected:
-    NVMatrix _acts;
-
     void _activate() {
-        _inputs->apply(SoftReluOperator(), _acts);
+        assert(_inputs != _outputs);
+        _inputs->apply(SoftReluOperator(), *_outputs);
     }
 
-    void _computeInputGrad(NVMatrix& actsGrad) {
-        actsGrad.applyBinary(SoftReluGradientOperator(), *_inputs);
+    void _computeInputGrad(NVMatrix& actsGrad, NVMatrix& target) {
+        actsGrad.applyBinary(SoftReluGradientOperator(), *_outputs, target);
+    }
+    
+    void _addInputGrad(NVMatrix& actsGrad, NVMatrix& target) {
+        actsGrad.applyTernary(AddGradientOperator<SoftReluGradientOperator>(SoftReluGradientOperator()), *_outputs, target, target);
     }
 public:
     class SoftReluOperator {
     public:    
-        __device__ float operator()(float x) const {
+        __device__ inline float operator()(float x) const {
             // This piece-wise implementation has better numerical stability than
             // simply computing log(1 + e^x).
             return x > 4.0f ? x : __logf(1.0f + __expf(x));
@@ -332,7 +331,7 @@ public:
 
     class SoftReluGradientOperator {
     public:
-        __device__ float operator()(float unitActGrad, float unitInput) const  {
+        __device__ inline float operator()(float unitActGrad, float unitInput) const  {
             if (unitInput > 4) {
                 return unitActGrad;
             }
@@ -341,11 +340,7 @@ public:
         }
     };
     
-    SoftReluNeuron(NVMatrix& inputs) : Neuron(inputs) {
-    }
-    
-    NVMatrix& getActs() {
-        return _acts;
+    SoftReluNeuron() : Neuron() {
     }
 };
 #endif	/* NEURONS_CUH */

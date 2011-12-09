@@ -125,7 +125,7 @@ NVMatrix::~NVMatrix() {
 }
 
 void NVMatrix::copyFromHost(const Matrix& hostMatrix, bool resizeDeviceMatrix) {
-    if(resizeDeviceMatrix) {
+    if (resizeDeviceMatrix) {
         resize(hostMatrix);
     }
     copyFromHost(hostMatrix);
@@ -212,6 +212,10 @@ void NVMatrix::rightMult(const NVMatrix &b, NVMatrix& target) const {
  * if isTrans() returns true.
  */
 void NVMatrix::addProduct(const NVMatrix& a, const NVMatrix &b, float scaleThis, float scaleAB) {
+    if (scaleThis == 0) {
+        a.rightMult(b, scaleAB, *this);
+        return;
+    }
     assert(isContiguous());
     assert(a.getNumCols() == b.getNumRows());
     assert(this->getNumRows() == a.getNumRows());
@@ -643,8 +647,8 @@ void NVMatrix::eltwiseDivideByVector(NVMatrix& vec, NVMatrix& target) {
  * TODO: this is a mess, fix it. it works pretty fast but it's too ugly.
  * TODO: this function is _really_ bad for very long aggregations of few columns.
  */
-template<class Agg>
-void NVMatrix::_aggregate(int axis, NVMatrix& target, Agg agg) {
+template<class Agg, class BinaryOp>
+void NVMatrix::_aggregate(int axis, NVMatrix& target, Agg agg, BinaryOp op) {
     assert(axis == 0 || axis == 1);
     assert(isContiguous()  && target.isContiguous());
     assert(&target != this);
@@ -655,14 +659,15 @@ void NVMatrix::_aggregate(int axis, NVMatrix& target, Agg agg) {
     assert(width > 0);
     assert(height > 0);
     if(axis == 0 && !_isTrans || axis == 1 && _isTrans) { //col sum
+//        printf("doin col sum\n");
         target.resize(!_isTrans ? 1 : _numRows, !_isTrans ? _numCols : 1);
         int numBlocks = DIVUP(width, NUM_SUM_COLS_THREADS_PER_BLOCK);
         assert(numBlocks * NUM_SUM_COLS_THREADS_PER_BLOCK >= width);
         assert(numBlocks < NUM_BLOCKS_MAX);
-
-        kDumbAggCols<Agg><<<numBlocks,NUM_SUM_COLS_THREADS_PER_BLOCK>>>(_devData, target._devData, width, height, agg);
+        kDumbAggCols<Agg, BinaryOp><<<numBlocks,NUM_SUM_COLS_THREADS_PER_BLOCK>>>(_devData, target._devData, width, height, agg, op);
         cutilCheckMsg("kDumbAggCols: Kernel execution failed");
     } else { // row sum
+//        printf("doin row sum\n");
         target.resize(_isTrans ? 1 : _numRows, _isTrans ? _numCols : 1);
         if (width > 1) {
             if (height >= 16384) { // linear aggregation
@@ -677,36 +682,36 @@ void NVMatrix::_aggregate(int axis, NVMatrix& target, Agg agg) {
                 dim3 grid(numBlocksX, numBlocksY), threads(numThreadsX, numThreadsY);
                 if(width <= 16) {
                     if(width <= 4) {
-                        kAggShortRows<Agg, 1, 4><<<grid, threads>>>(_devData, target._devData,width, height, agg);
+                        kAggShortRows<Agg, BinaryOp, 1, 4><<<grid, threads>>>(_devData, target._devData,width, height, agg, op);
                     } else if(width <= 8) {
-                        kAggShortRows<Agg, 1, 8><<<grid, threads>>>(_devData, target._devData,width, height, agg);
+                        kAggShortRows<Agg, BinaryOp, 1, 8><<<grid, threads>>>(_devData, target._devData,width, height, agg, op);
                     } else if(width <= 12) {
-                        kAggShortRows<Agg, 1, 12><<<grid, threads>>>(_devData, target._devData,width, height, agg);
+                        kAggShortRows<Agg, BinaryOp, 1, 12><<<grid, threads>>>(_devData, target._devData,width, height, agg, op);
                     } else {
-                        kAggShortRows<Agg, 1, 16><<<grid, threads>>>(_devData, target._devData,width, height, agg);
+                        kAggShortRows<Agg, BinaryOp, 1, 16><<<grid, threads>>>(_devData, target._devData,width, height, agg, op);
                     }
                 } else if(width <= 32) {
-                    kAggShortRows<Agg, 2, AGG_SHORT_ROWS_THREADS_X><<<grid, threads>>>(_devData, target._devData,width, height, agg);
+                    kAggShortRows<Agg, BinaryOp, 2, AGG_SHORT_ROWS_THREADS_X><<<grid, threads>>>(_devData, target._devData,width, height, agg, op);
                 } else if(width <= 48){
-                    kAggShortRows<Agg, 3, AGG_SHORT_ROWS_THREADS_X><<<grid, threads>>>(_devData, target._devData,width, height, agg);
+                    kAggShortRows<Agg, BinaryOp, 3, AGG_SHORT_ROWS_THREADS_X><<<grid, threads>>>(_devData, target._devData,width, height, agg, op);
                 } else if(width <= 64){
-                    kAggShortRows<Agg, 4, AGG_SHORT_ROWS_THREADS_X><<<grid, threads>>>(_devData, target._devData,width, height, agg);
+                    kAggShortRows<Agg, BinaryOp, 4, AGG_SHORT_ROWS_THREADS_X><<<grid, threads>>>(_devData, target._devData,width, height, agg, op);
                 } else {
-                    kAggShortRows2<Agg><<<grid, threads>>>(_devData, target._devData,width, height, agg);
+                    kAggShortRows2<Agg, BinaryOp><<<grid, threads>>>(_devData, target._devData,width, height, agg, op);
                 }
             } else {
                 if (width >= 512) {
                     dim3 threads(AWR_NUM_THREADS);
                     dim3 blocks(1, std::min(1024, height));
-                    kAggRows_wholerow_nosync<<<blocks, threads>>>(_devData, target._devData, width, height, agg);
+                    kAggRows_wholerow_nosync<<<blocks, threads>>>(_devData, target._devData, width, height, agg, op);
 //                    dim3 threads(AWR_NUM_THREADS);
 //                    dim3 blocks(1, std::min(1024, height));
-//                    kAggRows_wholerow<<<blocks, threads>>>(_devData, target._devData, width, height, agg);
+//                    kAggRows_wholerow<<<blocks, threads>>>(_devData, target._devData, width, height, agg, op);
                     
                 } else {
 //                    dim3 threads(AWR_NUM_THREADS);
 //                    dim3 blocks(1, std::min(1024, height));
-//                    kAggRows_wholerow<<<blocks, threads>>>(_devData, target._devData, width, height, agg);
+//                    kAggRows_wholerow<<<blocks, threads>>>(_devData, target._devData, width, height, agg, op);
                     NVMatrix *prevSum = this;
                     while (prevSum->getLeadingDim() > 1) {
                         int numThreadsX = width <= 64 ? 32 : (width <= 128 ? 64 : (width <= 256 ? 128 : (width <= 512 ? 256 : 512)));
@@ -720,20 +725,20 @@ void NVMatrix::_aggregate(int axis, NVMatrix& target, Agg agg) {
                         assert(numBlocksY <= NUM_BLOCKS_MAX);
 
                         if(width <= 64) {
-                            kAggRows<Agg, 32><<<grid, threads>>>(prevSum->_devData, nvSumAccum->_devData,
-                                                       width, height, nvSumAccum->getLeadingDim(), agg);
+                            kAggRows<Agg, BinaryOp, 32><<<grid, threads>>>(prevSum->_devData, nvSumAccum->_devData,
+                                                       width, height, nvSumAccum->getLeadingDim(), agg, op);
                         } else if(width <= 128) {
-                            kAggRows<Agg, 64><<<grid, threads>>>(prevSum->_devData, nvSumAccum->_devData,
-                                                       width, height, nvSumAccum->getLeadingDim(), agg);
+                            kAggRows<Agg, BinaryOp, 64><<<grid, threads>>>(prevSum->_devData, nvSumAccum->_devData,
+                                                       width, height, nvSumAccum->getLeadingDim(), agg, op);
                         } else if(width <= 256) {
-                            kAggRows<Agg, 128><<<grid, threads>>>(prevSum->_devData, nvSumAccum->_devData,
-                                                       width, height, nvSumAccum->getLeadingDim(), agg);
+                            kAggRows<Agg, BinaryOp, 128><<<grid, threads>>>(prevSum->_devData, nvSumAccum->_devData,
+                                                       width, height, nvSumAccum->getLeadingDim(), agg, op);
                         } else if(width <= 512) {
-                            kAggRows<Agg, 256><<<grid, threads>>>(prevSum->_devData, nvSumAccum->_devData,
-                                                       width, height, nvSumAccum->getLeadingDim(), agg);
+                            kAggRows<Agg, BinaryOp, 256><<<grid, threads>>>(prevSum->_devData, nvSumAccum->_devData,
+                                                       width, height, nvSumAccum->getLeadingDim(), agg, op);
                         } else {
-                            kAggRows<Agg, 512><<<grid, threads>>>(prevSum->_devData, nvSumAccum->_devData,
-                                                       width, height, nvSumAccum->getLeadingDim(), agg);
+                            kAggRows<Agg, BinaryOp, 512><<<grid, threads>>>(prevSum->_devData, nvSumAccum->_devData,
+                                                       width, height, nvSumAccum->getLeadingDim(), agg, op);
                         }
                         cutilCheckMsg("agg rows: Kernel execution failed");
                         cudaThreadSynchronize();
@@ -829,35 +834,44 @@ void NVMatrix::scale(float _scale, NVMatrix& target) {
     }
 }
 
-template<class Agg>
-NVMatrix& NVMatrix::_aggregate(int axis, Agg agg) {
+template<class Agg, class BinaryOp>
+NVMatrix& NVMatrix::_aggregate(int axis, Agg agg, BinaryOp op) {
     NVMatrix *sumVec = new NVMatrix();
-    _aggregate<Agg>(axis, *sumVec, agg);
+    _aggregate<Agg, BinaryOp>(axis, *sumVec, agg, op);
     return *sumVec;
 }
 
+
 void NVMatrix::max(int axis, NVMatrix& target) {
-    _aggregate(axis, target, NVMatrixAggs::Max());
+    _aggregate(axis, target, NVMatrixAggs::Max(), NVMatrixBinaryOps::Second());
+}
+
+void NVMatrix::addSum(NVMatrix& a, int axis, float scaleThis, float scaleSum) {
+    if (scaleThis != 0) {
+        a._aggregate(axis, *this, NVMatrixAggs::Sum(), NVMatrixBinaryOps::WeightedAdd(scaleThis, scaleSum));
+    } else {
+        a._aggregate(axis, *this, NVMatrixAggs::Sum(), NVMatrixBinaryOps::SecondScaled(scaleSum));
+    }
 }
 
 void NVMatrix::sum(int axis, NVMatrix& target) {
-    _aggregate(axis, target, NVMatrixAggs::Sum());
+    _aggregate(axis, target, NVMatrixAggs::Sum(), NVMatrixBinaryOps::Second());
 }
 
 void NVMatrix::min(int axis, NVMatrix& target) {
-    _aggregate(axis, target, NVMatrixAggs::Min());
+    _aggregate(axis, target, NVMatrixAggs::Min(), NVMatrixBinaryOps::Second());
 }
 
 NVMatrix& NVMatrix::max(int axis) {
-    return _aggregate(axis, NVMatrixAggs::Max());
+    return _aggregate(axis, NVMatrixAggs::Max(), NVMatrixBinaryOps::Second());
 }
 
 NVMatrix& NVMatrix::sum(int axis) {
-    return _aggregate(axis, NVMatrixAggs::Sum());
+    return _aggregate(axis, NVMatrixAggs::Sum(), NVMatrixBinaryOps::Second());
 }
 
 NVMatrix& NVMatrix::min(int axis) {
-    return _aggregate(axis, NVMatrixAggs::Min());
+    return _aggregate(axis, NVMatrixAggs::Min(), NVMatrixBinaryOps::Second());
 }
 
 void NVMatrix::_sum_setParams(int n, dim3* blocks, dim3* threads, int* numCols) {
