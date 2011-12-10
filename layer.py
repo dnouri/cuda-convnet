@@ -309,7 +309,7 @@ class LayerWithInputParser(LayerParser):
         dic['inputs'] = [prev_names.index(inp) for inp in dic['inputs']]
         for inp in dic['inputs']:
             if prev_layers[inp]['outputs'] == 0:
-                raise LayerParsingError("Layer '%s': input layer '%s' does not produce any output" % (name, inp))
+                raise LayerParsingError("Layer '%s': input layer '%s' does not produce any output" % (name, prev_names[inp]))
         dic['numInputs'] = [prev_layers[i]['outputs'] for i in dic['inputs']]
         
         # Layers can declare a neuron to apply to their output, as a shortcut
