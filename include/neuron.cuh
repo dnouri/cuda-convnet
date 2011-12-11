@@ -38,7 +38,7 @@ class AddGradientOperator {
 public:
     AddGradientOperator(GradientOp op) : _op(op) {
     }
-    __device__ inline float operator()(const float unitActGrad, const float unitAct, const float target) const  {
+    __device__ inline float operator()(const float unitActGrad, const float unitAct, const float target) const {
         return target + _op(unitActGrad, unitAct); 
     }
 };

@@ -522,7 +522,7 @@ class LocalLayerParser(WeightLayerParser):
                         layer[w][inp] = src_layer[w][src_matrix_idx]
                 else:
                     layer['weights'][inp] = n.require(n.reshape(n.tile(n.reshape(layer['weights'][inp], (1, n.prod(layer['weights'][inp].shape))), (layer['modules'], 1)),
-                                                        (layer['modules'] * layer['channels'][inp] * layer['filterPixels'][inp], layer['filters'])),
+                                                        (layer['modules'] * layer['filterChannels'][inp] * layer['filterPixels'][inp], layer['filters'])),
                                                       requirements='C')
                     layer['weightsInc'][inp] = n.zeros_like(layer['weights'][inp])
             if layer['sharedBiases']:
