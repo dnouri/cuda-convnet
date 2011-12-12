@@ -179,6 +179,11 @@ class LayerParser:
         # This should be true for layers where the mapping from output
         # gradient to input gradient is non-elementwise.
         self.dic['forceOwnActsGrad'] = True
+        
+        # Does this layer need the gradient at all?
+        # Should only be true for layers with parameters (weights)
+        # or layers which have layers with parameters below them.
+        self.dic['gradConsumer'] = any(l['gradConsumer'] for l in prev_layers)
         return self.dic  
     
     @staticmethod
@@ -454,6 +459,7 @@ class WeightLayerParser(LayerWithInputParser):
     def parse(self, name, mcp, prev_layers, model):
         dic = LayerWithInputParser.parse(self, name, mcp, prev_layers, model)
         dic['requiresParams'] = True
+        dic['gradConsumer'] = True
         dic['initW'] = mcp.safe_get_float_list(name, 'initW')
         dic['initB'] = mcp.safe_get_float(name, 'initB', default=0)
  
@@ -690,7 +696,8 @@ class PoolLayerParser(LayerWithInputParser):
         LayerParser.verify_int_range(name, dic['outputsX'], 'outputsX', 0, None)
         LayerParser.verify_int_range(name, dic['channels'], 'channels', 1, None)
         
-        LayerParser.verify_divisible(name, dic['channels'], 16, 'channels')
+        if dic['gradConsumer']:
+            LayerParser.verify_divisible(name, dic['channels'], 16, 'channels')
         LayerParser.verify_str_in(name, dic['pool'], ['max', 'avg'])
         
         if dic['numInputs'][0] % dic['imgPixels'] != 0 or dic['imgSize'] * dic['imgSize'] != dic['imgPixels']:
