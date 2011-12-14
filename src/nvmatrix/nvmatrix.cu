@@ -659,7 +659,6 @@ void NVMatrix::_aggregate(int axis, NVMatrix& target, Agg agg, BinaryOp op) {
     assert(width > 0);
     assert(height > 0);
     if(axis == 0 && !_isTrans || axis == 1 && _isTrans) { //col sum
-//        printf("doin col sum\n");
         target.resize(!_isTrans ? 1 : _numRows, !_isTrans ? _numCols : 1);
         int numBlocks = DIVUP(width, NUM_SUM_COLS_THREADS_PER_BLOCK);
         assert(numBlocks * NUM_SUM_COLS_THREADS_PER_BLOCK >= width);
@@ -667,7 +666,6 @@ void NVMatrix::_aggregate(int axis, NVMatrix& target, Agg agg, BinaryOp op) {
         kDumbAggCols<Agg, BinaryOp><<<numBlocks,NUM_SUM_COLS_THREADS_PER_BLOCK>>>(_devData, target._devData, width, height, agg, op);
         cutilCheckMsg("kDumbAggCols: Kernel execution failed");
     } else { // row sum
-//        printf("doin row sum\n");
         target.resize(_isTrans ? 1 : _numRows, _isTrans ? _numCols : 1);
         if (width > 1) {
             if (height >= 16384) { // linear aggregation

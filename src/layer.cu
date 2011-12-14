@@ -50,18 +50,16 @@ using namespace std;
 bool Layer::_saveActs = true;
 bool Layer::_saveActsGrad = true;
 
-Layer::Layer(ConvNet* convNet, PyObject* paramsDict, bool gradConsumer, bool trans) : 
-             _convNet(convNet), _gradConsumer(gradConsumer), _trans(trans) {
+Layer::Layer(ConvNet* convNet, PyObject* paramsDict, bool trans) : 
+             _convNet(convNet),  _trans(trans) {
     _name = pyDictGetString(paramsDict, "name");
     _type = pyDictGetString(paramsDict, "type");
     
     _numGradProducersNext = 0;
-    _foundGradConsumers = false;
+    _gradConsumer = pyDictGetInt(paramsDict, "gradConsumer");
     _actsTarget = pyDictGetInt(paramsDict, "actsTarget");
     _actsGradTarget = pyDictGetInt(paramsDict, "actsGradTarget");
     _outputs = _actsTarget < 0 ? new NVMatrix() : NULL;
-    // TODO: If some guy below me doesn't connect to anybody else
-    // and has same shape output as me, I can use his actsGrad matrix
     _actsGrad = _actsGradTarget < 0 ? new NVMatrix() : NULL;
 }
 
@@ -209,13 +207,6 @@ void Layer::postInit() {
 // for parameter updates?
 // Only weight layers should be grad consumers themselves.
 bool Layer::isGradConsumer() {
-    if (_gradConsumer || _foundGradConsumers) {
-        return _gradConsumer;
-    }
-    for (int i = 0; i < _prev.size(); i++) {
-        _gradConsumer |= _prev[i]->isGradConsumer();
-    }
-    _foundGradConsumers = true;
     return _gradConsumer;
 }
 
@@ -248,7 +239,7 @@ NVMatrix& Layer::getActsGrad() {
  * =======================
  */
 NeuronLayer::NeuronLayer(ConvNet* convNet, PyObject* paramsDict) 
-    : Layer(convNet, paramsDict, false, true) {
+    : Layer(convNet, paramsDict, true) {
     _neuron = &Neuron::makeNeuron(PyDict_GetItemString(paramsDict, "neuron"));
 }
 
@@ -266,7 +257,7 @@ void NeuronLayer::fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType) 
  * =======================
  */
 WeightLayer::WeightLayer(ConvNet* convNet, PyObject* paramsDict, bool trans, bool useGrad) : 
-    Layer(convNet, paramsDict, true, trans) {
+    Layer(convNet, paramsDict, trans) {
     
     MatrixV& hWeights = *pyDictGetMatrixV(paramsDict, "weights");
     MatrixV& hWeightsInc = *pyDictGetMatrixV(paramsDict, "weightsInc");
@@ -576,7 +567,7 @@ void LocalUnsharedLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, 
  * SoftmaxLayer
  * =======================
  */
-SoftmaxLayer::SoftmaxLayer(ConvNet* convNet, PyObject* paramsDict) : Layer(convNet, paramsDict, false, true) {
+SoftmaxLayer::SoftmaxLayer(ConvNet* convNet, PyObject* paramsDict) : Layer(convNet, paramsDict, true) {
 }
 
 void SoftmaxLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType) {
@@ -608,7 +599,7 @@ void SoftmaxLayer::fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType)
  * SumLayer
  * =======================
  */
-SumLayer::SumLayer(ConvNet* convNet, PyObject* paramsDict) : Layer(convNet, paramsDict, false, false) {
+SumLayer::SumLayer(ConvNet* convNet, PyObject* paramsDict) : Layer(convNet, paramsDict, false) {
 }
 
 void SumLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType) {
@@ -633,7 +624,7 @@ void SumLayer::fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType) {
  * DataLayer
  * =======================
  */
-DataLayer::DataLayer(ConvNet* convNet, PyObject* paramsDict) : Layer(convNet, paramsDict, false, false) {
+DataLayer::DataLayer(ConvNet* convNet, PyObject* paramsDict) : Layer(convNet, paramsDict, false) {
     _dataIdx = pyDictGetInt(paramsDict, "dataIdx");
 }
 
@@ -659,7 +650,7 @@ bool DataLayer::isGradProducer() {
  * =====================
  */
 PoolLayer::PoolLayer(ConvNet* convNet, PyObject* paramsDict, bool trans) 
-    : Layer(convNet, paramsDict, false, trans) {
+    : Layer(convNet, paramsDict, trans) {
     _channels = pyDictGetInt(paramsDict, "channels");
     _sizeX = pyDictGetInt(paramsDict, "sizeX");
     _start = pyDictGetInt(paramsDict, "start");
@@ -716,7 +707,7 @@ void MaxPoolLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_T
  * ResponseNormLayer
  * =====================
  */
-ResponseNormLayer::ResponseNormLayer(ConvNet* convNet, PyObject* paramsDict) : Layer(convNet, paramsDict, false, false) {
+ResponseNormLayer::ResponseNormLayer(ConvNet* convNet, PyObject* paramsDict) : Layer(convNet, paramsDict, false) {
     _channels = pyDictGetInt(paramsDict, "channels");
     _sizeX = pyDictGetInt(paramsDict, "sizeX");
 
@@ -771,8 +762,8 @@ void ContrastNormLayer::truncBwdActs() {
  * CostLayer
  * =====================
  */
-CostLayer::CostLayer(ConvNet* convNet, PyObject* paramsDict, bool gradConsumer, bool trans) 
-    : Layer(convNet, paramsDict, gradConsumer, trans) {
+CostLayer::CostLayer(ConvNet* convNet, PyObject* paramsDict, bool trans) 
+    : Layer(convNet, paramsDict, trans) {
     _coeff = pyDictGetFloat(paramsDict, "coeff");
 }
 
@@ -808,7 +799,7 @@ CostLayer& CostLayer::makeCostLayer(ConvNet* convNet, string& type, PyObject* pa
  * LogregCostLayer
  * =====================
  */
-LogregCostLayer::LogregCostLayer(ConvNet* convNet, PyObject* paramsDict) : CostLayer(convNet, paramsDict, true, false) {
+LogregCostLayer::LogregCostLayer(ConvNet* convNet, PyObject* paramsDict) : CostLayer(convNet, paramsDict, false) {
 }
 
 void LogregCostLayer::fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType) {

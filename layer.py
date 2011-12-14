@@ -129,8 +129,21 @@ class MyConfigParser(cfg.SafeConfigParser):
     
     def safe_get_bool_list(self, section, option, default=None):
         return self.safe_get_list(section, option, lambda x: x.lower() in ('true', '1'), typestr='bools', default=default)
-                     
+
+# A class that implements part of the interface of MyConfigParser
+class FakeConfigParser(object):
+    def __init__(self, dic):
+        self.dic = dic
+
+    def safe_get(self, section, option, default=None):
+        return self.dic[option]
+        
+
 class LayerParser:
+    def __init__(self):
+        self.dic = {}
+        self.set_defaults()
+        
     # Post-processing step -- this is called after all layers have been initialized
     def optimize(self, layers):
         self.dic['actsTarget'] = -1
@@ -144,11 +157,7 @@ class LayerParser:
         self.dic = dic
         return self
     
-    def parse(self, name, mcp, prev_layers, model):
-        self.prev_layers = prev_layers
-        self.dic = {}
-        self.dic['name'] = name
-        self.dic['type'] = mcp.safe_get(name, 'type')
+    def set_defaults(self):
         self.dic['outputs'] = 0
         self.dic['parser'] = self
         self.dic['requiresParams'] = False
@@ -183,7 +192,13 @@ class LayerParser:
         # Does this layer need the gradient at all?
         # Should only be true for layers with parameters (weights)
         # or layers which have layers with parameters below them.
-        self.dic['gradConsumer'] = any(l['gradConsumer'] for l in prev_layers)
+        self.dic['gradConsumer'] = False
+        
+    def parse(self, name, mcp, prev_layers, model=None):
+        self.prev_layers = prev_layers
+        self.dic['name'] = name
+        self.dic['type'] = mcp.safe_get(name, 'type')
+
         return self.dic  
     
     @staticmethod
@@ -277,6 +292,7 @@ class LayerParser:
 # Any layer that takes an input (i.e. non-data layer)
 class LayerWithInputParser(LayerParser):
     def __init__(self, num_inputs=-1):
+        LayerParser.__init__(self)
         self.num_inputs = num_inputs
 
     def verify_num_params(self, params):
@@ -303,7 +319,7 @@ class LayerWithInputParser(LayerParser):
                         dic['actsGradTarget'] = i
                         print "Layer '%s' sharing activity gradient matrix with layer '%s'" % (dic['name'], l['name'])
             
-    def parse(self, name, mcp, prev_layers, model):
+    def parse(self, name, mcp, prev_layers, model=None):
         dic = LayerParser.parse(self, name, mcp, prev_layers, model)
         
         dic['inputs'] = [inp.strip() for inp in mcp.safe_get(name, 'inputs').split(',')]
@@ -322,6 +338,9 @@ class LayerWithInputParser(LayerParser):
         dic['neuron'] = mcp.safe_get(name, 'neuron', default="")
         if self.num_inputs > 0 and len(dic['numInputs']) != self.num_inputs:
             raise LayerParsingError("Layer '%s': number of inputs must be %d", name, self.num_inputs)
+        
+        input_layers = [prev_layers[i] for i in dic['inputs']]
+        dic['gradConsumer'] = any(l['gradConsumer'] for l in input_layers)
         
         return dic
 
@@ -347,7 +366,7 @@ class NeuronLayerParser(LayerWithInputParser):
                 self.dic['neuron'] = p
                 self.dic['usesActs'] = self.dic['neuron']['usesActs']
                 self.dic['usesInputs'] = self.dic['neuron']['usesInputs']
-                self.dic['forceOwnActsGrad'] = False
+                
                 return
         # Could not parse neuron
         # Print available neuron types
@@ -360,14 +379,16 @@ class NeuronLayerParser(LayerWithInputParser):
         raise LayerParsingError("Layer '%s': unable to parse neuron type '%s'. Valid neuron types: %sWhere neurons have parameters, they must be floats." % (self.dic['name'], neuron_str, NL + usage_lines + NL))
     
     def detach_neuron_layer(self, idx, layers, layers_new):
-        self.dic = dic = {}
+        dic = self.dic
+        self.set_defaults()
         dic['name'] = NeuronLayerParser.get_unused_layer_name(layers, '%s_neuron' % layers[idx]['name'])
         dic['type'] = 'neuron'
-        dic['inputs'] = [len(layers_new) - 1]
-        dic['parser'] = self
-        dic['outputs'] = layers[idx]['outputs']
-        self.parse_neuron(layers[idx]['neuron'])
-        dic['requiresParams'] = False
+        dic['inputs'] = layers[idx]['name']
+        dic['neuron'] = layers[idx]['neuron']
+#        dic['outputs'] = layers[idx]['outputs']
+#        self.parse_neuron(layers[idx]['neuron'])
+        dic = self.parse(dic['name'], FakeConfigParser(dic), layers_new)
+        
         # Link upper layers to this new one
         for l in layers[idx+1:]:
             if 'inputs' in l:
@@ -376,17 +397,20 @@ class NeuronLayerParser(LayerWithInputParser):
                 l['weightSourceLayerIndices'] = [i + (i >= len(layers_new)) for i in l['weightSourceLayerIndices']]
         layers_new += [dic]
         
-        print "Initialized implicit neuron layer '%s', producing %d outputs" % (dic['name'], dic['outputs'])
+#        print "Initialized implicit neuron layer '%s', producing %d outputs" % (dic['name'], dic['outputs'])
     
-    def parse(self, name, mcp, prev_layers, model):
+    def parse(self, name, mcp, prev_layers, model=None):
         dic = LayerWithInputParser.parse(self, name, mcp, prev_layers, model)
         dic['outputs'] = dic['numInputs'][0]
         self.parse_neuron(dic['neuron'])
-        
+        dic['forceOwnActsGrad'] = False
         print "Initialized neuron layer '%s', producing %d outputs" % (name, dic['outputs'])
         return dic
 
-class SumLayerParser(LayerWithInputParser):    
+class SumLayerParser(LayerWithInputParser):
+    def __init__(self):
+        LayerWithInputParser.__init__(self)
+        
     def parse(self, name, mcp, prev_layers, model):
         dic = LayerWithInputParser.parse(self, name, mcp, prev_layers, model)
         
@@ -401,6 +425,9 @@ class SumLayerParser(LayerWithInputParser):
 
 class WeightLayerParser(LayerWithInputParser):
     LAYER_PAT = re.compile(r'^\s*([^\s\[]+)(?:\[(\d+)\])?\s*$') # matches things like layername[5], etc
+    
+    def __init__(self):
+        LayerWithInputParser.__init__(self)
     
     @staticmethod
     def get_layer_name(name_str):
@@ -498,6 +525,9 @@ class WeightLayerParser(LayerWithInputParser):
         return dic
         
 class FCLayerParser(WeightLayerParser):
+    def __init__(self):
+        WeightLayerParser.__init__(self)
+        
     def parse(self, name, mcp, prev_layers, model):
         dic = WeightLayerParser.parse(self, name, mcp, prev_layers, model)
         
@@ -511,7 +541,9 @@ class FCLayerParser(WeightLayerParser):
         return dic
 
 class LocalLayerParser(WeightLayerParser):
-    
+    def __init__(self):
+        WeightLayerParser.__init__(self)
+        
     # Convert convolutional layer to unshared, locally-connected layer
     @staticmethod
     def conv_to_local(layers, idx):
@@ -621,6 +653,9 @@ class LocalLayerParser(WeightLayerParser):
         return dic    
 
 class ConvLayerParser(LocalLayerParser):
+    def __init__(self):
+        LocalLayerParser.__init__(self)
+        
     def parse(self, name, mcp, prev_layers, model):
         dic = LocalLayerParser.parse(self, name, mcp, prev_layers, model)
         
@@ -640,6 +675,9 @@ class ConvLayerParser(LocalLayerParser):
         return dic    
     
 class LocalUnsharedLayerParser(LocalLayerParser):
+    def __init__(self):
+        LocalLayerParser.__init__(self)
+        
     def parse(self, name, mcp, prev_layers, model):
         dic = LocalLayerParser.parse(self, name, mcp, prev_layers, model)
 
@@ -652,6 +690,9 @@ class LocalUnsharedLayerParser(LocalLayerParser):
         return dic  
     
 class DataLayerParser(LayerParser):
+    def __init__(self):
+        LayerParser.__init__(self)
+        
     def parse(self, name, mcp, prev_layers, model):
         dic = LayerParser.parse(self, name, mcp, prev_layers, model)
         dic['dataIdx'] = mcp.safe_get_int(name, 'dataIdx')

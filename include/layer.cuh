@@ -55,7 +55,7 @@ protected:
     NVMatrixV _inputs;
     NVMatrix *_outputs; // TODO: make this a pointer so you can reuse previous layers' matrices
     NVMatrix *_actsGrad; // Layer activity gradients
-    bool _gradConsumer, _foundGradConsumers, _trans;
+    bool _gradConsumer, _trans;
     int _numGradProducersNext;
     int _actsTarget, _actsGradTarget;
     std::string _name, _type;
@@ -72,7 +72,7 @@ protected:
 public:    
     static bool _saveActsGrad, _saveActs;
     
-    Layer(ConvNet* convNet, PyObject* paramsDict, bool gradConsumer, bool trans);
+    Layer(ConvNet* convNet, PyObject* paramsDict, bool trans);
     
     virtual void fprop(PASS_TYPE passType);
     void fprop(NVMatrix& v, PASS_TYPE passType);
@@ -270,7 +270,7 @@ protected:
     float _coeff;
     doublev _costv;
 public:
-    CostLayer(ConvNet* convNet, PyObject* paramsDict, bool gradConsumer, bool trans);
+    CostLayer(ConvNet* convNet, PyObject* paramsDict, bool trans);
     void bprop(PASS_TYPE passType); 
     virtual doublev& getCost();
     float getCoeff();
