@@ -47,6 +47,13 @@ void convContrastNorm(NVMatrix& images, NVMatrix& meanDiffs, NVMatrix& denoms, N
 void convContrastNormUndo(NVMatrix& outGrads, NVMatrix& denoms, NVMatrix& meanDiffs, NVMatrix& acts, NVMatrix& target, int numFilters,
                          int sizeX, float addScale, float powScale, float scaleTargets, float scaleOutput);
 
+void convGaussianBlur(NVMatrix& images, NVMatrix& filter, NVMatrix& target, bool horiz, int numChannels,
+                      float scaleTargets, float scaleOutputs);
+void convBedOfNails(NVMatrix& images, NVMatrix& target, int numChannels, int imgSize, int startX,
+                    int strideX, float scaleTargets, float scaleOutput);
+void convBedOfNailsUndo(NVMatrix& actsGrad, NVMatrix& target, int numChannels, int imgSize,
+                        int startX, int strideX, float scaleTargets, float scaleOutput);
+
 class AvgPooler {
 private:
     float _num;
@@ -91,7 +98,6 @@ public:
  * target:      (numFilters, numOutputs, numImages)
  * 
  * numImages must be divisible by B_X*imgsPerThread if checkCaseBounds is false
- * numFilters must be divisible by B_Y*filtersPerThread
  */
 
 template<class Agg, int B_Y, int B_X, int imgsPerThread, int filtersPerThread, bool checkCaseBounds>

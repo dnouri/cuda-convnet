@@ -242,6 +242,7 @@ class ShowGPUModel(GPUModel):
                                                                  'num_vis':num_ftrs})
                 
     def start(self):
+        self.op.print_values()
         if self.show_cost:
             self.plot_cost()
         if self.show_filters:

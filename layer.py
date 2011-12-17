@@ -23,6 +23,7 @@
 # EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import options as op
+from math import exp
 import sys
 import ConfigParser as cfg
 import os
@@ -42,7 +43,7 @@ class NeuronParser:
     def __init__(self, type, func_str, uses_acts=True, uses_inputs=True):
         self.type = type
         self.func_str = func_str
-        self.uses_acts = uses_acts
+        self.uses_acts = uses_acts  
         self.uses_inputs = uses_inputs
         
     def parse(self, type):
@@ -187,7 +188,7 @@ class LayerParser:
         # 
         # This should be true for layers where the mapping from output
         # gradient to input gradient is non-elementwise.
-        self.dic['forceOwnActsGrad'] = True
+        self.dic['forceOwnActs'] = True
         
         # Does this layer need the gradient at all?
         # Should only be true for layers with parameters (weights)
@@ -200,18 +201,16 @@ class LayerParser:
         self.dic['type'] = mcp.safe_get(name, 'type')
 
         return self.dic  
-    
-    @staticmethod
-    def verify_int_range(layer_name, v, param_name, _min, _max):
+
+    def verify_int_range(self, v, param_name, _min, _max):
         if type(v) == list:
             for i,vv in enumerate(v):
-                LayerParser._verify_int_range(layer_name, vv, param_name, _min, _max, i)
+                self._verify_int_range(vv, param_name, _min, _max, i)
         else:
-            LayerParser._verify_int_range(layer_name, v, param_name, _min, _max)
+            self._verify_int_range(v, param_name, _min, _max)
     
-    @staticmethod
-    def _verify_int_range(layer_name, v, param_name, _min, _max, input=-1):
-        layer_name = layer_name if input < 0 else '%s[%d]' % (layer_name, input)
+    def _verify_int_range(self, v, param_name, _min, _max, input=-1):
+        layer_name = self.dic['name'] if input < 0 else '%s[%d]' % (self.dic['name'], input)
         if _min is not None and _max is not None and (v < _min or v > _max):
             raise LayerParsingError("Layer '%s': parameter '%s' must be in the range %d-%d" % (layer_name, param_name, _min, _max))
         elif _min is not None and v < _min:
@@ -219,15 +218,18 @@ class LayerParser:
         elif _max is not None and v > _max:
             raise LayerParsingError("Layer '%s': parameter '%s' must be smaller than or equal to %d" % (layer_name, param_name, _max))
     
-    @staticmethod
-    def verify_divisible(layer_name, value, div, value_name, div_name=None):
+    def verify_divisible(self, value, div, value_name, div_name=None, input_idx=0):
+        layer_name = self.dic['name'] if len(self.dic['inputs']) == 0 else '%s[%d]' % (self.dic['name'], input_idx)
         if value % div != 0:
             raise LayerParsingError("Layer '%s': parameter '%s' must be divisible by %s" % (layer_name, value_name, str(div) if div_name is None else "'%s'" % div_name))
         
-    @staticmethod
-    def verify_str_in(layer_name, value, lst):
+    def verify_str_in(self, value, lst):
         if value not in lst:
-            raise LayerParsingError("Layer '%s': parameter '%s' must be one of %s" % (layer_name, value, ", ".join("'%s'" % s for s in lst)))
+            raise LayerParsingError("Layer '%s': parameter '%s' must be one of %s" % (self.dic['name'], value, ", ".join("'%s'" % s for s in lst)))
+        
+    def verify_int_in(self, value, lst):
+        if value not in lst:
+            raise LayerParsingError("Layer '%s': parameter '%s' must be one of %s" % (self.dic['name'], value, ", ".join("'%d'" % s for s in lst)))
 
     # This looks for neuron=x arguments in various layers, and creates
     # separate layer definitions for them.
@@ -304,7 +306,7 @@ class LayerWithInputParser(LayerParser):
         LayerParser.optimize(self, layers)
         dic = self.dic
         # Check if I have an input that no one else uses.
-        if not dic['usesInputs'] or not dic['forceOwnActsGrad']:
+        if not dic['forceOwnActs']:
             for i, inp in enumerate(dic['inputs']):
                 l = layers[inp]
                 if l['outputs'] == dic['outputs'] and sum('inputs' in ll and inp in ll['inputs'] for ll in layers) == 1:
@@ -313,11 +315,10 @@ class LayerWithInputParser(LayerParser):
                     # do not need to remember my inputs.
                     if not l['usesActs'] and not dic['usesInputs']:
                         dic['actsTarget'] = i
-                        print "Layer '%s' sharing activity matrix with layer '%s'" % (dic['name'], l['name'])
-                    if not dic['forceOwnActsGrad']:
-                        # I can share my gradient matrix with this layer.
-                        dic['actsGradTarget'] = i
-                        print "Layer '%s' sharing activity gradient matrix with layer '%s'" % (dic['name'], l['name'])
+#                        print "Layer '%s' sharing activity matrix with layer '%s'" % (dic['name'], l['name'])
+                    # I can share my gradient matrix with this layer.
+                    dic['actsGradTarget'] = i
+#                    print "Layer '%s' sharing activity gradient matrix with layer '%s'" % (dic['name'], l['name'])
             
     def parse(self, name, mcp, prev_layers, model=None):
         dic = LayerParser.parse(self, name, mcp, prev_layers, model)
@@ -341,6 +342,77 @@ class LayerWithInputParser(LayerParser):
         
         input_layers = [prev_layers[i] for i in dic['inputs']]
         dic['gradConsumer'] = any(l['gradConsumer'] for l in input_layers)
+        dic['usesActs'] = dic['gradConsumer'] # A conservative setting by default for layers with input
+        return dic
+    
+    def verify_img_size(self):
+        dic = self.dic
+        if dic['numInputs'][0] % dic['imgPixels'] != 0 or dic['imgSize'] * dic['imgSize'] != dic['imgPixels']:
+            raise LayerParsingError("Layer '%s': has %-d dimensional input, not interpretable as %d-channel images" % (dic['name'], dic['numInputs'][0], dic['channels']))
+
+
+class NailbedLayerParser(LayerWithInputParser):
+    def __init__(self):
+        LayerWithInputParser.__init__(self, num_inputs=1)
+        
+    def parse(self, name, mcp, prev_layers, model=None):
+        dic = LayerWithInputParser.parse(self, name, mcp, prev_layers, model)
+        dic['forceOwnActs'] = False
+        dic['usesActs'] = False
+        dic['usesInputs'] = False
+        
+        
+        dic['channels'] = mcp.safe_get_int(name, 'channels')
+        dic['stride'] = mcp.safe_get_int(name, 'stride')
+
+        self.verify_int_range(dic['channels'], 'channels', 1, None)
+        
+        # Computed values
+        dic['imgPixels'] = dic['numInputs'][0] / dic['channels']
+        dic['imgSize'] = int(n.sqrt(dic['imgPixels']))
+        dic['outputsX'] = (dic['imgSize'] + dic['stride'] - 1) / dic['stride']
+        dic['start'] = (dic['imgSize'] - dic['stride'] * (dic['outputsX'] - 1)) / 2
+        dic['outputs'] = dic['channels'] * dic['outputsX']**2
+        
+        self.verify_int_range(dic['outputsX'], 'outputsX', 0, None)
+        
+        self.verify_img_size()
+        
+        print "Initialized bed-of-nails layer '%s', producing %dx%d %d-channel output" % (name, dic['outputsX'], dic['outputsX'], dic['channels'])
+        return dic
+    
+class GaussianBlurLayerParser(LayerWithInputParser):
+    def __init__(self):
+        LayerWithInputParser.__init__(self, num_inputs=1)
+        
+    def parse(self, name, mcp, prev_layers, model=None):
+        dic = LayerWithInputParser.parse(self, name, mcp, prev_layers, model)
+        dic['forceOwnActs'] = False
+        dic['usesActs'] = False
+        dic['usesInputs'] = False
+        dic['outputs'] = dic['numInputs'][0]
+        
+        dic['channels'] = mcp.safe_get_int(name, 'channels')
+        dic['filterSize'] = mcp.safe_get_int(name, 'filterSize')
+        dic['stdev'] = mcp.safe_get_float(name, 'stdev')
+
+        self.verify_int_range(dic['channels'], 'channels', 1, None)
+        self.verify_int_in(dic['filterSize'], [3, 5, 7, 9])
+        
+        # Computed values
+        dic['imgPixels'] = dic['numInputs'][0] / dic['channels']
+        dic['imgSize'] = int(n.sqrt(dic['imgPixels']))
+        dic['filter'] = n.array([exp(-(dic['filterSize']/2 - i)**2 / float(2 * dic['stdev']**2)) 
+                                 for i in xrange(dic['filterSize'])], dtype=n.float32).reshape(1, dic['filterSize'])
+        dic['filter'] /= dic['filter'].sum()
+        print dic['filter']
+        
+        self.verify_img_size()
+        
+        if dic['filterSize'] > dic['imgSize']:
+            raise LayerParsingError("Later '%s': filter size (%d) must be smaller than image size (%d)." % (dic['name'], dic['filterSize'], dic['imgSize']))
+        
+        print "Initialized Gaussian blur layer '%s', producing %dx%d %d-channel output" % (name, dic['imgSize'], dic['imgSize'], dic['channels'])
         
         return dic
 
@@ -385,8 +457,7 @@ class NeuronLayerParser(LayerWithInputParser):
         dic['type'] = 'neuron'
         dic['inputs'] = layers[idx]['name']
         dic['neuron'] = layers[idx]['neuron']
-#        dic['outputs'] = layers[idx]['outputs']
-#        self.parse_neuron(layers[idx]['neuron'])
+
         dic = self.parse(dic['name'], FakeConfigParser(dic), layers_new)
         
         # Link upper layers to this new one
@@ -403,7 +474,7 @@ class NeuronLayerParser(LayerWithInputParser):
         dic = LayerWithInputParser.parse(self, name, mcp, prev_layers, model)
         dic['outputs'] = dic['numInputs'][0]
         self.parse_neuron(dic['neuron'])
-        dic['forceOwnActsGrad'] = False
+        dic['forceOwnActs'] = False
         print "Initialized neuron layer '%s', producing %d outputs" % (name, dic['outputs'])
         return dic
 
@@ -419,7 +490,10 @@ class SumLayerParser(LayerWithInputParser):
         dic['outputs'] = dic['numInputs'][0]
         dic['usesInputs'] = False
         dic['usesActs'] = False
-        dic['forceOwnActsGrad'] = False
+        dic['forceOwnActs'] = False
+        
+        dic['coeffs'] = mcp.safe_get_float_list(name, 'coeffs', default=[1.0] * len(dic['inputs']))
+        
         print "Initialized sum layer '%s', producing %d outputs" % (name, dic['outputs'])
         return dic
 
@@ -534,7 +608,7 @@ class FCLayerParser(WeightLayerParser):
         dic['usesActs'] = False
         dic['outputs'] = mcp.safe_get_int(name, 'outputs')
         
-        LayerParser.verify_int_range(name, dic['outputs'], 'outputs', 1, None)
+        self.verify_int_range(dic['outputs'], 'outputs', 1, None)
         self.make_weights(dic['initW'], dic['numInputs'], [dic['outputs']] * len(dic['numInputs']), order='F')
         self.make_biases(1, dic['outputs'], order='F')
         print "Initialized fully-connected layer '%s', producing %d outputs" % (name, dic['outputs'])
@@ -598,16 +672,16 @@ class LocalLayerParser(WeightLayerParser):
         self.verify_num_params(['channels', 'padding', 'stride', 'filterSize', \
                                                      'filters', 'groups', 'randSparse', 'initW'])
         
-        LayerParser.verify_int_range(name, dic['stride'], 'stride', 1, None)
-        LayerParser.verify_int_range(name, dic['filterSize'],'filterSize', 1, None)
-        LayerParser.verify_int_range(name, dic['padding'], 'padding', 0, None)
-        LayerParser.verify_int_range(name, dic['channels'], 'channels', 1, None)
-        LayerParser.verify_int_range(name, dic['groups'], 'groups', 1, None)
+        self.verify_int_range(dic['stride'], 'stride', 1, None)
+        self.verify_int_range(dic['filterSize'],'filterSize', 1, None)
+        self.verify_int_range(dic['padding'], 'padding', 0, None)
+        self.verify_int_range(dic['channels'], 'channels', 1, None)
+        self.verify_int_range(dic['groups'], 'groups', 1, None)
         
         # Computed values
         dic['imgPixels'] = [numInputs/channels for numInputs,channels in zip(dic['numInputs'], dic['channels'])]
         dic['imgSize'] = [int(n.sqrt(imgPixels)) for imgPixels in dic['imgPixels']]
-        LayerParser.verify_int_range(name, dic['imgSize'], 'imgSize', 1, None)
+        self.verify_int_range(dic['imgSize'], 'imgSize', 1, None)
         dic['filters'] = [filters*groups for filters,groups in zip(dic['filters'], dic['groups'])]
         dic['filterPixels'] = [filterSize**2 for filterSize in dic['filterSize']]
         dic['modulesX'] = [1 + int(ceil((2 * padding + imgSize - filterSize) / float(stride))) for padding,imgSize,filterSize,stride in zip(dic['padding'], dic['imgSize'], dic['filterSize'], dic['stride'])]
@@ -636,16 +710,16 @@ class LocalLayerParser(WeightLayerParser):
             if dic['randSparse'][i]: # Random sparse connectivity requires some extra checks
                 if dic['groups'][i] == 1:
                     raise LayerParsingError("Layer '%s[%d]': number of groups must be greater than 1 when using random sparse connectivity" % (name, i))
-                LayerParser.verify_divisible("%s[%d]" % (name, i), dic['channels'][i], dic['filterChannels'][i], 'channels', 'filterChannels')
-                LayerParser.verify_divisible("%s[%d]" % (name, i), dic['filterChannels'][i], 4, 'filterChannels')
-                LayerParser.verify_divisible("%s[%d]" % (name, i), dic['groups'][i]*dic['filterChannels'][i], dic['channels'][i], 'groups * filterChannels', 'channels')
+                self.verify_divisible(dic['channels'][i], dic['filterChannels'][i], 'channels', 'filterChannels', input_idx=i)
+                self.verify_divisible(dic['filterChannels'][i], 4, 'filterChannels', input_idx=i)
+                self.verify_divisible( dic['groups'][i]*dic['filterChannels'][i], dic['channels'][i], 'groups * filterChannels', 'channels', input_idx=i)
                 dic['filterConns'][i] = self.gen_rand_conns(dic['groups'][i], dic['channels'][i], dic['filterChannels'][i])
             else:
                 if dic['groups'][i] > 1:
-                    LayerParser.verify_divisible("%s[%d]" % (name, i), dic['channels'][i], 4*dic['groups'][i], 'channels', '4 * groups')
-                LayerParser.verify_divisible("%s[%d]" % (name, i), dic['channels'][i], dic['groups'][i], 'channels', 'groups')
+                    self.verify_divisible(dic['channels'][i], 4*dic['groups'][i], 'channels', '4 * groups', input_idx=i)
+                self.verify_divisible(dic['channels'][i], dic['groups'][i], 'channels', 'groups', input_idx=i)
 
-            LayerParser.verify_divisible("%s[%d]" % (name, i), dic['filters'], 16*dic['groups'][i], 'filters * groups')
+            self.verify_divisible(dic['filters'], 16*dic['groups'][i], 'filters * groups', input_idx=i)
         
             dic['padding'][i] = -dic['padding'][i]
         dic['overSample'] = [groups*filterChannels/channels for groups,filterChannels,channels in zip(dic['groups'], dic['filterChannels'], dic['channels'])]
@@ -722,7 +796,6 @@ class PoolLayerParser(LayerWithInputParser):
         dic['start'] = mcp.safe_get_int(name, 'start', default=0)
         dic['stride'] = mcp.safe_get_int(name, 'stride')
         dic['outputsX'] = mcp.safe_get_int(name, 'outputsX', default=0)
-        dic['stride'] = mcp.safe_get_int(name, 'stride')
         dic['pool'] = mcp.safe_get(name, 'pool')
         
         # Avg pooler does not use its acts or inputs
@@ -732,14 +805,14 @@ class PoolLayerParser(LayerWithInputParser):
         dic['imgPixels'] = dic['numInputs'][0] / dic['channels']
         dic['imgSize'] = int(n.sqrt(dic['imgPixels']))
         
-        LayerParser.verify_int_range(name, dic['sizeX'], 'sizeX', 1, dic['imgSize'])
-        LayerParser.verify_int_range(name, dic['stride'], 'stride', 1, dic['sizeX'])
-        LayerParser.verify_int_range(name, dic['outputsX'], 'outputsX', 0, None)
-        LayerParser.verify_int_range(name, dic['channels'], 'channels', 1, None)
+        self.verify_int_range(dic['sizeX'], 'sizeX', 1, dic['imgSize'])
+        self.verify_int_range(dic['stride'], 'stride', 1, dic['sizeX'])
+        self.verify_int_range(dic['outputsX'], 'outputsX', 0, None)
+        self.verify_int_range(dic['channels'], 'channels', 1, None)
         
         if dic['gradConsumer']:
-            LayerParser.verify_divisible(name, dic['channels'], 16, 'channels')
-        LayerParser.verify_str_in(name, dic['pool'], ['max', 'avg'])
+            self.verify_divisible(dic['channels'], 16, 'channels')
+        self.verify_str_in(dic['pool'], ['max', 'avg'])
         
         if dic['numInputs'][0] % dic['imgPixels'] != 0 or dic['imgSize'] * dic['imgSize'] != dic['imgPixels']:
             raise LayerParsingError("Layer '%s': has %-d dimensional input, not interpretable as %d-channel images" % (name, dic['numInputs'][0], dic['channels']))
@@ -768,8 +841,8 @@ class NormLayerParser(LayerWithInputParser):
         # Contrast normalization layer does not use its inputs
         dic['usesInputs'] = self.norm_type != 'contrast'
         
-        LayerParser.verify_int_range(name, dic['sizeX'], 'sizeX', 1, dic['imgSize'])
-        LayerParser.verify_int_range(name, dic['channels'], 'channels', 1, None)
+        self.verify_int_range(dic['sizeX'], 'sizeX', 1, dic['imgSize'])
+        self.verify_int_range(dic['channels'], 'channels', 1, None)
         
         if dic['channels'] > 3 and dic['channels'] % 4 != 0:
             raise LayerParsingError("Layer '%s': number of channels must be smaller than 4 or divisible by 4" % name)
@@ -822,6 +895,8 @@ layer_parsers = {'data': lambda : DataLayerParser(),
                  'pool': lambda : PoolLayerParser(),
                  'rnorm': lambda : NormLayerParser('response'),
                  'cnorm': lambda : NormLayerParser('contrast'),
+                 'nailbed': lambda : NailbedLayerParser(),
+                 'blur': lambda : GaussianBlurLayerParser(),
                  'cost.logreg': lambda : LogregCostParser()}
  
 # All the neuron parsers

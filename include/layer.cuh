@@ -95,6 +95,7 @@ public:
     virtual NVMatrix& getActsGrad();
     virtual void postInit();
     
+    int getNumGradProducersNext();
     // Do nothing if this layer has no weights
     virtual void updateWeights() {
     }
@@ -152,6 +153,7 @@ public:
 
 class SumLayer : public Layer {
 protected:
+    vector<float>* _coeffs;
     void fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType);
     void bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType);
 public:
@@ -238,7 +240,32 @@ protected:
     void bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType);
 public:
     MaxPoolLayer(ConvNet* convNet, PyObject* paramsDict);
-}; 
+};
+
+class NailbedLayer : public Layer {
+protected:
+    int _channels, _start, _stride, _outputsX;
+    int _imgSize;
+public:
+    void fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType);
+    void bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType);
+    
+    NailbedLayer(ConvNet* convNet, PyObject* paramsDict);
+};
+
+class GaussianBlurLayer : public Layer {
+protected:
+    int _channels;
+    Matrix* _hFilter;
+    NVMatrix _filter;
+    NVMatrix _actGradsTmp;
+public:
+    void fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType);
+    void bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType);
+    void copyToGPU();
+    
+    GaussianBlurLayer(ConvNet* convNet, PyObject* paramsDict);
+};
 
 class ResponseNormLayer : public Layer {
 protected:

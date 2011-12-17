@@ -47,7 +47,7 @@ except ImportError: # no magic module
 
 def get_gpu_lock():
     import imp
-    lock_script_path = '/u/murray/bin/gpu_lock.py'
+    lock_script_path = '/u/tang/bin/gpu_lock2.py'
     if os.path.exists(lock_script_path):
         locker = imp.load_source("", lock_script_path)
         return locker.obtain_lock_id()

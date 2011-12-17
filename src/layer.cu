@@ -233,6 +233,10 @@ NVMatrix& Layer::getActsGrad() {
     return *_actsGrad;
 }
 
+int Layer::getNumGradProducersNext() {
+    return _numGradProducersNext;
+}
+
 /* 
  * =======================
  * NeuronLayer
@@ -371,8 +375,9 @@ void FCLayer::bpropWeights(NVMatrix& v, int inpIdx, PASS_TYPE passType) {
     NVMatrix& prevActs_T = _prev[inpIdx]->getActs().getTranspose();
     float scaleInc = (_weights[inpIdx].getNumUpdates() == 0 && passType != PASS_GC) * _weights[inpIdx].getMom();
     float scaleGrad = passType == PASS_GC ? 1 : _weights[inpIdx].getEps() / numCases;
-
+    
     _weights[inpIdx].getInc().addProduct(prevActs_T, v, scaleInc, scaleGrad);
+    
     delete &prevActs_T;
 }
 
@@ -600,22 +605,23 @@ void SoftmaxLayer::fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType)
  * =======================
  */
 SumLayer::SumLayer(ConvNet* convNet, PyObject* paramsDict) : Layer(convNet, paramsDict, false) {
+    _coeffs = pyDictGetFloatV(paramsDict, "coeffs");
 }
 
 void SumLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType) {
-    if (scaleTargets == 0 && &_prev[inpIdx]->getActsGrad() != &v) {
-        v.copy(_prev[inpIdx]->getActsGrad());
-    } else if (scaleTargets != 0) {
+    if (scaleTargets == 0 ) {
+        v.scale(_coeffs->at(inpIdx), _prev[inpIdx]->getActsGrad());
+    } else {
         assert(&_prev[inpIdx]->getActsGrad() != &v);
-        _prev[inpIdx]->getActsGrad().add(v, scaleTargets, 1);
+        _prev[inpIdx]->getActsGrad().add(v, scaleTargets, _coeffs->at(inpIdx));
     }
 }
 
 void SumLayer::fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType) {
     if (scaleTargets == 0) {
-        _inputs[inpIdx]->copy(getActs());
+        _inputs[inpIdx]->scale(_coeffs->at(inpIdx), getActs());
     } else {
-        getActs().add(*_inputs[inpIdx]);
+        getActs().add(*_inputs[inpIdx], _coeffs->at(inpIdx));
     }
 }
 
@@ -700,6 +706,54 @@ void MaxPoolLayer::fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType)
 
 void MaxPoolLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType) {
     convLocalMaxUndo(_prev[0]->getActs(), v, getActs(), _prev[inpIdx]->getActsGrad(), _sizeX, _start, _stride, _outputsX, scaleTargets, 1);
+}
+
+/* 
+ * =====================
+ * NailbedLayer
+ * =====================
+ */
+NailbedLayer::NailbedLayer(ConvNet* convNet, PyObject* paramsDict) : Layer(convNet, paramsDict, false) {
+    _channels = pyDictGetInt(paramsDict, "channels");
+    _start = pyDictGetInt(paramsDict, "start");
+    _stride = pyDictGetInt(paramsDict, "stride");
+    _outputsX = pyDictGetInt(paramsDict, "outputsX");
+    _imgSize = pyDictGetInt(paramsDict, "imgSize");
+}
+
+void NailbedLayer::fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType) {
+    convBedOfNails(*_inputs[0], getActs(), _channels, _imgSize, _start, _stride, 0, 1);
+}
+
+void NailbedLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType) {
+    convBedOfNailsUndo(v, _prev[0]->getActsGrad(), _channels, _imgSize, _start, _stride, scaleTargets, 1);
+}
+
+/* 
+ * =====================
+ * GaussianBlurLayer
+ * =====================
+ */
+GaussianBlurLayer::GaussianBlurLayer(ConvNet* convNet, PyObject* paramsDict) : Layer(convNet, paramsDict, false) {
+    _channels = pyDictGetInt(paramsDict, "channels");
+    _hFilter = pyDictGetMatrix(paramsDict, "filter");
+}
+
+void GaussianBlurLayer::fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType) {
+    convGaussianBlur(*_inputs[0], _filter, getActs(), true, _channels, 0, 1);
+    convGaussianBlur(getActs(), _filter, getActs(), false, _channels, 0, 1);
+}
+
+// This is here just for completeness' sake. Why would you backpropagate
+// through a blur filter?
+void GaussianBlurLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType) {
+    NVMatrix& tgt1 = _prev[0]->getRcvdBInputs() > 0 ? _actGradsTmp : _prev[0]->getActsGrad();
+    convGaussianBlur(v, _filter, tgt1, true, _channels, 0, 1);
+    convGaussianBlur(tgt1, _filter, _prev[0]->getActsGrad(), false, _channels, scaleTargets, 1);
+}
+
+void GaussianBlurLayer::copyToGPU() {
+    _filter.copyFromHost(*_hFilter, true);
 }
 
 /* 

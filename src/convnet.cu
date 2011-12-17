@@ -102,6 +102,10 @@ Layer* ConvNet::initLayer(string& layerType, PyObject* paramsDict) {
         _layers.push_back(new SumLayer(this, paramsDict));
     } else if (layerType == "neuron") {
         _layers.push_back(new NeuronLayer(this, paramsDict));
+    } else if (layerType == "nailbed") {
+        _layers.push_back(new NailbedLayer(this, paramsDict));
+    } else if (layerType == "blur") {
+        _layers.push_back(new GaussianBlurLayer(this, paramsDict));
     } else if (layerType == "data") {
         DataLayer *d = new DataLayer(this, paramsDict);
         _layers.push_back(d);

@@ -36,10 +36,340 @@ __device__ float square(const float a) {
     return a*a;
 }
 
+/*
+ * Block size B_YxB_X.
+ * B_X*imgsPerThread*blockIdx.x + threadIdx.x determines img idx 
+ * B_Y*blockIdx.y + threadIdx.y determines img row (col if !horiz), channel idx
+ * 
+ * imgs:        (numChannels, imgPixels, numImages) with given imgStride
+ * filter:      (1, 2*radius + 1)
+ * target:      (numChannels, imgPixels, numImages)
+ * 
+ * target can be the same matrix as imgs.
+ * radius must be one of 3, 5, 7, 9.
+ * 
+ * Tried imgsPerThread, slower.
+ */
+template<int B_Y, int B_X, int radius>
+__global__ void kGaussianBlur(float* imgs, float* filter, float* target, const int imgSize,
+                              const int numImages, const int imgStride,
+                              const bool horiz,
+                              const float scaleTargets, const float scaleOutputs) {
+    __shared__ float shFilter[radius];
+    
+    const int imgPixels = imgSize * imgSize;
+    const int ty = B_Y * blockIdx.y + threadIdx.y;
+    const int channelIdx = ty / imgSize;
+    const int rowIdx = ty % imgSize;
+    const int imgIdx = B_X*blockIdx.x + threadIdx.x;
+    const int filterWidth = 2*radius+1;
+//    const int tidx = B_Y * threadIdx.y + threadIdx.x;
+    if (horiz) {
+        imgs += channelIdx * imgPixels * imgStride + rowIdx * imgSize * imgStride + imgIdx;
+        target += channelIdx * imgPixels * numImages + rowIdx * imgSize * numImages + imgIdx;
+    } else {
+        imgs += channelIdx * imgPixels * imgStride + rowIdx * imgStride + imgIdx;
+        target += channelIdx * imgPixels * numImages + rowIdx * numImages + imgIdx;
+    }
+    float outputs[filterWidth-1];
+    #pragma unroll
+    for (int r = 0; r < filterWidth-1; r++) {
+        outputs[r] = 0;
+    }
+    if (threadIdx.x < filterWidth-1) {
+        shFilter[threadIdx.x] = filter[threadIdx.x];
+    }
+    __syncthreads();
+
+    if (imgIdx < numImages) {
+        // This writes radius*2 = filterWidth - 1 values to outputs 
+        #pragma unroll
+        for (int col = 0; col < radius; col++) {
+            float px = imgs[0];
+            #pragma unroll
+            for (int r = 0; r < radius + 1 + col; r++) {
+                outputs[r] += px * shFilter[radius + col - r];
+            }
+            imgs += horiz ? imgStride : imgStride * imgSize;
+        }
+
+        // Unfortunately this has to be at this level of granularity
+        if (scaleTargets != 0) {
+            for (int col = radius; col < imgSize ; col++) { // loop over img columns
+                float px = imgs[0];
+                target[0] = scaleTargets * target[0] + scaleOutputs * (outputs[0] + px * shFilter[0]);
+
+                #pragma unroll
+                for (int r = 1; r < radius*2; r++) {
+                    outputs[r-1] = outputs[r] + px * shFilter[r];
+                }
+                outputs[filterWidth - 2] = px * shFilter[0];
+
+                imgs += horiz ? imgStride : imgStride * imgSize;
+                target += horiz ? numImages : numImages * imgSize;
+            }
+
+            #pragma unroll
+            for (int r = 0; r < radius; r++) {
+                float* t = &target[0];
+                t[0] = scaleTargets * t[0] + scaleOutputs * outputs[r];
+                target += horiz ? numImages : numImages * imgSize;
+            }
+        } else {
+            for (int col = radius; col < imgSize ; col++) { // loop over img columns
+                float px = imgs[0];
+                target[0] = scaleOutputs * (outputs[0] + px * shFilter[0]);
+                #pragma unroll
+                for (int r = 1; r < radius*2; r++) {
+                    outputs[r-1] = outputs[r] + px * shFilter[r];
+                }
+                outputs[filterWidth - 2] = px * shFilter[0];
+
+                imgs += horiz ? imgStride : imgStride * imgSize;
+                target += horiz ? numImages : numImages * imgSize;
+            }
+
+            #pragma unroll
+            for (int r = 0; r < radius; r++) {
+                target[0] = scaleOutputs * outputs[r];
+                target += horiz ? numImages : numImages * imgSize;
+            }
+        }
+    }
+}
+
+/*
+ * Block size B_YxB_X
+ * blockIdx.x determines output.x, image idx in batches of B_X*imgsPerThread
+ * blockIdx.y determines output.y, filter idx in batches of B_Y*filtersPerThread
+ * 
+ * So each block does one output for some number of images/filters.
+ * 
+ * threadIdx.x determines img idx
+ * threadIdx.y determines filter idx
+ * 
+ * imgs:        (numChannels, imgPixels, numImages)
+ * target:      (numChannels, numOutputs, numImages)
+ * 
+ * numImages must be divisible by B_X*imgsPerThread if checkCaseBounds is false
+ * numFilters must be divisible by filtersPerThread
+ */
+
+template<int B_Y, int B_X, int imgsPerThread, int chansPerThread, bool checkCaseBounds>
+__global__ void kBedOfNails(float* imgs, float* target, const int imgSize, const int numChannels,
+                           const int numImages, const int startX, const int strideX, const int outputsX,
+                           const bool reverse, const float scaleTargets, const float scaleOutput) {
+    const int numImgBlocks = DIVUP(numImages,B_X*imgsPerThread);
+    const int numChanBlocks = DIVUP(numChannels, B_Y*chansPerThread);
+    const int outputIdxX = blockIdx.x / numImgBlocks;
+    const int outputIdxY = blockIdx.y / numChanBlocks;
+    const int blockImgIdx = (blockIdx.x % numImgBlocks) * B_X * imgsPerThread;
+    const int blockChanIdx = (blockIdx.y % numChanBlocks) * B_Y * chansPerThread;
+    const int myChanIdx = (blockChanIdx + threadIdx.y*chansPerThread);
+    if (myChanIdx >= numChannels) {
+        return;
+    }
+//    if (blockIdx.x != 0 || blockIdx.y != 0) {
+//        return;
+//    }
+    const int outputIdx = outputIdxY * outputsX + outputIdxX;
+    const int numOutputs = outputsX * outputsX;
+    const int imgPixels = imgSize * imgSize;
+    
+    const int startImgPxX = startX + outputIdxX * strideX;
+    const int startImgPxY = startX + outputIdxY * strideX;
+    const int imgIdx = blockImgIdx + threadIdx.x;
+    const int imgPx = startImgPxY * imgSize + startImgPxX;
+    
+    imgs += myChanIdx * imgPixels * numImages + imgPx * numImages + imgIdx;
+    target += (myChanIdx * numOutputs + outputIdx) * numImages + imgIdx;
+    
+    if (scaleTargets != 0) {
+        if (!reverse) {
+            #pragma unroll
+            for (int i = 0; i < imgsPerThread; i++) {
+                if (!checkCaseBounds || imgIdx + i * B_X < numImages) {
+                    #pragma unroll
+                    for (int c = 0; c < chansPerThread; c++) {
+                        target[c * numOutputs * numImages + i * B_X] = scaleTargets * target[c * numOutputs * numImages + i * B_X] + scaleOutput * imgs[c * imgPixels * numImages + i * B_X]; 
+                    }
+                }
+            }
+        } else {
+            #pragma unroll
+            for (int i = 0; i < imgsPerThread; i++) {
+                if (!checkCaseBounds || imgIdx + i * B_X < numImages) {
+                    #pragma unroll
+                    for (int c = 0; c < chansPerThread; c++) {
+                        imgs[c * imgPixels * numImages + i * B_X] = scaleTargets * imgs[c * imgPixels * numImages + i * B_X] + scaleOutput * target[c * numOutputs * numImages + i * B_X]; 
+                    }
+                }
+            }
+        }
+    } else {
+        if (!reverse) {
+            #pragma unroll
+            for (int i = 0; i < imgsPerThread; i++) {
+                if (!checkCaseBounds || imgIdx + i * B_X < numImages) {
+                    #pragma unroll
+                    for (int c = 0; c < chansPerThread; c++) {
+                        target[c * numOutputs * numImages + i * B_X] = scaleOutput * imgs[c * imgPixels * numImages + i * B_X]; 
+                    }
+                }
+            }
+        } else {
+            #pragma unroll
+            for (int i = 0; i < imgsPerThread; i++) {
+                if (!checkCaseBounds || imgIdx + i * B_X < numImages) {
+                    #pragma unroll
+                    for (int c = 0; c < chansPerThread; c++) {
+                        imgs[c * imgPixels * numImages + i * B_X] = scaleOutput * target[c * numOutputs * numImages + i * B_X]; 
+                    }
+                }
+            }
+        }
+    }
+
+}
+
+/*
+ * imgs:        (numChannels, imgPixels, numImages)
+ * target:      (numChannels, outputs, numImages)
+ */
+void _convBedOfNails(NVMatrix& images, NVMatrix& target, int numChannels, int imgSize, int startX, int strideX,
+                     bool reverse, float scaleTargets, float scaleOutput) {
+    int numImages = reverse ? target.getNumCols() : images.getNumCols();
+    int imgPixels = imgSize * imgSize;
+
+    assert(!images.isTrans());
+    assert(!target.isTrans());
+    assert(images.isContiguous());
+    assert(target.isContiguous());
+    assert(strideX > 1);
+    
+    int outputsX = DIVUP(imgSize, strideX);
+    int outputs = outputsX * outputsX;
+    if (reverse) {
+        assert(target.getNumRows() == numChannels * outputs);
+    } else  {
+        assert(images.getNumRows() == numChannels * imgPixels);
+    }
+    
+    if (scaleTargets == 0) {
+        if (reverse) {
+            images.resize(numChannels * imgPixels, numImages);
+            images.apply(NVMatrixOps::Zero());
+        } else {
+            target.resize(numChannels*outputs, numImages);
+        }
+    } else {
+        if (reverse) {
+            assert(images.getNumRows() == numChannels * outputs);
+            assert(images.getNumCols() == numImages);
+        } else {
+            assert(target.getNumRows() == numChannels * outputs);
+            assert(target.getNumCols() == numImages);
+        }
+    }
+    
+    bool checkCaseBounds = numImages % 128 != 0;
+    
+    int chansPerThread = numChannels % 8 == 0 ? 2 : 1;
+    dim3 threads(32, 4);
+    dim3 blocks(DIVUP(numImages,32*4) * outputsX, DIVUP(numChannels, 4 * chansPerThread) * outputsX);
+    if (chansPerThread == 1) {
+        if (checkCaseBounds) {
+            cudaFuncSetCacheConfig(kBedOfNails<4, 32, 4, 1, true>, cudaFuncCachePreferL1);
+            kBedOfNails<4, 32, 4, 1, true><<<blocks, threads>>>(images.getDevData(), target.getDevData(),
+                                                                imgSize, numChannels, numImages, startX, strideX, outputsX,
+                                                                reverse, scaleTargets, scaleOutput);
+        } else {
+            cudaFuncSetCacheConfig(kBedOfNails<4, 32, 4, 1, false>, cudaFuncCachePreferL1);
+            kBedOfNails<4, 32, 4, 1, false><<<blocks, threads>>>(images.getDevData(), target.getDevData(),
+                                                                 imgSize, numChannels, numImages, startX, strideX, outputsX,
+                                                                 reverse, scaleTargets, scaleOutput);
+        }
+    } else {
+        if (checkCaseBounds) {
+            cudaFuncSetCacheConfig(kBedOfNails<4, 32, 4, 2, true>, cudaFuncCachePreferL1);
+            kBedOfNails<4, 32, 4, 2, true><<<blocks, threads>>>(images.getDevData(), target.getDevData(),
+                                                                imgSize, numChannels, numImages, startX, strideX, outputsX,
+                                                                reverse, scaleTargets, scaleOutput);
+        } else {
+            cudaFuncSetCacheConfig(kBedOfNails<4, 32, 4, 2, false>, cudaFuncCachePreferL1);
+            kBedOfNails<4, 32, 4, 2, false><<<blocks, threads>>>(images.getDevData(), target.getDevData(),
+                                                                 imgSize, numChannels, numImages, startX, strideX, outputsX,
+                                                                 reverse, scaleTargets, scaleOutput);
+        }
+    }
+}
+
+void convBedOfNails(NVMatrix& images, NVMatrix& target, int numChannels, int imgSize, int startX,
+                    int strideX, float scaleTargets, float scaleOutput) {
+    _convBedOfNails(images, target, numChannels, imgSize, startX, strideX, false, scaleTargets, scaleOutput);
+}
+
+void convBedOfNailsUndo(NVMatrix& actsGrad, NVMatrix& target, int numChannels, int imgSize,
+                        int startX, int strideX, float scaleTargets, float scaleOutput) {
+
+    _convBedOfNails(target, actsGrad, numChannels, imgSize, startX, strideX, true, scaleTargets, scaleOutput);
+}
+    
+
+/*
+ * imgs:        (numChannels, imgPixels, numImages) with given imgStride
+ * filter:      (1, 2*radius + 1)
+ * target:      (numChannels, imgPixels, numImages)
+ */
+void convGaussianBlur(NVMatrix& images, NVMatrix& filter, NVMatrix& target, bool horiz, int numChannels,
+                      float scaleTargets, float scaleOutputs) {
+    int numImages = images.getNumCols();
+    int radius = filter.getNumCols() / 2;
+    int imgPixels = images.getNumRows() / numChannels;
+    int imgSize = int(sqrt(imgPixels));
+    
+    assert(imgPixels == imgSize * imgSize);
+    assert(radius >= 1 && radius <= 4);
+    assert(imgSize >= 2 * radius + 1);
+    assert(filter.getNumRows() == 1);
+    assert(images.getNumRows() == numChannels * imgPixels);
+    assert(!images.isTrans());
+    assert(!filter.isTrans());
+    assert(!target.isTrans());
+    assert(target.isContiguous());
+    if (scaleTargets == 0) {
+        target.resize(images);
+    } else {
+        assert(target.isSameDims(images));
+    }
+
+    dim3 threads(32, 4);
+    dim3 blocks(DIVUP(numImages, threads.x), DIVUP(numChannels*imgSize, threads.y));
+
+    if (radius == 1) {
+        cudaFuncSetCacheConfig(kGaussianBlur<4, 32, 1>, cudaFuncCachePreferL1);
+        kGaussianBlur<4, 32, 1><<<blocks, threads>>>(images.getDevData(), filter.getDevData(), target.getDevData(),
+                                                           imgSize, numImages, images.getStride(), horiz, scaleTargets, scaleOutputs);
+
+    } else if (radius == 2) {
+        cudaFuncSetCacheConfig(kGaussianBlur<4, 32, 2>, cudaFuncCachePreferL1);
+        kGaussianBlur<4, 32, 2><<<blocks, threads>>>(images.getDevData(), filter.getDevData(), target.getDevData(),
+                                                           imgSize, numImages, images.getStride(), horiz, scaleTargets, scaleOutputs);
+
+    } else if (radius == 3) {
+        cudaFuncSetCacheConfig(kGaussianBlur<4, 32, 3>, cudaFuncCachePreferL1);
+        kGaussianBlur<4, 32, 3><<<blocks, threads>>>(images.getDevData(), filter.getDevData(), target.getDevData(),
+                                                           imgSize, numImages, images.getStride(), horiz, scaleTargets, scaleOutputs);
+    } else if (radius == 4) {
+        cudaFuncSetCacheConfig(kGaussianBlur<4, 32, 4>, cudaFuncCachePreferL1);
+        kGaussianBlur<4, 32, 4><<<blocks, threads>>>(images.getDevData(), filter.getDevData(), target.getDevData(),
+                                                           imgSize, numImages, images.getStride(), horiz, scaleTargets, scaleOutputs);
+    }
+}
 
 /*
  * Block size 1x128
- * blockIdx.x determines pixel.x, image idx in batches of B_X*imgsPerThread
+ * blockIdx.x determines pixel.x, image idx in batches of 128*imgsPerThread
  * blockIdx.y determines pixel.y
  * 
  * So each block does one output for some number of images and all the fliters.
