@@ -54,10 +54,17 @@ static PyMethodDef _ConvNetMethods[] = {  { "initModel",          initModel,    
                                               { NULL, NULL }
 };
 
+#if defined(_WIN64) || defined(_WIN32)
+extern "C" __declspec(dllexport) void initpyconvnet() {
+    (void) Py_InitModule("pyconvnet", _ConvNetMethods);
+    import_array();
+}
+#else
 void INITNAME() {
     (void) Py_InitModule(QUOTEME(MODELNAME), _ConvNetMethods);
     import_array();
 }
+#endif
 
 PyObject* initModel(PyObject *self, PyObject *args) {
     assert(model == NULL);
