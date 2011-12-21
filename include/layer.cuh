@@ -151,13 +151,21 @@ public:
     SoftmaxLayer(ConvNet* convNet, PyObject* paramsDict);
 };
 
-class SumLayer : public Layer {
+class EltwiseSumLayer : public Layer {
 protected:
     vector<float>* _coeffs;
     void fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType);
     void bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType);
 public:
-    SumLayer(ConvNet* convNet, PyObject* paramsDict);
+    EltwiseSumLayer(ConvNet* convNet, PyObject* paramsDict);
+};
+
+class EltwiseMaxLayer : public Layer {
+protected:
+    void fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType);
+    void bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType);
+public:
+    EltwiseMaxLayer(ConvNet* convNet, PyObject* paramsDict);
 };
 
 class DataLayer : public Layer {

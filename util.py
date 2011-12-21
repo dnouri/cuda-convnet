@@ -102,3 +102,5 @@ def get_cpu():
         return 'intel'
     return 'amd'
 
+def is_windows_machine():
+    return os.name == 'nt'

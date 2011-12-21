@@ -33,13 +33,24 @@
 #include <cutil_inline.h>
 
 template <class GradientOp>
+class AddGradientBinaryOperator {
+    GradientOp _op;
+public:
+    AddGradientBinaryOperator(GradientOp op) : _op(op) {
+    }
+    __device__ inline float operator()(const float unitActGrad, const float unitAct, const float target) const {
+        return target + _op(unitActGrad, unitAct); 
+    }
+};
+
+template <class GradientOp>
 class AddGradientOperator {
     GradientOp _op;
 public:
     AddGradientOperator(GradientOp op) : _op(op) {
     }
-    __device__ inline float operator()(const float unitActGrad, const float unitAct, const float target) const {
-        return target + _op(unitActGrad, unitAct); 
+    __device__ inline float operator()(const float unitActGrad, const float target) const {
+        return target + _op(unitActGrad); 
     }
 };
 
@@ -111,7 +122,7 @@ protected:
     }
     
     void _addInputGrad(NVMatrix& actsGrad, NVMatrix& target) {
-        actsGrad.applyTernary(AddGradientOperator<LogisticGradientOperator>(LogisticGradientOperator()), *_outputs, target, target);
+        actsGrad.applyTernary(AddGradientBinaryOperator<LogisticGradientOperator>(LogisticGradientOperator()), *_outputs, target, target);
     }
 public:
     class LogisticGradientOperator {
@@ -124,8 +135,6 @@ public:
     LogisticNeuron() : Neuron() {
     }
 };
-
-
 
 /* =======================
  * ReluNeuron
@@ -145,7 +154,7 @@ protected:
     }
     
     void _addInputGrad(NVMatrix& actsGrad, NVMatrix& target) {
-        actsGrad.applyTernary(AddGradientOperator<ReluGradientOperator>(ReluGradientOperator()), *_outputs, target, target);
+        actsGrad.applyTernary(AddGradientBinaryOperator<ReluGradientOperator>(ReluGradientOperator()), *_outputs, target, target);
     }
 public:
     class ReluOperator {
@@ -186,7 +195,7 @@ protected:
     }
     
     void _addInputGrad(NVMatrix& actsGrad, NVMatrix& target) {
-        actsGrad.applyTernary(AddGradientOperator<BoundedReluGradientOperator>(BoundedReluGradientOperator(_a)), *_outputs, target, target);
+        actsGrad.applyTernary(AddGradientBinaryOperator<BoundedReluGradientOperator>(BoundedReluGradientOperator(_a)), *_outputs, target, target);
     }
 public:
     class BoundedReluOperator {
@@ -234,7 +243,7 @@ protected:
     }
     
     void _addInputGrad(NVMatrix& actsGrad, NVMatrix& target) {
-        actsGrad.applyTernary(AddGradientOperator<AbsGradientOperator>(AbsGradientOperator()), *_inputs, target, target);
+        actsGrad.applyTernary(AddGradientBinaryOperator<AbsGradientOperator>(AbsGradientOperator()), *_inputs, target, target);
     }
 public:
     class AbsGradientOperator {
@@ -268,7 +277,7 @@ protected:
     }
     
     void _addInputGrad(NVMatrix& actsGrad, NVMatrix& target) {
-        actsGrad.applyTernary(AddGradientOperator<TanhGradientOperator>(TanhGradientOperator(_a, _b)), *_outputs, target, target);
+        actsGrad.applyTernary(AddGradientBinaryOperator<TanhGradientOperator>(TanhGradientOperator(_a, _b)), *_outputs, target, target);
     }
 public:
     class TanhOperator {
@@ -317,7 +326,7 @@ protected:
     }
     
     void _addInputGrad(NVMatrix& actsGrad, NVMatrix& target) {
-        actsGrad.applyTernary(AddGradientOperator<SoftReluGradientOperator>(SoftReluGradientOperator()), *_outputs, target, target);
+        actsGrad.applyTernary(AddGradientBinaryOperator<SoftReluGradientOperator>(SoftReluGradientOperator()), *_outputs, target, target);
     }
 public:
     class SoftReluOperator {
@@ -341,6 +350,119 @@ public:
     };
     
     SoftReluNeuron() : Neuron() {
+    }
+};
+
+/* =======================
+ * SquareNeuron
+ * -----------------------
+ * 
+ * f(x) = x^2
+ * =======================
+ */
+class SquareNeuron : public Neuron {
+protected:
+    void _activate() {
+        assert(_inputs != _outputs);
+        _inputs->apply(NVMatrixOps::Square(), *_outputs);
+    }
+
+    void _computeInputGrad(NVMatrix& actsGrad, NVMatrix& target) {
+        actsGrad.applyBinary(SquareGradientOperator(), *_inputs, target);
+    }
+    
+    void _addInputGrad(NVMatrix& actsGrad, NVMatrix& target) {
+        actsGrad.applyTernary(AddGradientBinaryOperator<SquareGradientOperator>(SquareGradientOperator()), *_inputs, target, target);
+    }
+public:
+    class SquareGradientOperator {
+    public:
+        __device__ inline float operator()(float unitActGrad, float unitInput) const {
+            return unitActGrad * 2 * unitInput; 
+        }
+    };
+    
+    SquareNeuron() : Neuron() {
+    }
+};
+
+/* =======================
+ * SqrtNeuron
+ * -----------------------
+ * 
+ * f(x) = sqrt(x)
+ * =======================
+ */
+class SqrtNeuron : public Neuron {
+protected:
+    void _activate() {
+        _inputs->apply(NVMatrixOps::Sqrt(), *_outputs);
+    }
+
+    void _computeInputGrad(NVMatrix& actsGrad, NVMatrix& target) {
+        actsGrad.applyBinary(SqrtGradientOperator(), *_outputs, target);
+    }
+    
+    void _addInputGrad(NVMatrix& actsGrad, NVMatrix& target) {
+        actsGrad.applyTernary(AddGradientBinaryOperator<SqrtGradientOperator>(SqrtGradientOperator()), *_outputs, target, target);
+    }
+public:
+    class SqrtGradientOperator {
+    public:
+        __device__ inline float operator()(float unitActGrad, float unitAct) const {
+            return __fdividef(unitActGrad, 2.0f * unitAct); 
+        }
+    };
+    
+    SqrtNeuron() : Neuron() {
+    }
+};
+
+/* =======================
+ * LinearNeuron
+ * -----------------------
+ * 
+ * f(x) = ax + b
+ * =======================
+ */
+class LinearNeuron : public Neuron {
+protected:
+    float _a, _b;
+    void _activate() {
+        _inputs->apply(LinearOperator(_a, _b), *_outputs);
+    }
+
+    void _computeInputGrad(NVMatrix& actsGrad, NVMatrix& target) {
+        actsGrad.apply(LinearGradientOperator(_a), target);
+    }
+    
+    void _addInputGrad(NVMatrix& actsGrad, NVMatrix& target) {
+        actsGrad.applyBinary(AddGradientOperator<LinearGradientOperator>(LinearGradientOperator(_a)), target, target);
+    }
+public:
+    class LinearOperator {
+    protected:
+        float _a, _b;
+    public:    
+        __device__ inline float operator()(float x) const {
+            return _a * x + _b;
+        }
+        LinearOperator(float a, float b) : _a(a), _b(b) {
+        }
+    };
+    
+    class LinearGradientOperator {
+    protected:
+        float _a;
+    public:
+        __device__ inline float operator()(float unitActGrad) const {
+            return unitActGrad * _a; 
+        }
+        LinearGradientOperator(float a) : _a(a) {
+        }
+    };
+    
+    LinearNeuron(float a, float b) : Neuron(), _a(b), _b(b) {
     }
 };
 #endif	/* NEURONS_CUH */

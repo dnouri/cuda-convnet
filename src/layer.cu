@@ -575,18 +575,6 @@ void LocalUnsharedLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, 
 SoftmaxLayer::SoftmaxLayer(ConvNet* convNet, PyObject* paramsDict) : Layer(convNet, paramsDict, true) {
 }
 
-void SoftmaxLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType) {
-    assert(inpIdx == 0);
-    bool doLogregGrad = _next.size() == 1 && _next[0]->getType() == "cost.logreg";
-    if (doLogregGrad) {
-        NVMatrix& labels = _next[0]->getPrev()[0]->getActs();
-        float gradCoeff = dynamic_cast<CostLayer*>(_next[0])->getCoeff();
-        computeLogregSoftmaxGrad(labels, getActs(), _prev[0]->getActsGrad(), scaleTargets == 1, gradCoeff);
-    } else {
-        computeSoftmaxGrad(getActs(), v, _prev[0]->getActsGrad(), scaleTargets == 1);
-    }
-}
-
 void SoftmaxLayer::fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType) {
     NVMatrix& input = *_inputs[0];
     NVMatrix& max = input.max(1);
@@ -599,16 +587,36 @@ void SoftmaxLayer::fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType)
     delete &sum;
 }
 
+void SoftmaxLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType) {
+    assert(inpIdx == 0);
+    bool doLogregGrad = _next.size() == 1 && _next[0]->getType() == "cost.logreg";
+    if (doLogregGrad) {
+        NVMatrix& labels = _next[0]->getPrev()[0]->getActs();
+        float gradCoeff = dynamic_cast<CostLayer*>(_next[0])->getCoeff();
+        computeLogregSoftmaxGrad(labels, getActs(), _prev[0]->getActsGrad(), scaleTargets == 1, gradCoeff);
+    } else {
+        computeSoftmaxGrad(getActs(), v, _prev[0]->getActsGrad(), scaleTargets == 1);
+    }
+}
+
 /* 
  * =======================
- * SumLayer
+ * EltwiseSumLayer
  * =======================
  */
-SumLayer::SumLayer(ConvNet* convNet, PyObject* paramsDict) : Layer(convNet, paramsDict, false) {
+EltwiseSumLayer::EltwiseSumLayer(ConvNet* convNet, PyObject* paramsDict) : Layer(convNet, paramsDict, false) {
     _coeffs = pyDictGetFloatV(paramsDict, "coeffs");
 }
 
-void SumLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType) {
+void EltwiseSumLayer::fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType) {
+    if (scaleTargets == 0) {
+        _inputs[inpIdx]->scale(_coeffs->at(inpIdx), getActs());
+    } else {
+        getActs().add(*_inputs[inpIdx], _coeffs->at(inpIdx));
+    }
+}
+
+void EltwiseSumLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType) {
     if (scaleTargets == 0 ) {
         v.scale(_coeffs->at(inpIdx), _prev[inpIdx]->getActsGrad());
     } else {
@@ -617,12 +625,24 @@ void SumLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE 
     }
 }
 
-void SumLayer::fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType) {
-    if (scaleTargets == 0) {
-        _inputs[inpIdx]->scale(_coeffs->at(inpIdx), getActs());
-    } else {
-        getActs().add(*_inputs[inpIdx], _coeffs->at(inpIdx));
+/* 
+ * =======================
+ * EltwiseMaxLayer
+ * =======================
+ */
+EltwiseMaxLayer::EltwiseMaxLayer(ConvNet* convNet, PyObject* paramsDict) : Layer(convNet, paramsDict, false) {
+}
+
+void EltwiseMaxLayer::fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType) {
+    if (inpIdx == 1) { // First input, do nothing
+        _inputs[inpIdx]->applyBinary(NVMatrixAggs::Max(), *_inputs[0], getActs());
+    } else if (inpIdx > 1) {
+        getActs().applyBinary(NVMatrixAggs::Max(), *_inputs[inpIdx]);
     }
+}
+
+void EltwiseMaxLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType) {
+    computeEltwiseMaxGrad(v, *_inputs[inpIdx], getActs(), _prev[inpIdx]->getActsGrad(), scaleTargets != 0);
 }
 
 /* 

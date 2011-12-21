@@ -478,7 +478,7 @@ class NeuronLayerParser(LayerWithInputParser):
         print "Initialized neuron layer '%s', producing %d outputs" % (name, dic['outputs'])
         return dic
 
-class SumLayerParser(LayerWithInputParser):
+class EltwiseSumLayerParser(LayerWithInputParser):
     def __init__(self):
         LayerWithInputParser.__init__(self)
         
@@ -494,7 +494,22 @@ class SumLayerParser(LayerWithInputParser):
         
         dic['coeffs'] = mcp.safe_get_float_list(name, 'coeffs', default=[1.0] * len(dic['inputs']))
         
-        print "Initialized sum layer '%s', producing %d outputs" % (name, dic['outputs'])
+        print "Initialized elementwise sum layer '%s', producing %d outputs" % (name, dic['outputs'])
+        return dic
+    
+class EltwiseMaxLayerParser(LayerWithInputParser):
+    def __init__(self):
+        LayerWithInputParser.__init__(self)
+        
+    def parse(self, name, mcp, prev_layers, model):
+        dic = LayerWithInputParser.parse(self, name, mcp, prev_layers, model)
+        if len(dic['inputs']) < 2:
+            raise LayerParsingError("Layer '%s': elementwise max layer must have at least 2 inputs, got %d." % (name, len(dic['inputs'])))
+        if len(set(dic['numInputs'])) != 1:
+            raise LayerParsingError("Layer '%s': all inputs must have the same dimensionality. Got dimensionalities: %s" % (name, ", ".join(dic['numInputs'])))
+        dic['outputs'] = dic['numInputs'][0]
+
+        print "Initialized elementwise max layer '%s', producing %d outputs" % (name, dic['outputs'])
         return dic
 
 class WeightLayerParser(LayerWithInputParser):
@@ -814,8 +829,8 @@ class PoolLayerParser(LayerWithInputParser):
             self.verify_divisible(dic['channels'], 16, 'channels')
         self.verify_str_in(dic['pool'], ['max', 'avg'])
         
-        if dic['numInputs'][0] % dic['imgPixels'] != 0 or dic['imgSize'] * dic['imgSize'] != dic['imgPixels']:
-            raise LayerParsingError("Layer '%s': has %-d dimensional input, not interpretable as %d-channel images" % (name, dic['numInputs'][0], dic['channels']))
+        self.verify_img_size()
+
         if dic['outputsX'] <= 0:
             dic['outputsX'] = int(ceil((dic['imgSize'] - dic['start'] - dic['sizeX']) / float(dic['stride']))) + 1;
         dic['outputs'] = dic['outputsX']**2 * dic['channels']
@@ -847,8 +862,8 @@ class NormLayerParser(LayerWithInputParser):
         if dic['channels'] > 3 and dic['channels'] % 4 != 0:
             raise LayerParsingError("Layer '%s': number of channels must be smaller than 4 or divisible by 4" % name)
         
-        if dic['numInputs'][0] % dic['imgPixels'] != 0 or dic['imgSize'] * dic['imgSize'] != dic['imgPixels']:
-            raise LayerParsingError("Layer '%s': has %-d dimensional input, not interpretable as %d-channel images" % (name, dic['numInputs'][0], dic['channels']))
+        self.verify_img_size()
+
         dic['outputs'] = dic['imgPixels'] * dic['channels']
         print "Initialized %s-normalization layer '%s', producing %dx%d %d-channel output" % (self.norm_type, name, dic['imgSize'], dic['imgSize'], dic['channels'])
         return dic
@@ -890,7 +905,8 @@ layer_parsers = {'data': lambda : DataLayerParser(),
                  'conv': lambda : ConvLayerParser(),
                  'local': lambda : LocalUnsharedLayerParser(),
                  'softmax': lambda : SoftmaxLayerParser(),
-                 'sum': lambda : SumLayerParser(),
+                 'eltsum': lambda : EltwiseSumLayerParser(),
+                 'eltmax': lambda : EltwiseMaxLayerParser(),
                  'neuron': lambda : NeuronLayerParser(),
                  'pool': lambda : PoolLayerParser(),
                  'rnorm': lambda : NormLayerParser('response'),
@@ -907,6 +923,9 @@ neuron_parsers = sorted([NeuronParser('ident', 'f(x) = x', uses_acts=False, uses
                          NeuronParser('abs', 'f(x) = |x|', uses_acts=False, uses_inputs=True),
                          NeuronParser('relu', 'f(x) = max(0, x)', uses_acts=True, uses_inputs=False),
                          NeuronParser('softrelu', 'f(x) = log(1 + e^x)', uses_acts=True, uses_inputs=False),
+                         NeuronParser('square', 'f(x) = x^2', uses_acts=False, uses_inputs=True),
+                         NeuronParser('sqrt', 'f(x) = sqrt(x)', uses_acts=True, uses_inputs=False),
                          ParamNeuronParser('tanh[a,b]', 'f(x) = a * tanh(b * x)', uses_acts=True, uses_inputs=False),
-                         ParamNeuronParser('brelu[a]', 'f(x) = min(a, max(0, x))', uses_acts=True, uses_inputs=False)],
+                         ParamNeuronParser('brelu[a]', 'f(x) = min(a, max(0, x))', uses_acts=True, uses_inputs=False),
+                         ParamNeuronParser('linear[a,b]', 'f(x) = a * x + b', uses_acts=True, uses_inputs=False),],
                         key=lambda x:x.type)

@@ -43,6 +43,7 @@ void computeSoftmaxGrad(NVMatrix& acts, NVMatrix& actsGrad, NVMatrix& target, bo
 // Numerical stability optimization: this routine combines computeLogregGrad with computeSoftmaxGrad
 // to avoi dividing and then multiplying by quantities that may be near zero.
 void computeLogregSoftmaxGrad(NVMatrix& labels, NVMatrix& probs, NVMatrix& target, bool add, float coeff);
+void computeEltwiseMaxGrad(NVMatrix& actGrad, NVMatrix& input, NVMatrix& output, NVMatrix& target, bool add);
 
 #endif	/* LAYER_KERNELS_CUH */
 

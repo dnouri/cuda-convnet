@@ -38,6 +38,15 @@
 #include <string.h>
 #include <math.h>
 
+#if defined(_WIN64) || defined(_WIN32)
+#include <float.h>
+#define isnan(_X) (_isnan(_X))
+#define isinf(_X) (!_finite(_X)) 
+#define uint unsigned int
+double sqrt(int _X);
+double log(int _X);
+#endif
+
 #ifdef USE_MKL
 #include <mkl.h>
 #include <mkl_cblas.h>

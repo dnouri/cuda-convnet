@@ -70,8 +70,8 @@ class ShowGPUModel(GPUModel):
     def plot_cost(self):
         if self.show_cost not in self.train_outputs[0]:
             raise ShowNetError("Cost function with name '%s' not defined by given convnet." % self.show_cost)
-        train_errors = [o[self.show_cost][0] for o in self.train_outputs]
-        test_errors = [o[self.show_cost][0] for o in self.test_outputs]
+        train_errors = [o[self.show_cost][self.cost_idx] for o in self.train_outputs]
+        test_errors = [o[self.show_cost][self.cost_idx] for o in self.test_outputs]
 
         numbatches = len(self.train_batch_range)
         test_errors = numpy.row_stack(test_errors)
@@ -93,7 +93,7 @@ class ShowGPUModel(GPUModel):
 
         pl.xticks(ticklocs, ticklabels)
         pl.xlabel('Epoch')
-        pl.ylabel(self.show_cost)
+#        pl.ylabel(self.show_cost)
         pl.title(self.show_cost)
         
     def make_filter_fig(self, filters, filter_start, fignum, _title, num_filters, combine_chans):
@@ -263,6 +263,7 @@ class ShowGPUModel(GPUModel):
         op.add_option("show-cost", "show_cost", StringOptionParser, "Show specified objective function", default="")
         op.add_option("show-filters", "show_filters", StringOptionParser, "Show learned filters in specified layer", default="")
         op.add_option("input-idx", "input_idx", IntegerOptionParser, "Input index for layer given to --show-filters", default=0)
+        op.add_option("cost-idx", "cost_idx", IntegerOptionParser, "Cost function return value index for --show-cost", default=0)
         op.add_option("no-rgb", "no_rgb", BooleanOptionParser, "Don't combine filter channels into RGB in layer given to --show-filters", default=False)
         op.add_option("channels", "channels", IntegerOptionParser, "Number of channels in layer given to --show-filters (fully-connected layers only)", default=0)
         op.add_option("show-preds", "show_preds", StringOptionParser, "Show predictions made by given softmax on test set", default="")

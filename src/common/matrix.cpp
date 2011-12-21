@@ -27,6 +27,11 @@
 #include <matrix.h>
 #include <matrix_funcs.h>
 
+#if defined(_WIN64) || defined(_WIN32)
+double sqrt(int _X) {return sqrt((double) _X);}
+double log(int _X) {return log((double) _X);}
+#endif
+
 using namespace std;
 
 void Matrix::_init(MTYPE* data, long int numRows, long int numCols, bool transpose, bool ownsData) {

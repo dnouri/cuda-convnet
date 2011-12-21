@@ -103,7 +103,6 @@ class IGPUModel:
             self.train_data_provider = DataProvider.get_instance(self.data_path, self.train_batch_range,
                                                                      self.model_state["epoch"], self.model_state["batchnum"],
                                                                      type=self.dp_type, dp_params=self.dp_params, test=False)
-
         except DataProviderException, e:
             print "Unable to create data provider: %s" % e
             self.print_data_providers()

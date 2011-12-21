@@ -60,6 +60,20 @@ Neuron& Neuron::makeNeuron(PyObject* neuronDict) {
         
         return *new TanhNeuron(a, b);
     }
+    
+    if (type == "square") {
+        return *new SquareNeuron();
+    }
+    
+    if (type == "sqrt") {
+        return *new SqrtNeuron();
+    }
+    
+    if (type == "linear") {
+        float a = pyDictGetFloat(neuronParamsDict, "a");
+        float b = pyDictGetFloat(neuronParamsDict, "b");
+        return *new LinearNeuron(a, b);
+    }
 
     if (type == "ident") {
         return *new Neuron();

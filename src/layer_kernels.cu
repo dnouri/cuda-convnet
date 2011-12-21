@@ -154,6 +154,41 @@ __global__ void kLogregSoftmaxGrad(float* y_l, float* labels, float* dE_dx_l, co
     }
 }
 
+template <int B_X, bool add>
+__global__ void kEltwiseMaxGrad(float* actGrad, float* input, float* output, float* target,
+                                const int numElements) {
+    for (int i = B_X * blockIdx.x + threadIdx.x; i < numElements; i += B_X * gridDim.x) {
+        if (add) {
+            target[i] += actGrad[i] * (output[i] == input[i]);
+        } else {
+            target[i] = actGrad[i] * (output[i] == input[i]);
+        }
+        
+    }
+}
+
+void computeEltwiseMaxGrad(NVMatrix& actGrad, NVMatrix& input, NVMatrix& output, NVMatrix& target, bool add) {
+    assert(actGrad.isContiguous());
+    assert(output.isContiguous());
+    assert(input.isContiguous());
+    assert(actGrad.isSameDims(input));
+    assert(actGrad.isSameDims(output));
+    
+    dim3 blocks(DIVUP(actGrad.getNumElements(), 128));
+    dim3 threads(128);
+    if (add) {
+        assert(actGrad.isSameDims(target));
+        cudaFuncSetCacheConfig(kEltwiseMaxGrad<128, true>, cudaFuncCachePreferL1);
+        kEltwiseMaxGrad<128, true><<<blocks, threads>>>(actGrad.getDevData(), input.getDevData(), output.getDevData(), target.getDevData(), actGrad.getNumElements());
+    } else {
+        target.resize(actGrad);
+        cudaFuncSetCacheConfig(kEltwiseMaxGrad<128, false>, cudaFuncCachePreferL1);
+        kEltwiseMaxGrad<128, false><<<blocks, threads>>>(actGrad.getDevData(), input.getDevData(), output.getDevData(), target.getDevData(), actGrad.getNumElements());
+    }
+    
+    cutilCheckMsg("computeEltwiseMaxGrad: Kernel execution failed");
+}
+
 /*
  * E = -log(y_t)
  * probs:           (numOut, numCases)

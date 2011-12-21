@@ -45,6 +45,7 @@ class CIFARDataProvider(LabeledMemoryDataProvider):
         return epoch, batchnum, [datadic['data'], datadic['labels']]
 
     # Returns the dimensionality of the two data matrices returned by get_next_batch
+    # idx is the index of the matrix. 
     def get_data_dims(self, idx=0):
         return self.img_size**2 * self.num_colors if idx == 0 else 1
     

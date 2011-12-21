@@ -35,12 +35,18 @@ from convdata import *
 from os import linesep as NL
 #import pylab as pl
 
-class GPUModel(IGPUModel):
-    def __init__(self, model_name, op, load_dic, dp_params={}):
+class ConvNet(IGPUModel):
+    def __init__(self, op, load_dic, dp_params={}):
         filename_options = []
         dp_params['multiview_test'] = op.get_value('multiview_test')
         dp_params['crop_border'] = op.get_value('crop_border')
-        IGPUModel.__init__(self, model_name, op, load_dic, filename_options, dp_params=dp_params)
+        IGPUModel.__init__(self, "ConvNet", op, load_dic, filename_options, dp_params=dp_params)
+        
+    def import_model(self):
+        lib_name = "pyconvnet" if is_windows_machine() else "_ConvNet"
+        print "========================="
+        print "Importing %s C++ module" % lib_name
+        self.libmodel = __import__(lib_name) 
         
     def init_model_lib(self):
         self.libmodel.initModel(self.layers, self.minibatch_size, self.device_ids[0])
@@ -186,8 +192,8 @@ class GPUModel(IGPUModel):
     
 if __name__ == "__main__":
     #nr.seed(5)
-    op = GPUModel.get_options_parser()
+    op = ConvNet.get_options_parser()
 
     op, load_dic = IGPUModel.parse_options(op)
-    model = GPUModel("ConvNet", op, load_dic)
+    model = ConvNet(op, load_dic)
     model.start()
