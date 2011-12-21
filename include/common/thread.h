@@ -44,6 +44,7 @@ private:
     static void* start_pthread_func(void *obj) {
         void* retval = reinterpret_cast<Thread*>(obj)->run();
         pthread_exit(retval);
+        return retval;
     }
 protected:
     virtual void* run() = 0;

@@ -341,7 +341,7 @@ public:
     class SoftReluGradientOperator {
     public:
         __device__ inline float operator()(float unitActGrad, float unitInput) const  {
-            if (unitInput > 4) {
+            if (unitInput > 4.0f) {
                 return unitActGrad;
             }
             const float f = __expf(unitInput);
@@ -378,7 +378,7 @@ public:
     class SquareGradientOperator {
     public:
         __device__ inline float operator()(float unitActGrad, float unitInput) const {
-            return unitActGrad * 2 * unitInput; 
+            return unitActGrad * 2.0f * unitInput; 
         }
     };
     
@@ -422,7 +422,7 @@ public:
  * LinearNeuron
  * -----------------------
  * 
- * f(x) = ax + b
+ * f(x) = a*x + b
  * =======================
  */
 class LinearNeuron : public Neuron {
@@ -433,11 +433,11 @@ protected:
     }
 
     void _computeInputGrad(NVMatrix& actsGrad, NVMatrix& target) {
-        actsGrad.apply(LinearGradientOperator(_a), target);
+        actsGrad.scale(_a, target);
     }
     
     void _addInputGrad(NVMatrix& actsGrad, NVMatrix& target) {
-        actsGrad.applyBinary(AddGradientOperator<LinearGradientOperator>(LinearGradientOperator(_a)), target, target);
+        actsGrad.applyBinary(AddGradientOperator<NVMatrixOps::MultByScalar>(NVMatrixOps::MultByScalar(_a)), target, target);
     }
 public:
     class LinearOperator {
@@ -448,17 +448,6 @@ public:
             return _a * x + _b;
         }
         LinearOperator(float a, float b) : _a(a), _b(b) {
-        }
-    };
-    
-    class LinearGradientOperator {
-    protected:
-        float _a;
-    public:
-        __device__ inline float operator()(float unitActGrad) const {
-            return unitActGrad * _a; 
-        }
-        LinearGradientOperator(float a) : _a(a) {
         }
     };
     

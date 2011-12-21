@@ -536,6 +536,10 @@ void NVMatrix::squaredDiff(NVMatrix& b, NVMatrix& target) {
 }
 
 void NVMatrix::add(NVMatrix& b, float scaleA, float scaleB, NVMatrix& target) {
+    if (scaleA == 0) {
+        b.scale(scaleB, target);
+        return;
+    }
     if (scaleA == 1 && scaleB == 1) { // slight optimization
         applyBinary(NVMatrixBinaryOps::Add(), b, target);
     } else {

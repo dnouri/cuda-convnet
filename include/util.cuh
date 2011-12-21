@@ -43,7 +43,7 @@
 enum PASS_TYPE {PASS_TRAIN, PASS_TEST, PASS_GC};
 
 // For gradient checking
-#define GC_SUPPRESS_PASSES          false
+#define GC_SUPPRESS_PASSES          true
 #define GC_REL_ERR_THRESH           0.02
 
 /*

@@ -233,10 +233,6 @@ NVMatrix& Layer::getActsGrad() {
     return *_actsGrad;
 }
 
-int Layer::getNumGradProducersNext() {
-    return _numGradProducersNext;
-}
-
 /* 
  * =======================
  * NeuronLayer
@@ -864,6 +860,8 @@ doublev& CostLayer::getCost() {
 CostLayer& CostLayer::makeCostLayer(ConvNet* convNet, string& type, PyObject* paramsDict) {
     if (type == "cost.logreg") {
         return *new LogregCostLayer(convNet, paramsDict);
+    } else if (type == "cost.sum2") {
+        return *new SumOfSquaresCostLayer(convNet, paramsDict);
     }
     throw string("Unknown cost layer type ") + type;
 }
@@ -901,4 +899,22 @@ void LogregCostLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PAS
     if (doWork) {
         computeLogregGrad(labels, probs, target, scaleTargets == 1, _coeff);
     }
+}
+
+/* 
+ * =====================
+ * SumOfSquaresCostLayer
+ * =====================
+ */
+SumOfSquaresCostLayer::SumOfSquaresCostLayer(ConvNet* convNet, PyObject* paramsDict) : CostLayer(convNet, paramsDict, false) {
+}
+
+void SumOfSquaresCostLayer::fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType) {
+    _inputs[0]->apply(NVMatrixOps::Square(), getActs());
+    _costv.clear();
+    _costv.push_back(getActs().sum());
+}
+
+void SumOfSquaresCostLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType) {
+    _prev[inpIdx]->getActsGrad().add(*_inputs[0], scaleTargets, -2 * _coeff);
 }

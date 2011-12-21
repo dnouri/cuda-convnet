@@ -95,7 +95,6 @@ public:
     virtual NVMatrix& getActsGrad();
     virtual void postInit();
     
-    int getNumGradProducersNext();
     // Do nothing if this layer has no weights
     virtual void updateWeights() {
     }
@@ -324,6 +323,14 @@ protected:
     void bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType);
 public:
     LogregCostLayer(ConvNet* convNet, PyObject* paramsDict);
+};
+
+class SumOfSquaresCostLayer : public CostLayer {
+protected:
+    void fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType);
+    void bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType);
+public:
+    SumOfSquaresCostLayer(ConvNet* convNet, PyObject* paramsDict);
 };
 
 #endif	/* LAYER_CUH */

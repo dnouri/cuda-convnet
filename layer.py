@@ -315,10 +315,10 @@ class LayerWithInputParser(LayerParser):
                     # do not need to remember my inputs.
                     if not l['usesActs'] and not dic['usesInputs']:
                         dic['actsTarget'] = i
-#                        print "Layer '%s' sharing activity matrix with layer '%s'" % (dic['name'], l['name'])
+                        print "Layer '%s' sharing activity matrix with layer '%s'" % (dic['name'], l['name'])
                     # I can share my gradient matrix with this layer.
                     dic['actsGradTarget'] = i
-#                    print "Layer '%s' sharing activity gradient matrix with layer '%s'" % (dic['name'], l['name'])
+                    print "Layer '%s' sharing activity gradient matrix with layer '%s'" % (dic['name'], l['name'])
             
     def parse(self, name, mcp, prev_layers, model=None):
         dic = LayerParser.parse(self, name, mcp, prev_layers, model)
@@ -360,7 +360,6 @@ class NailbedLayerParser(LayerWithInputParser):
         dic['forceOwnActs'] = False
         dic['usesActs'] = False
         dic['usesInputs'] = False
-        
         
         dic['channels'] = mcp.safe_get_int(name, 'channels')
         dic['stride'] = mcp.safe_get_int(name, 'stride')
@@ -898,6 +897,15 @@ class LogregCostParser(CostParser):
         
         print "Initialized logistic regression cost '%s'" % name
         return dic
+    
+class SumOfSquaresCostParser(CostParser):
+    def __init__(self):
+        CostParser.__init__(self, num_inputs=1)
+        
+    def parse(self, name, mcp, prev_layers, model):
+        dic = CostParser.parse(self, name, mcp, prev_layers, model)
+        print "Initialized sum-of-squares cost '%s'" % name
+        return dic
 
 # All the layer parsers
 layer_parsers = {'data': lambda : DataLayerParser(),
@@ -913,7 +921,8 @@ layer_parsers = {'data': lambda : DataLayerParser(),
                  'cnorm': lambda : NormLayerParser('contrast'),
                  'nailbed': lambda : NailbedLayerParser(),
                  'blur': lambda : GaussianBlurLayerParser(),
-                 'cost.logreg': lambda : LogregCostParser()}
+                 'cost.logreg': lambda : LogregCostParser(),
+                 'cost.sum2': lambda : SumOfSquaresCostParser()}
  
 # All the neuron parsers
 # This isn't a name --> parser mapping as the layer parsers above because neurons don't have fixed names.

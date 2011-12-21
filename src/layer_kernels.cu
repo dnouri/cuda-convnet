@@ -163,7 +163,6 @@ __global__ void kEltwiseMaxGrad(float* actGrad, float* input, float* output, flo
         } else {
             target[i] = actGrad[i] * (output[i] == input[i]);
         }
-        
     }
 }
 
