@@ -31,7 +31,7 @@ import os
 from gpumodel import IGPUModel
 import random as r
 import numpy.random as nr
-from convnet import GPUModel
+from convnet import ConvNet
 from options import *
 
 try:
@@ -43,21 +43,21 @@ except:
 class ShowNetError(Exception):
     pass
 
-class ShowGPUModel(GPUModel):
-    def __init__(self, model_name, op, load_dic):
-        GPUModel.__init__(self, model_name, op, load_dic)
+class ShowConvNet(ConvNet):
+    def __init__(self, op, load_dic):
+        ConvNet.__init__(self, op, load_dic)
     
     def get_gpus(self):
         self.need_gpu = self.op.get_value('show_preds') or self.op.get_value('write_features')
         if self.need_gpu:
-            GPUModel.get_gpus(self)
+            ConvNet.get_gpus(self)
     
     def import_model(self):
         if self.need_gpu:
-            GPUModel.import_model(self)
+            ConvNet.import_model(self)
             
     def init_model_state(self):
-        #GPUModel.init_model_state(self)
+        #ConvNet.init_model_state(self)
         if self.op.get_value('show_preds'):
             self.sotmax_idx = self.get_layer_idx(self.op.get_value('show_preds'), check_type='softmax')
         if self.op.get_value('write_features'):
@@ -65,7 +65,7 @@ class ShowGPUModel(GPUModel):
             
     def init_model_lib(self):
         if self.need_gpu:
-            GPUModel.init_model_lib(self)
+            ConvNet.init_model_lib(self)
 
     def plot_cost(self):
         if self.show_cost not in self.train_outputs[0]:
@@ -256,7 +256,7 @@ class ShowGPUModel(GPUModel):
             
     @classmethod
     def get_options_parser(cls):
-        op = GPUModel.get_options_parser()
+        op = ConvNet.get_options_parser()
         for option in list(op.options):
             if option not in ('gpu', 'load_file', 'train_batch_range', 'test_batch_range'):
                 op.delete_option(option)
@@ -276,9 +276,9 @@ class ShowGPUModel(GPUModel):
     
 if __name__ == "__main__":
     try:
-        op = ShowGPUModel.get_options_parser()
+        op = ShowConvNet.get_options_parser()
         op, load_dic = IGPUModel.parse_options(op)
-        model = ShowGPUModel("ConvNet", op, load_dic)
+        model = ShowConvNet(op, load_dic)
         model.start()
     except (UnpickleError, ShowNetError, opt.GetoptError), e:
         print "----------------"
