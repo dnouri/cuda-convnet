@@ -484,7 +484,7 @@ class EltwiseSumLayerParser(LayerWithInputParser):
         dic = LayerWithInputParser.parse(self, name, mcp, prev_layers, model)
         
         if len(set(dic['numInputs'])) != 1:
-            raise LayerParsingError("Layer '%s': all inputs must have the same dimensionality. Got dimensionalities: %s" % (name, ", ".join(dic['numInputs'])))
+            raise LayerParsingError("Layer '%s': all inputs must have the same dimensionality. Got dimensionalities: %s" % (name, ", ".join(str(s) for s in dic['numInputs'])))
         dic['outputs'] = dic['numInputs'][0]
         dic['usesInputs'] = False
         dic['usesActs'] = False
