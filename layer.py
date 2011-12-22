@@ -22,7 +22,6 @@
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
 # EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-import options as op
 from math import exp
 import sys
 import ConfigParser as cfg
@@ -315,10 +314,10 @@ class LayerWithInputParser(LayerParser):
                     # do not need to remember my inputs.
                     if not l['usesActs'] and not dic['usesInputs']:
                         dic['actsTarget'] = i
-                        print "Layer '%s' sharing activity matrix with layer '%s'" % (dic['name'], l['name'])
+#                        print "Layer '%s' sharing activity matrix with layer '%s'" % (dic['name'], l['name'])
                     # I can share my gradient matrix with this layer.
                     dic['actsGradTarget'] = i
-                    print "Layer '%s' sharing activity gradient matrix with layer '%s'" % (dic['name'], l['name'])
+#                    print "Layer '%s' sharing activity gradient matrix with layer '%s'" % (dic['name'], l['name'])
             
     def parse(self, name, mcp, prev_layers, model=None):
         dic = LayerParser.parse(self, name, mcp, prev_layers, model)
@@ -505,7 +504,7 @@ class EltwiseMaxLayerParser(LayerWithInputParser):
         if len(dic['inputs']) < 2:
             raise LayerParsingError("Layer '%s': elementwise max layer must have at least 2 inputs, got %d." % (name, len(dic['inputs'])))
         if len(set(dic['numInputs'])) != 1:
-            raise LayerParsingError("Layer '%s': all inputs must have the same dimensionality. Got dimensionalities: %s" % (name, ", ".join(dic['numInputs'])))
+            raise LayerParsingError("Layer '%s': all inputs must have the same dimensionality. Got dimensionalities: %s" % (name, ", ".join(str(s) for s in dic['numInputs'])))
         dic['outputs'] = dic['numInputs'][0]
 
         print "Initialized elementwise max layer '%s', producing %d outputs" % (name, dic['outputs'])
@@ -936,5 +935,5 @@ neuron_parsers = sorted([NeuronParser('ident', 'f(x) = x', uses_acts=False, uses
                          NeuronParser('sqrt', 'f(x) = sqrt(x)', uses_acts=True, uses_inputs=False),
                          ParamNeuronParser('tanh[a,b]', 'f(x) = a * tanh(b * x)', uses_acts=True, uses_inputs=False),
                          ParamNeuronParser('brelu[a]', 'f(x) = min(a, max(0, x))', uses_acts=True, uses_inputs=False),
-                         ParamNeuronParser('linear[a,b]', 'f(x) = a * x + b', uses_acts=True, uses_inputs=False),],
+                         ParamNeuronParser('linear[a,b]', 'f(x) = a * x + b', uses_acts=True, uses_inputs=False)],
                         key=lambda x:x.type)
