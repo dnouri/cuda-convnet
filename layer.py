@@ -718,7 +718,7 @@ class LocalLayerParser(WeightLayerParser):
             if dic['channels'][i] > 3 and dic['channels'][i] % 4 != 0:
                 raise LayerParsingError("Layer '%s[%d]': number of channels must be smaller than 4 or divisible by 4" % (name, i))
             if dic['filterSize'][i] > 2 * dic['padding'][i] + dic['imgSize'][i]:
-                raise LayerParsingError("Layer '%s[%d]': filter size (%d) greater than image size + 2 * padding (%d)" % (name, i, dic['filterSize'], 2 * dic['padding'] + dic['imgSize']))
+                raise LayerParsingError("Layer '%s[%d]': filter size (%d) greater than image size + 2 * padding (%d)" % (name, i, dic['filterSize'][i], 2 * dic['padding'][i] + dic['imgSize'][i]))
         
             if dic['randSparse'][i]: # Random sparse connectivity requires some extra checks
                 if dic['groups'][i] == 1:
