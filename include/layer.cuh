@@ -55,7 +55,7 @@ protected:
     NVMatrixV _inputs;
     NVMatrix *_outputs; // TODO: make this a pointer so you can reuse previous layers' matrices
     NVMatrix *_actsGrad; // Layer activity gradients
-    bool _gradConsumer, _trans;
+    bool _gradConsumer, _foundGradConsumers, _trans;
     int _numGradProducersNext;
     int _actsTarget, _actsGradTarget;
     std::string _name, _type;
@@ -123,6 +123,7 @@ protected:
     float _wStep, _bStep;
     
     void bpropCommon(NVMatrix& v, PASS_TYPE passType);
+    virtual void bpropBiases(NVMatrix& v, PASS_TYPE passType) = 0;
     virtual void bpropWeights(NVMatrix& v, int inpIdx, PASS_TYPE passType) = 0;
 public:
     WeightLayer(ConvNet* convNet, PyObject* paramsDict, bool trans, bool useGrad);
@@ -137,6 +138,7 @@ class FCLayer : public WeightLayer {
 protected:
     void fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType);
     void bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType);
+    void bpropBiases(NVMatrix& v, PASS_TYPE passType);
     void bpropWeights(NVMatrix& v, int inpIdx, PASS_TYPE passType);
 public:
     FCLayer(ConvNet* convNet, PyObject* paramsDict);
@@ -206,6 +208,7 @@ protected:
 
     void fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType);
     void bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType);
+    void bpropBiases(NVMatrix& v, PASS_TYPE passType);
     void bpropWeights(NVMatrix& v, int inpIdx, PASS_TYPE passType);
     void truncBwdActs();
 
@@ -217,6 +220,7 @@ class LocalUnsharedLayer : public LocalLayer {
 protected:
     void fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType);
     void bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType);
+    void bpropBiases(NVMatrix& v, PASS_TYPE passType);
     void bpropWeights(NVMatrix& v, int inpIdx, PASS_TYPE passType);
 public:
     LocalUnsharedLayer(ConvNet* convNet, PyObject* paramsDict);

@@ -328,27 +328,27 @@ class LayerWithInputParser(LayerParser):
             if inp not in prev_names:
                 raise LayerParsingError("Layer '%s': input layer '%s' not defined" % (name, inp))
         dic['inputs'] = [prev_names.index(inp) for inp in dic['inputs']]
+        dic['inputLayers'] = [prev_layers[inp] for inp in dic['inputs']]
         for inp in dic['inputs']:
             if prev_layers[inp]['outputs'] == 0:
                 raise LayerParsingError("Layer '%s': input layer '%s' does not produce any output" % (name, prev_names[inp]))
         dic['numInputs'] = [prev_layers[i]['outputs'] for i in dic['inputs']]
         
-        # Layers can declare a neuron to apply to their output, as a shortcut
+        # Layers can declare a neuron activation function to apply to their output, as a shortcut
         # to avoid declaring a separate neuron layer above themselves.
         dic['neuron'] = mcp.safe_get(name, 'neuron', default="")
         if self.num_inputs > 0 and len(dic['numInputs']) != self.num_inputs:
             raise LayerParsingError("Layer '%s': number of inputs must be %d", name, self.num_inputs)
         
-        input_layers = [prev_layers[i] for i in dic['inputs']]
-        dic['gradConsumer'] = any(l['gradConsumer'] for l in input_layers)
-        dic['usesActs'] = dic['gradConsumer'] # A conservative setting by default for layers with input
+#        input_layers = [prev_layers[i] for i in dic['inputs']]
+#        dic['gradConsumer'] = any(l['gradConsumer'] for l in dic['inputLayers'])
+#        dic['usesActs'] = dic['gradConsumer'] # A conservative setting by default for layers with input
         return dic
     
     def verify_img_size(self):
         dic = self.dic
         if dic['numInputs'][0] % dic['imgPixels'] != 0 or dic['imgSize'] * dic['imgSize'] != dic['imgPixels']:
             raise LayerParsingError("Layer '%s': has %-d dimensional input, not interpretable as %d-channel images" % (dic['name'], dic['numInputs'][0], dic['channels']))
-
 
 class NailbedLayerParser(LayerWithInputParser):
     def __init__(self):
@@ -533,6 +533,8 @@ class WeightLayerParser(LayerWithInputParser):
         
         self.verify_num_params(['epsW', 'momW', 'wc'])
         
+        dic['gradConsumer'] = dic['epsB'] > 0 or any(w > 0 for w in dic['epsW'])
+        
     @staticmethod
     def unshare_weights(layer, layers, matrix_idx=None):
         def unshare(layer, layers, indices):
@@ -553,17 +555,46 @@ class WeightLayerParser(LayerWithInputParser):
     def make_weights(self, initW, rows, cols, order='C'):
         dic = self.dic
         dic['weights'], dic['weightsInc'] = [], []
-        for i in xrange(len(dic['inputs'])):
-            if dic['weightSourceLayerIndices'][i] >= 0: # Shared weight matrix
-                src_layer = self.prev_layers[dic['weightSourceLayerIndices'][i]] if dic['weightSourceLayerIndices'][i] < len(self.prev_layers) else dic
-                dic['weights'] += [src_layer['weights'][dic['weightSourceMatrixIndices'][i]]]
-                dic['weightsInc'] += [src_layer['weightsInc'][dic['weightSourceMatrixIndices'][i]]]
-                if dic['weights'][i].shape != (rows[i], cols[i]):
-                    raise LayerParsingError("Layer '%s': weight sharing source matrix '%s' has shape %dx%d; should be %dx%d." 
-                                            % (dic['name'], dic['weightSource'][i], dic['weights'][i].shape[0], dic['weights'][i].shape[1], rows[i], cols[i]))
-            else:
-                dic['weights'] += [n.array(initW[i] * nr.randn(rows[i], cols[i]), dtype=n.single, order=order)]
-                dic['weightsInc'] += [n.zeros_like(dic['weights'][i])]
+        if dic['initFunc']: # Initialize weights from user-supplied python function
+            # Initialization function is supplied in the format
+            # module.func
+            s = dic['initFunc'].split('.')
+            if len(s) != 2:
+                raise LayerParsingError("Layer '%s': 'initFunc' parameter must have format 'moduleName.functionName'; got: %s." % (dic['name'], dic['initFunc']))
+            module, func = s[0], s[1]
+            try:
+                mod = __import__(module)
+                dic['weights'] = getattr(mod, func)(dic['name'], zip(rows, cols))
+                if type(dic['weights']) != list:
+                    raise LayerParsingError("Layer '%s': weight initialization function %s must return list of weight matrices. Got: %s." % (dic['name'], dic['initFunc'], type(dic['weights'])))
+                if len(dic['weights']) != len(rows):
+                    raise LayerParsingError("Layer '%s': weight initialization function %s returned %d weight matrices; should be %d." % (dic['name'], dic['initFunc'], len(dic['weights']), len(rows)))
+                for i in xrange(len(dic['weights'])):
+                    if type(dic['weights'][i]) != n.ndarray:
+                        raise LayerParsingError("Layer '%s': weight initialization function %s must return list of weight matrices as numpy.ndarray objects. Got: %s." % (dic['name'], dic['initFunc'], type(dic['weights'][i])))
+                    if dic['weights'][i].dtype != n.float32:
+                        raise LayerParsingError("Layer '%s': weight initialization function %s must return list of weight matrices consisting of single-precision floats. Got: %s." % (dic['name'], dic['initFunc'], dic['weights'][i].dtype))
+                    if dic['weights'][i].shape != (rows[i], cols[i]):
+                        raise LayerParsingError("Layer '%s': weight matrix %d returned by weight initialization function %s has wrong shape. Should be: %s; got: %s." % (dic['name'], i, dic['initFunc'], (rows[i], cols[i]), dic['weights'][i].shape))
+                    # Convert to desired order
+                    dic['weights'][i] = n.require(dic['weights'][i], requirements=order)
+                dic['weightsInc'] = [n.zeros_like(w) for w in dic['weights']]
+                print "Layer '%s' initialized weight matrices from function %s" % (dic['name'], dic['initFunc'])
+            except (ImportError, AttributeError), e:
+                raise LayerParsingError("Layer '%s': %s." % (dic['name'], e))
+        else:
+            for i in xrange(len(dic['inputs'])):
+                if dic['weightSourceLayerIndices'][i] >= 0: # Shared weight matrix
+                    src_layer = self.prev_layers[dic['weightSourceLayerIndices'][i]] if dic['weightSourceLayerIndices'][i] < len(self.prev_layers) else dic
+                    dic['weights'] += [src_layer['weights'][dic['weightSourceMatrixIndices'][i]]]
+                    dic['weightsInc'] += [src_layer['weightsInc'][dic['weightSourceMatrixIndices'][i]]]
+                    if dic['weights'][i].shape != (rows[i], cols[i]):
+                        raise LayerParsingError("Layer '%s': weight sharing source matrix '%s' has shape %dx%d; should be %dx%d." 
+                                                % (dic['name'], dic['weightSource'][i], dic['weights'][i].shape[0], dic['weights'][i].shape[1], rows[i], cols[i]))
+                    print "Layer '%s' initialized weight matrix %d from %s" % (dic['name'], i, dic['weightSource'][i])
+                else:
+                    dic['weights'] += [n.array(initW[i] * nr.randn(rows[i], cols[i]), dtype=n.single, order=order)]
+                    dic['weightsInc'] += [n.zeros_like(dic['weights'][i])]
         
     def make_biases(self, rows, cols, order='C'):
         dic = self.dic
@@ -576,7 +607,7 @@ class WeightLayerParser(LayerWithInputParser):
         dic['gradConsumer'] = True
         dic['initW'] = mcp.safe_get_float_list(name, 'initW')
         dic['initB'] = mcp.safe_get_float(name, 'initB', default=0)
- 
+        dic['initFunc'] = mcp.safe_get(name, 'initFunc', default="")
         # Find shared weight matrices
         
         dic['weightSource'] = mcp.safe_get_list(name, 'weightSource', default=[''] * len(dic['inputs']))
