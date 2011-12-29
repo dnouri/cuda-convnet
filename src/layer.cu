@@ -212,7 +212,7 @@ bool Layer::isGradConsumer() {
         for (int i = 0; i < _prev.size(); i++) {
             _gradConsumer |= _prev[i]->isGradConsumer();
         }
-        _foundGradConsumers = _gradConsumer;
+        _foundGradConsumers = true;
     }
     return _gradConsumer;
 }
@@ -325,10 +325,8 @@ void WeightLayer::bpropCommon(NVMatrix& v, PASS_TYPE passType) {
 }
 
 void WeightLayer::updateWeights() {
-    if (_gradConsumer) {
-        _weights.update();
-        _biases->update();
-    }
+    _weights.update();
+    _biases->update();
 }
 
 void WeightLayer::copyToCPU() {
