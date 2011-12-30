@@ -552,36 +552,43 @@ class WeightLayerParser(LayerWithInputParser):
         if 'weightSourceLayerIndices' in layer:
             unshare(layer, layers, range(len(layer['inputs'])) if matrix_idx is None else [matrix_idx])
 
+    # Load weight/biases initialization module
+    def call_init_func(self, param_name, shapes):
+        dic = self.dic
+        func_pat = re.compile('^([^\.]+)\.([^\(\)]+)\s*(?:\(([^,]+(?:,[^,]+)*)\))?$')
+        m = func_pat.match(dic[param_name])
+        if not m:
+            raise LayerParsingError("Layer '%s': '%s' parameter must have format 'moduleName.functionName(param1,param2,...)'; got: %s." % (dic['name'], param_name, dic['initWFunc']))
+        module, func = m.group(1), m.group(2)
+        params = m.group(3).split(',') if m.group(3) is not None else []
+        try:
+            mod = __import__(module)
+            return getattr(mod, func)(dic['name'], shapes, params=params)
+        except (ImportError, AttributeError, TypeError), e:
+            raise LayerParsingError("Layer '%s': %s." % (dic['name'], e))
+        
     def make_weights(self, initW, rows, cols, order='C'):
         dic = self.dic
         dic['weights'], dic['weightsInc'] = [], []
-        if dic['initFunc']: # Initialize weights from user-supplied python function
+        if dic['initWFunc']: # Initialize weights from user-supplied python function
             # Initialization function is supplied in the format
             # module.func
-            s = dic['initFunc'].split('.')
-            if len(s) != 2:
-                raise LayerParsingError("Layer '%s': 'initFunc' parameter must have format 'moduleName.functionName'; got: %s." % (dic['name'], dic['initFunc']))
-            module, func = s[0], s[1]
-            try:
-                mod = __import__(module)
-                dic['weights'] = getattr(mod, func)(dic['name'], zip(rows, cols))
-                if type(dic['weights']) != list:
-                    raise LayerParsingError("Layer '%s': weight initialization function %s must return list of weight matrices. Got: %s." % (dic['name'], dic['initFunc'], type(dic['weights'])))
-                if len(dic['weights']) != len(rows):
-                    raise LayerParsingError("Layer '%s': weight initialization function %s returned %d weight matrices; should be %d." % (dic['name'], dic['initFunc'], len(dic['weights']), len(rows)))
-                for i in xrange(len(dic['weights'])):
-                    if type(dic['weights'][i]) != n.ndarray:
-                        raise LayerParsingError("Layer '%s': weight initialization function %s must return list of weight matrices as numpy.ndarray objects. Got: %s." % (dic['name'], dic['initFunc'], type(dic['weights'][i])))
-                    if dic['weights'][i].dtype != n.float32:
-                        raise LayerParsingError("Layer '%s': weight initialization function %s must return list of weight matrices consisting of single-precision floats. Got: %s." % (dic['name'], dic['initFunc'], dic['weights'][i].dtype))
-                    if dic['weights'][i].shape != (rows[i], cols[i]):
-                        raise LayerParsingError("Layer '%s': weight matrix %d returned by weight initialization function %s has wrong shape. Should be: %s; got: %s." % (dic['name'], i, dic['initFunc'], (rows[i], cols[i]), dic['weights'][i].shape))
-                    # Convert to desired order
-                    dic['weights'][i] = n.require(dic['weights'][i], requirements=order)
-                dic['weightsInc'] = [n.zeros_like(w) for w in dic['weights']]
-                print "Layer '%s' initialized weight matrices from function %s" % (dic['name'], dic['initFunc'])
-            except (ImportError, AttributeError), e:
-                raise LayerParsingError("Layer '%s': %s." % (dic['name'], e))
+            dic['weights'] = self.call_init_func('initWFunc', zip(rows, cols))
+            if type(dic['weights']) != list:
+                raise LayerParsingError("Layer '%s': weight initialization function %s must return list of weight matrices. Got: %s." % (dic['name'], dic['initWFunc'], type(dic['weights'])))
+            if len(dic['weights']) != len(rows):
+                raise LayerParsingError("Layer '%s': weight initialization function %s returned %d weight matrices; should be %d." % (dic['name'], dic['initWFunc'], len(dic['weights']), len(rows)))
+            for i in xrange(len(dic['weights'])):
+                if type(dic['weights'][i]) != n.ndarray:
+                    raise LayerParsingError("Layer '%s': weight initialization function %s must return list of weight matrices as numpy.ndarray objects. Got: %s." % (dic['name'], dic['initWFunc'], type(dic['weights'][i])))
+                if dic['weights'][i].dtype != n.float32:
+                    raise LayerParsingError("Layer '%s': weight initialization function %s must return list of weight matrices consisting of single-precision floats. Got: %s." % (dic['name'], dic['initWFunc'], dic['weights'][i].dtype))
+                if dic['weights'][i].shape != (rows[i], cols[i]):
+                    raise LayerParsingError("Layer '%s': weight matrix %d returned by weight initialization function %s has wrong shape. Should be: %s; got: %s." % (dic['name'], i, dic['initWFunc'], (rows[i], cols[i]), dic['weights'][i].shape))
+                # Convert to desired order
+                dic['weights'][i] = n.require(dic['weights'][i], requirements=order)
+            dic['weightsInc'] = [n.zeros_like(w) for w in dic['weights']]
+            print "Layer '%s' initialized weight matrices from function %s" % (dic['name'], dic['initWFunc'])
         else:
             for i in xrange(len(dic['inputs'])):
                 if dic['weightSourceLayerIndices'][i] >= 0: # Shared weight matrix
@@ -598,7 +605,19 @@ class WeightLayerParser(LayerWithInputParser):
         
     def make_biases(self, rows, cols, order='C'):
         dic = self.dic
-        dic['biases'] = dic['initB'] * n.ones((rows, cols), order='C', dtype=n.single)
+        if dic['initBFunc']:
+            dic['biases'] = self.call_init_func('initBFunc', (rows, cols))
+            if type(dic['biases']) != n.ndarray:
+                raise LayerParsingError("Layer '%s': bias initialization function %s must return numpy.ndarray object. Got: %s." % (dic['name'], dic['initBFunc'], type(dic['biases'])))
+            if dic['biases'].dtype != n.float32:
+                raise LayerParsingError("Layer '%s': bias initialization function %s must return numpy.ndarray object consisting of single-precision floats. Got: %s." % (dic['name'], dic['initBFunc'], dic['biases'].dtype))
+            if dic['biases'].shape != (rows, cols):
+                raise LayerParsingError("Layer '%s': bias vector returned by bias initialization function %s has wrong shape. Should be: %s; got: %s." % (dic['name'], dic['initBFunc'], (rows, cols), dic['biases'].shape))
+
+            dic['biases'] = n.require(dic['biases'], requirements=order)
+            print "Layer '%s' initialized bias vector from function %s" % (dic['name'], dic['initBFunc'])
+        else:
+            dic['biases'] = dic['initB'] * n.ones((rows, cols), order='C', dtype=n.single)
         dic['biasesInc'] = n.zeros_like(dic['biases'])
         
     def parse(self, name, mcp, prev_layers, model):
@@ -607,7 +626,8 @@ class WeightLayerParser(LayerWithInputParser):
         dic['gradConsumer'] = True
         dic['initW'] = mcp.safe_get_float_list(name, 'initW')
         dic['initB'] = mcp.safe_get_float(name, 'initB', default=0)
-        dic['initFunc'] = mcp.safe_get(name, 'initFunc', default="")
+        dic['initWFunc'] = mcp.safe_get(name, 'initWFunc', default="")
+        dic['initBFunc'] = mcp.safe_get(name, 'initBFunc', default="")
         # Find shared weight matrices
         
         dic['weightSource'] = mcp.safe_get_list(name, 'weightSource', default=[''] * len(dic['inputs']))
