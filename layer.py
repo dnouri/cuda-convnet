@@ -624,7 +624,7 @@ class WeightLayerParser(LayerWithInputParser):
         dic = LayerWithInputParser.parse(self, name, mcp, prev_layers, model)
         dic['requiresParams'] = True
         dic['gradConsumer'] = True
-        dic['initW'] = mcp.safe_get_float_list(name, 'initW')
+        dic['initW'] = mcp.safe_get_float_list(name, 'initW', default=0.01)
         dic['initB'] = mcp.safe_get_float(name, 'initB', default=0)
         dic['initWFunc'] = mcp.safe_get(name, 'initWFunc', default="")
         dic['initBFunc'] = mcp.safe_get(name, 'initBFunc', default="")
