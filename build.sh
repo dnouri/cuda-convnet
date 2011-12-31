@@ -1,8 +1,17 @@
 #!/bin/sh
 
 # Fill in these environment variables.
-# Make sure you're using CUDA 4.0 to ensure compatibility.
+# Make sure you're using CUDA 4.0.
 # Only use Fermi-generation cards. Older cards won't work.
+
+# If you're not sure what these paths should be, 
+# you can use the find command to try to locate them.
+# For example, NUMPY_INCLUDE_PATH contains the file
+# arrayobject.h. So you can search for it like this:
+# 
+# find /usr -name arrayobject.h
+# 
+# (it'll almost certainly be under /usr)
 
 # CUDA toolkit installation directory.
 export CUDA_INSTALL_PATH=/usr/local/cuda
