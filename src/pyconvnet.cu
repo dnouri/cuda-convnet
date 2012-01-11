@@ -164,8 +164,10 @@ PyObject* finishBatch(PyObject *self, PyObject *args) {
         }
         PyDict_SetItemString(dict, it->first.c_str(), v);
     }
+    
+    PyObject* retVal = Py_BuildValue("Ni", dict, cost.getNumCases());
     delete res; // Deletes cost too
-    return dict;
+    return retVal;
 }
 
 PyObject* checkGradients(PyObject *self, PyObject *args) {

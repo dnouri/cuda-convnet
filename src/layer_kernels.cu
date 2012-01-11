@@ -36,10 +36,7 @@
  * labelLogProbs:   (1, numCases)   (*out)
  * correctProbs:    (1, numCases)   (*out)
  * 
- * target:          (1, numCases) == log(y_l[labels,:]
- * 
- * numCases is the actual number of cases
- * caseStride is the number of cases including padding cases
+ * target:          (1, numCases)
  */
 __global__ void kLogregCost(float* probs, float* labels, float* maxProbs, float* labelLogProbs, float* correctProbs,
                             const int numCases, const int numOut) {
@@ -196,7 +193,7 @@ void computeEltwiseMaxGrad(NVMatrix& actGrad, NVMatrix& input, NVMatrix& output,
  * labelLogProbs:   (1, numCases)   (*out)
  * correctProbs:    (1, numCases)   (*out)
  * 
- * target:          (1, numCases) == log(y_l[labels,:]
+ * target:          (1, numCases)
  */
 void computeLogregCost(NVMatrix& labels, NVMatrix& probs, NVMatrix& labelLogProbs_out, NVMatrix& correctProbs_out) {
     int numCases = probs.getNumCols(); 

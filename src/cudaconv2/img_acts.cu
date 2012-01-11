@@ -922,7 +922,7 @@ void _imgActs(NVMatrix& hidActs, NVMatrix& filters, NVMatrix& targets,
     assert(!filters.isTrans());
     assert(!targets.isTrans());
     // These routines don't handle the case when only part of the image is visited in the convolution
-    assert(paddingStart <= 0 && paddingStart + (numModules-1)*moduleStride + filterSize >= imgSize);
+    assert(paddingStart <= 0 && paddingStart + (numModulesX-1)*moduleStride + filterSize >= imgSize);
     assert(moduleStride <= filterSize);
     
     assert(targets.isContiguous()); // no stride support here!
@@ -1333,7 +1333,7 @@ void _imgActsSparse(NVMatrix& hidActs, NVMatrix& filters, NVMatrix& targets, int
     assert(!filters.isTrans());
     assert(!targets.isTrans());
     // These routines don't handle the case when only part of the image is visited in the convolution
-    assert(paddingStart <= 0 && paddingStart + (numModules-1)*moduleStride + filterSize >= imgSize);
+    assert(paddingStart <= 0 && paddingStart + (numModulesX-1)*moduleStride + filterSize >= imgSize);
     assert(moduleStride <= filterSize);
     
     assert(targets.isContiguous()); // no stride support here!

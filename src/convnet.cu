@@ -108,6 +108,8 @@ Layer* ConvNet::initLayer(string& layerType, PyObject* paramsDict) {
         _layers.push_back(new NailbedLayer(this, paramsDict));
     } else if (layerType == "blur") {
         _layers.push_back(new GaussianBlurLayer(this, paramsDict));
+    } else if (layerType == "resize") {
+        _layers.push_back(new ResizeLayer(this, paramsDict));
     } else if (layerType == "data") {
         DataLayer *d = new DataLayer(this, paramsDict);
         _layers.push_back(d);
@@ -208,7 +210,7 @@ void ConvNet::bprop(PASS_TYPE passType) {
 void ConvNet::fprop(PASS_TYPE passType) {
     assert(_data != NULL);
     reset();
-    for (int i = 0; i < _data->getSize(); i++) {
+    for (int i = 0; i < _dataLayers.size(); i++) {
         _dataLayers[i]->fprop(_data->getData(), passType);
     }
 }
@@ -228,7 +230,7 @@ void ConvNet::fprop(int miniIdx, PASS_TYPE passType) {
 }
 
 Cost& ConvNet::getCost() {
-    return *new Cost(_costs);
+    return *new Cost(_data->getNumCases(), _costs);
 }
 
 // Same as getCost() but adds results to given cost and returns it

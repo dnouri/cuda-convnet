@@ -792,6 +792,27 @@ void GaussianBlurLayer::copyToGPU() {
 
 /* 
  * =====================
+ * ResizeLayer
+ * =====================
+ */
+ResizeLayer::ResizeLayer(ConvNet* convNet, PyObject* paramsDict) : Layer(convNet, paramsDict, false) {
+    _channels = pyDictGetInt(paramsDict, "channels");
+    _imgSize = pyDictGetInt(paramsDict, "imgSize");
+    _tgtSize = pyDictGetInt(paramsDict, "tgtSize");
+    _scale = pyDictGetFloat(paramsDict, "scale");
+}
+
+void ResizeLayer::fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType) {
+    resizeBilinear(*_inputs[0], getActs(), _imgSize, _tgtSize, _scale);
+}
+
+// Can't do this
+void ResizeLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType) {
+    assert(false);
+}
+
+/* 
+ * =====================
  * ResponseNormLayer
  * =====================
  */

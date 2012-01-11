@@ -35,14 +35,18 @@ using namespace std;
  * =====================
  */
 
-Cost::Cost() {
+Cost::Cost(int numCases) : _numCases(numCases) {
 }
 
-Cost::Cost(vector<CostLayer*>& costs) {
+Cost::Cost(int numCases, vector<CostLayer*>& costs) : _numCases(numCases) {
     for (vector<CostLayer*>::iterator it = costs.begin(); it != costs.end(); ++it) {
         _costMap[(*it)->getName()] = &(*it)->getCost();
         _costCoeffMap[(*it)->getName()] = (*it)->getCoeff();
     }
+}
+
+int Cost::getNumCases() {
+    return _numCases;
 }
 
 doublev& Cost::operator [](const string s) {
@@ -83,6 +87,7 @@ Cost& Cost::operator += (Cost& er) {
             myVec[i] += otherVec[i];
         }
     }
+    _numCases += er.getNumCases();
     return *this;
 }
 

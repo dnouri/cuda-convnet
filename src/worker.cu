@@ -87,7 +87,7 @@ TrainingWorker::TrainingWorker(ConvNet& convNet, CPUData& data, bool test)
 // the original CPU thread, which is not the one with GPU access.
 void TrainingWorker::run() {
     _dp->setData(*_data);
-    Cost& batchCost = *new Cost();
+    Cost& batchCost = *new Cost(0);
     for (int i = 0; i < _dp->getNumMinibatches(); i++) {
         _convNet->fprop(i, _test ? PASS_TEST : PASS_TRAIN);
         _convNet->getCost(batchCost);
@@ -98,7 +98,6 @@ void TrainingWorker::run() {
         }
     }
     cudaThreadSynchronize();
-    batchCost /= _data->getNumCases();
     _convNet->getResultQueue().enqueue(new WorkResult(WorkResult::BATCH_DONE, batchCost));
 }
 
@@ -143,10 +142,11 @@ MultiviewTestWorker::MultiviewTestWorker(ConvNet& convNet, CPUData& data, int nu
 void MultiviewTestWorker::run() {
     _dp->setData(*_data);
     Layer& logregLayer = _convNet->getLayer(_logregIdx);
-    Cost& batchCost = *new Cost();
-    
+
     int numCasesReal = _dp->getNumCases() / _numViews;
     int numMiniReal = DIVUP(numCasesReal, _dp->getMinibatchSize());
+    
+    Cost& batchCost = *new Cost(0);
     for (int i = 0; i < numMiniReal; i++) {
         NVMatrix softmaxActs;
         for (int v = 0; v < _numViews; v++) {
@@ -170,7 +170,6 @@ void MultiviewTestWorker::run() {
     }
     cudaThreadSynchronize();
 
-    batchCost /= numCasesReal;
     _convNet->getResultQueue().enqueue(new WorkResult(WorkResult::BATCH_DONE, batchCost));
 }
 
@@ -192,7 +191,7 @@ FeatureWorker::~FeatureWorker() {
 void FeatureWorker::run() {
     _dp->setData(*_data);
     Layer& ftrLayer = _convNet->getLayer(_layerIdx);
-    Cost& batchCost = *new Cost();
+    Cost& batchCost = *new Cost(0);
     for (int i = 0; i < _dp->getNumMinibatches(); i++) {
         _convNet->fprop(i, PASS_TEST);
         _convNet->getCost(batchCost);
@@ -211,6 +210,5 @@ void FeatureWorker::run() {
         delete &miniFtrs;
     }
     cudaThreadSynchronize();
-    batchCost /= _data->getNumCases();
     _convNet->getResultQueue().enqueue(new WorkResult(WorkResult::BATCH_DONE, batchCost));
 }

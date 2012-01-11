@@ -28,7 +28,7 @@ import ConfigParser as cfg
 import os
 import numpy as n
 import numpy.random as nr
-from math import ceil
+from math import ceil, floor
 from ordereddict import OrderedDict
 from os import linesep as NL
 from options import OptionsParser
@@ -201,21 +201,24 @@ class LayerParser:
 
         return self.dic  
 
-    def verify_int_range(self, v, param_name, _min, _max):
+    def verify_float_range(self, v, param_name, _min, _max):
+        self.verify_num_range(v, param_name, _min, _max, strconv=lambda x: '%.3f' % x)
+
+    def verify_num_range(self, v, param_name, _min, _max, strconv=lambda x:'%d' % x):
         if type(v) == list:
             for i,vv in enumerate(v):
-                self._verify_int_range(vv, param_name, _min, _max, i)
+                self._verify_num_range(vv, param_name, _min, _max, i, strconv=strconv)
         else:
-            self._verify_int_range(v, param_name, _min, _max)
+            self._verify_num_range(v, param_name, _min, _max, strconv=strconv)
     
-    def _verify_int_range(self, v, param_name, _min, _max, input=-1):
+    def _verify_num_range(self, v, param_name, _min, _max, input=-1, strconv=lambda x:'%d' % x):
         layer_name = self.dic['name'] if input < 0 else '%s[%d]' % (self.dic['name'], input)
         if _min is not None and _max is not None and (v < _min or v > _max):
-            raise LayerParsingError("Layer '%s': parameter '%s' must be in the range %d-%d" % (layer_name, param_name, _min, _max))
+            raise LayerParsingError("Layer '%s': parameter '%s' must be in the range %s-%s" % (layer_name, param_name, strconv(_min), strconv(_max)))
         elif _min is not None and v < _min:
-            raise LayerParsingError("Layer '%s': parameter '%s' must be greater than or equal to %d" % (layer_name, param_name, _min))
+            raise LayerParsingError("Layer '%s': parameter '%s' must be greater than or equal to %s" % (layer_name, param_name,  strconv(_min)))
         elif _max is not None and v > _max:
-            raise LayerParsingError("Layer '%s': parameter '%s' must be smaller than or equal to %d" % (layer_name, param_name, _max))
+            raise LayerParsingError("Layer '%s': parameter '%s' must be smaller than or equal to %s" % (layer_name, param_name,  strconv(_max)))
     
     def verify_divisible(self, value, div, value_name, div_name=None, input_idx=0):
         layer_name = self.dic['name'] if len(self.dic['inputs']) == 0 else '%s[%d]' % (self.dic['name'], input_idx)
@@ -349,6 +352,13 @@ class LayerWithInputParser(LayerParser):
         dic = self.dic
         if dic['numInputs'][0] % dic['imgPixels'] != 0 or dic['imgSize'] * dic['imgSize'] != dic['imgPixels']:
             raise LayerParsingError("Layer '%s': has %-d dimensional input, not interpretable as %d-channel images" % (dic['name'], dic['numInputs'][0], dic['channels']))
+    
+    @staticmethod
+    def grad_consumers_below(dic):
+        if dic['gradConsumer']:
+            return True
+        if 'inputLayers' in dic:
+            return any(LayerWithInputParser.grad_consumers_below(l) for l in dic['inputLayers'])
 
 class NailbedLayerParser(LayerWithInputParser):
     def __init__(self):
@@ -363,7 +373,7 @@ class NailbedLayerParser(LayerWithInputParser):
         dic['channels'] = mcp.safe_get_int(name, 'channels')
         dic['stride'] = mcp.safe_get_int(name, 'stride')
 
-        self.verify_int_range(dic['channels'], 'channels', 1, None)
+        self.verify_num_range(dic['channels'], 'channels', 1, None)
         
         # Computed values
         dic['imgPixels'] = dic['numInputs'][0] / dic['channels']
@@ -372,7 +382,7 @@ class NailbedLayerParser(LayerWithInputParser):
         dic['start'] = (dic['imgSize'] - dic['stride'] * (dic['outputsX'] - 1)) / 2
         dic['outputs'] = dic['channels'] * dic['outputsX']**2
         
-        self.verify_int_range(dic['outputsX'], 'outputsX', 0, None)
+        self.verify_num_range(dic['outputsX'], 'outputsX', 0, None)
         
         self.verify_img_size()
         
@@ -394,7 +404,7 @@ class GaussianBlurLayerParser(LayerWithInputParser):
         dic['filterSize'] = mcp.safe_get_int(name, 'filterSize')
         dic['stdev'] = mcp.safe_get_float(name, 'stdev')
 
-        self.verify_int_range(dic['channels'], 'channels', 1, None)
+        self.verify_num_range(dic['channels'], 'channels', 1, None)
         self.verify_int_in(dic['filterSize'], [3, 5, 7, 9])
         
         # Computed values
@@ -403,14 +413,48 @@ class GaussianBlurLayerParser(LayerWithInputParser):
         dic['filter'] = n.array([exp(-(dic['filterSize']/2 - i)**2 / float(2 * dic['stdev']**2)) 
                                  for i in xrange(dic['filterSize'])], dtype=n.float32).reshape(1, dic['filterSize'])
         dic['filter'] /= dic['filter'].sum()
-        print dic['filter']
-        
+
         self.verify_img_size()
         
         if dic['filterSize'] > dic['imgSize']:
             raise LayerParsingError("Later '%s': filter size (%d) must be smaller than image size (%d)." % (dic['name'], dic['filterSize'], dic['imgSize']))
         
         print "Initialized Gaussian blur layer '%s', producing %dx%d %d-channel output" % (name, dic['imgSize'], dic['imgSize'], dic['channels'])
+        
+        return dic
+    
+class ResizeLayerParser(LayerWithInputParser):
+    def __init__(self):
+        LayerWithInputParser.__init__(self, num_inputs=1)
+        
+    def parse(self, name, mcp, prev_layers, model=None):
+        dic = LayerWithInputParser.parse(self, name, mcp, prev_layers, model)
+        dic['forceOwnActs'] = False
+        dic['usesActs'] = False
+        dic['usesInputs'] = False
+        
+        dic['channels'] = mcp.safe_get_int(name, 'channels')
+        dic['scale'] = mcp.safe_get_float(name, 'scale')
+        dic['tgtSize'] = int(floor(dic['imgSize'] / dic['scale']))
+        dic['tgtPixels'] = dic['tgtSize']**2;
+        self.verify_num_range(dic['channels'], 'channels', 1, None)
+        # Really not recommended to use this for such severe scalings
+        self.verify_float_range(dic['scale'], 'scale', 0.5, 2) 
+
+        # Computed values
+        dic['imgPixels'] = dic['numInputs'][0] / dic['channels']
+        dic['imgSize'] = int(n.sqrt(dic['imgPixels']))
+        dic['imgCenter'] = float(dic['imgSize']) / 2;
+        dic['tgtCenter'] = float(dic['tgtSize']) / 2;
+        dic['centerScale'] = dic['imgCenter'] - dic['tgtCenter'] * dic['scale'];
+        
+        dic['outputs'] = dic['channels'] * dic['tgtPixels']
+        self.verify_img_size()
+        
+        if LayerWithInputParser.grad_consumers_below(dic):
+            raise LayerParsingError("Layer '%s': resize layers cannot propagate gradient." % name)
+        
+        print "Initialized resize layer '%s', producing %dx%d %d-channel output" % (name, dic['tgtSize'], dic['tgtSize'], dic['channels'])
         
         return dic
 
@@ -672,7 +716,7 @@ class FCLayerParser(WeightLayerParser):
         dic['usesActs'] = False
         dic['outputs'] = mcp.safe_get_int(name, 'outputs')
         
-        self.verify_int_range(dic['outputs'], 'outputs', 1, None)
+        self.verify_num_range(dic['outputs'], 'outputs', 1, None)
         self.make_weights(dic['initW'], dic['numInputs'], [dic['outputs']] * len(dic['numInputs']), order='F')
         self.make_biases(1, dic['outputs'], order='F')
         print "Initialized fully-connected layer '%s', producing %d outputs" % (name, dic['outputs'])
@@ -736,16 +780,16 @@ class LocalLayerParser(WeightLayerParser):
         self.verify_num_params(['channels', 'padding', 'stride', 'filterSize', \
                                                      'filters', 'groups', 'randSparse', 'initW'])
         
-        self.verify_int_range(dic['stride'], 'stride', 1, None)
-        self.verify_int_range(dic['filterSize'],'filterSize', 1, None)
-        self.verify_int_range(dic['padding'], 'padding', 0, None)
-        self.verify_int_range(dic['channels'], 'channels', 1, None)
-        self.verify_int_range(dic['groups'], 'groups', 1, None)
+        self.verify_num_range(dic['stride'], 'stride', 1, None)
+        self.verify_num_range(dic['filterSize'],'filterSize', 1, None)
+        self.verify_num_range(dic['padding'], 'padding', 0, None)
+        self.verify_num_range(dic['channels'], 'channels', 1, None)
+        self.verify_num_range(dic['groups'], 'groups', 1, None)
         
         # Computed values
         dic['imgPixels'] = [numInputs/channels for numInputs,channels in zip(dic['numInputs'], dic['channels'])]
         dic['imgSize'] = [int(n.sqrt(imgPixels)) for imgPixels in dic['imgPixels']]
-        self.verify_int_range(dic['imgSize'], 'imgSize', 1, None)
+        self.verify_num_range(dic['imgSize'], 'imgSize', 1, None)
         dic['filters'] = [filters*groups for filters,groups in zip(dic['filters'], dic['groups'])]
         dic['filterPixels'] = [filterSize**2 for filterSize in dic['filterSize']]
         dic['modulesX'] = [1 + int(ceil((2 * padding + imgSize - filterSize) / float(stride))) for padding,imgSize,filterSize,stride in zip(dic['padding'], dic['imgSize'], dic['filterSize'], dic['stride'])]
@@ -869,12 +913,12 @@ class PoolLayerParser(LayerWithInputParser):
         dic['imgPixels'] = dic['numInputs'][0] / dic['channels']
         dic['imgSize'] = int(n.sqrt(dic['imgPixels']))
         
-        self.verify_int_range(dic['sizeX'], 'sizeX', 1, dic['imgSize'])
-        self.verify_int_range(dic['stride'], 'stride', 1, dic['sizeX'])
-        self.verify_int_range(dic['outputsX'], 'outputsX', 0, None)
-        self.verify_int_range(dic['channels'], 'channels', 1, None)
+        self.verify_num_range(dic['sizeX'], 'sizeX', 1, dic['imgSize'])
+        self.verify_num_range(dic['stride'], 'stride', 1, dic['sizeX'])
+        self.verify_num_range(dic['outputsX'], 'outputsX', 0, None)
+        self.verify_num_range(dic['channels'], 'channels', 1, None)
         
-        if dic['gradConsumer']:
+        if LayerWithInputParser.grad_consumers_below(dic):
             self.verify_divisible(dic['channels'], 16, 'channels')
         self.verify_str_in(dic['pool'], ['max', 'avg'])
         
@@ -905,8 +949,8 @@ class NormLayerParser(LayerWithInputParser):
         # Contrast normalization layer does not use its inputs
         dic['usesInputs'] = self.norm_type != 'contrast'
         
-        self.verify_int_range(dic['sizeX'], 'sizeX', 1, dic['imgSize'])
-        self.verify_int_range(dic['channels'], 'channels', 1, None)
+        self.verify_num_range(dic['sizeX'], 'sizeX', 1, dic['imgSize'])
+        self.verify_num_range(dic['channels'], 'channels', 1, None)
         
         if dic['channels'] > 3 and dic['channels'] % 4 != 0:
             raise LayerParsingError("Layer '%s': number of channels must be smaller than 4 or divisible by 4" % name)
@@ -971,6 +1015,7 @@ layer_parsers = {'data': lambda : DataLayerParser(),
                  'cnorm': lambda : NormLayerParser('contrast'),
                  'nailbed': lambda : NailbedLayerParser(),
                  'blur': lambda : GaussianBlurLayerParser(),
+                 'resize': lambda : ResizeLayerParser(),
                  'cost.logreg': lambda : LogregCostParser(),
                  'cost.sum2': lambda : SumOfSquaresCostParser()}
  

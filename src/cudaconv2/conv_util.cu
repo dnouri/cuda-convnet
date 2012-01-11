@@ -32,8 +32,81 @@
 
 using namespace std;
 
-__device__ float square(const float a) {
-    return a*a;
+__device__ inline float square(const float a) {
+    return a * a;
+}
+
+/*
+ * Block size 16x32.
+ * Each block produces a 4x4 chunk of the output image.
+ * threadIdx.y determines pixel idx in 4x4 chunk.
+ * threadIdx.x determines case idx.
+ * blockIdx.x determines case idx in batches of 32*imgsPerThread.
+ * blockIdx.y determines 4x4 chunk idx, channel idx.
+ * 
+ * imgs:        (numChannels, imgPixels, numImages) with given imgStride
+ * target:      (numChannels, tgtPixels, numImages)
+ * 
+ * imgSize = scale * tgtSize (roughly)
+ * 
+ * This is a rather naive kernel that relies on cache for speed. But all it's doing
+ * is basic texture manipulation, which is very local in nature, so it should be ok.
+ * Also, it will in practice be a tiny fraction of the runtime of a large convnet.
+ * 
+ * So that is my justification for being lazy here.
+ */
+template <int imgsPerThread, bool checkCaseBounds>
+__global__ void kResizeBilinear(float* imgs, float* target, const int imgSize, const int tgtSize,
+                                const int numImages, const int imgStride, const float scale,
+                                const float centerScale) {
+    const int numChunksX = DIVUP(tgtSize, 4);
+    const int numChunks = numChunksX * numChunksX;
+    const int channelIdx = blockIdx.y / numChunks;
+    const int chunkIdx = blockIdx.y % numChunks;
+    const int chunkIdxX = chunkIdx % numChunksX;
+    const int chunkIdxY = chunkIdx / numChunksX;
+    const int caseIdx = blockIdx.x * 32 * imgsPerThread + threadIdx.x;
+    const int imgPixels = imgSize * imgSize;
+    const int tgtPixels = tgtSize * tgtSize;
+    
+    const int pxX = 4 * chunkIdxX + threadIdx.y % 4;
+    const int pxY = 4 * chunkIdxY + threadIdx.y / 4;
+
+    if (pxY < tgtSize && pxX < tgtSize) {
+        const int pxIdx = pxY * tgtSize + pxX;
+
+        imgs += channelIdx * imgPixels * imgStride + caseIdx;
+        target += channelIdx * tgtPixels * numImages + pxIdx * numImages + caseIdx;
+
+        // This will cause slight distortions at the edges when upsampling in some cases.
+        // But I think that's not a big deal.
+        const float srcPxX = fmaxf(0.0f, fminf(__int2float_rn(imgSize - 2), __int2float_rn(pxX) * scale + centerScale));
+        const float srcPxY = fmaxf(0.0f, fminf(__int2float_rn(imgSize - 2), __int2float_rn(pxY) * scale + centerScale));
+
+        const float u = floorf(srcPxX + 1) - srcPxX;
+        const float w = srcPxY - floorf(srcPxY);
+
+        // Consider doing max(0, min(imgSize, x)) here
+        const int srcPx0 = (__float2int_rd(srcPxY) * imgSize + __float2int_rd(srcPxX)); // top-left
+        const int srcPx1 = srcPx0 + 1; // top-right
+        const int srcPx2 = srcPx0 + imgSize; // bottom-left
+        const int srcPx3 = srcPx2 + 1; // bottom-right
+
+        #pragma unroll
+        for (int c = 0; c < imgsPerThread; ++c) {
+            if (!checkCaseBounds || caseIdx + c * 32 < numImages) {
+                const float val0 = imgs[srcPx0 * imgStride + c * 32];
+                const float val1 = imgs[srcPx1 * imgStride + c * 32];
+                const float val2 = imgs[srcPx2 * imgStride + c * 32];
+                const float val3 = imgs[srcPx3 * imgStride + c * 32];
+
+                const float c0 = u * (val0 - val1) + val1;
+                const float c1 = u * (val2 - val3) + val3;
+
+                target[32 * c] = w * (c1 - c0) + c0;
+            }
+        }
+    }
 }
 
 /*
@@ -1513,7 +1586,42 @@ void convResponseNormUndo(NVMatrix& outGrads, NVMatrix& denoms, NVMatrix& inputs
             }
         }
     }
-
-
     cutilCheckMsg("kRNormUndo: kernel execution failed");
+}
+
+/*
+ * imgs:        (numChannels, imgPixels, numImages) with given imgStride
+ * target:      (numChannels, tgtPixels, numImages)
+ * 
+ * imgSize = scale * tgtSize
+ */
+void resizeBilinear(NVMatrix& images, NVMatrix& target, int imgSize, int tgtSize, float scale) {
+    assert(!images.isTrans());
+    assert(!target.isTrans());
+    int imgPixels = imgSize * imgSize;
+    int tgtPixels = tgtSize * tgtSize;
+    int numChannels = images.getNumRows() / imgPixels;
+    int numImages = images.getNumCols();
+    assert(images.getNumRows() == numChannels * imgPixels);
+    
+    target.resize(numChannels * tgtPixels, numImages);
+    
+    int numChunksX = DIVUP(tgtSize, 4);
+    int numChunks = numChunksX * numChunksX;
+    double imgCenter = imgSize * 0.5;
+    double tgtCenter = tgtSize * 0.5;
+    double centerScale = imgCenter - tgtCenter * scale;
+    
+    bool checkCaseBounds = numImages % 128 != 0;
+    
+    dim3 threads(32, 16);
+    dim3 blocks(DIVUP(numImages, 4 * 32), numChannels * numChunks);
+    if (checkCaseBounds) {
+        cudaFuncSetCacheConfig(kResizeBilinear<4, true>, cudaFuncCachePreferL1);
+        kResizeBilinear<4, true><<<blocks, threads>>>(images.getDevData(), target.getDevData(), imgSize, tgtSize, numImages, images.getStride(), scale, centerScale);
+    } else {
+        cudaFuncSetCacheConfig(kResizeBilinear<4, false>, cudaFuncCachePreferL1);
+        kResizeBilinear<4, false><<<blocks, threads>>>(images.getDevData(), target.getDevData(), imgSize, tgtSize, numImages, images.getStride(), scale, centerScale);
+    }
+    cutilCheckMsg("resizeBilinear: kernel execution failed");
 }

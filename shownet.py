@@ -77,10 +77,10 @@ class ShowConvNet(ConvNet):
             ConvNet.init_model_lib(self)
 
     def plot_cost(self):
-        if self.show_cost not in self.train_outputs[0]:
+        if self.show_cost not in self.train_outputs[0][0]:
             raise ShowNetError("Cost function with name '%s' not defined by given convnet." % self.show_cost)
-        train_errors = [o[self.show_cost][self.cost_idx] for o in self.train_outputs]
-        test_errors = [o[self.show_cost][self.cost_idx] for o in self.test_outputs]
+        train_errors = [o[0][self.show_cost][self.cost_idx] for o in self.train_outputs]
+        test_errors = [o[0][self.show_cost][self.cost_idx] for o in self.test_outputs]
 
         numbatches = len(self.train_batch_range)
         test_errors = numpy.row_stack(test_errors)

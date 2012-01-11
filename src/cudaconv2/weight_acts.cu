@@ -597,7 +597,7 @@ void _weightActs(NVMatrix& images, NVMatrix& hidActs, NVMatrix& targets,
     assert(hidActs.getNumCols() == numImages);
 
     // These routines don't handle the case when only part of the image is visited in the convolution
-    assert(paddingStart <= 0 && paddingStart + (numModules-1)*moduleStride + filterSize >= imgSize);
+    assert(paddingStart <= 0 && paddingStart + (numModulesX-1)*moduleStride + filterSize >= imgSize);
     assert(moduleStride <= filterSize);
     
     assert(numModules * numFilters == hidActs.getNumRows());
@@ -1001,7 +1001,7 @@ void _weightActsSparse(NVMatrix& images, NVMatrix& hidActs, NVMatrix& targets, i
     assert(hidActs.getNumCols() == numImages);
 
     // These routines don't handle the case when only part of the image is visited in the convolution
-    assert(paddingStart <= 0 && paddingStart + (numModules-1)*moduleStride + filterSize >= imgSize);
+    assert(paddingStart <= 0 && paddingStart + (numModulesX-1)*moduleStride + filterSize >= imgSize);
     assert(moduleStride <= filterSize);
     
     assert(numModules * numFilters == hidActs.getNumRows());

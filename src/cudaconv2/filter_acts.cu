@@ -585,7 +585,7 @@ __global__ void filterActs_YxX_sparse_random(float* images, float* filters, floa
     assert(filters.getNumRows() == filterModuleMult * numFilterColors * filterPixels);
 
     // These routines don't handle the case when only part of the image is visited in the convolution
-    assert(paddingStart <= 0 && paddingStart + (numModules-1)*moduleStride + filterSize >= imgSize);
+    assert(paddingStart <= 0 && paddingStart + (numModulesX-1)*moduleStride + filterSize >= imgSize);
     assert(moduleStride <= filterSize);
     
     assert(!images.isTrans());

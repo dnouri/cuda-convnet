@@ -123,23 +123,26 @@ class ConvNet(IGPUModel):
     def print_train_time(self, compute_time_py):
         print "(%.3f sec)" % (compute_time_py)
         
-    def print_train_results(self):
-        for errname, errvals in self.train_outputs[-1].items():
+    def print_costs(self, cost_outputs):
+        costs, num_cases = cost_outputs[0], cost_outputs[1]
+        for errname in costs.keys():
+            costs[errname] = [(v/num_cases) for v in costs[errname]]
             print "%s: " % errname,
-            print ", ".join("%6f" % v for v in errvals),
-            if sum(m.isnan(v) for v in errvals) > 0 or sum(m.isinf(v) for v in errvals):
+            print ", ".join("%6f" % v for v in costs[errname]),
+            if sum(m.isnan(v) for v in costs[errname]) > 0 or sum(m.isinf(v) for v in costs[errname]):
                 print "^ got nan or inf!"
                 sys.exit(1)
-
+        
+    def print_train_results(self):
+        self.print_costs(self.train_outputs[-1])
+        
     def print_test_status(self):
         pass
-    
+        
     def print_test_results(self):
         print ""
         print "======================Test output======================"
-        for errname, errvals in self.test_outputs[-1].items():
-            print "%s: " % errname,
-            print ", ".join("%6f" % v for v in errvals),
+        self.print_costs(self.test_outputs[-1])
         print ""
         print "-------------------------------------------------------", 
         for i,l in enumerate(self.layers): # This is kind of hacky but will do for now.
@@ -159,11 +162,12 @@ class ConvNet(IGPUModel):
         print "=======================================================",
         
     def aggregate_test_outputs(self, test_outputs):
+        num_cases = sum(t[1] for t in test_outputs)
         for i in xrange(1 ,len(test_outputs)):
-            for k,v in test_outputs[i].items():
+            for k,v in test_outputs[i][0].items():
                 for j in xrange(len(v)):
-                    test_outputs[0][k][j] += test_outputs[i][k][j]
-        return test_outputs[0]
+                    test_outputs[0][0][k][j] += test_outputs[i][0][k][j]
+        return (test_outputs[0][0], num_cases)
     
     @classmethod
     def get_options_parser(cls):

@@ -24,8 +24,8 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef ERROR_CUH
-#define	ERROR_CUH
+#ifndef COST_CUH
+#define	COST_CUH
 
 #include <vector>
 #include <map>
@@ -41,14 +41,16 @@ class CostLayer;
  */
 class Cost {
 private:
+    int _numCases;
     CostMap _costMap;
     CostCoeffMap _costCoeffMap;
 public:
-    Cost();
-    Cost(std::vector<CostLayer*>& costs);
+    Cost(int numCases);
+    Cost(int numCases, std::vector<CostLayer*>& costs);
     doublev& operator [](const std::string s);
     CostMap& getCostMap();
     CostCoeffMap& getCostCoeffMap();
+    int getNumCases();
     /*
      * Returns sum of first values returned by all the costs, weighted by the cost coefficients.
      */
@@ -59,5 +61,5 @@ public:
 };
 
 
-#endif	/* ERROR_CUH */
+#endif	/* COST_CUH */
 

@@ -278,6 +278,18 @@ public:
     GaussianBlurLayer(ConvNet* convNet, PyObject* paramsDict);
 };
 
+class ResizeLayer : public Layer {
+protected:
+    int _channels;
+    float _scale;
+    int _imgSize, _tgtSize;
+public:
+    void fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType);
+    void bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType);
+
+    ResizeLayer(ConvNet* convNet, PyObject* paramsDict);
+};
+
 class ResponseNormLayer : public Layer {
 protected:
     int _channels, _sizeX;
