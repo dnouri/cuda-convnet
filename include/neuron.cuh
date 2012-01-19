@@ -451,7 +451,7 @@ public:
         }
     };
     
-    LinearNeuron(float a, float b) : Neuron(), _a(b), _b(b) {
+    LinearNeuron(float a, float b) : Neuron(), _a(a), _b(b) {
     }
 };
 #endif	/* NEURONS_CUH */
