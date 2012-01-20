@@ -556,6 +556,11 @@ __global__ void filterActs_YxX_sparse_random(float* images, float* filters, floa
  *              (numModules, numFilterColors, filterPixels, numFilters) otherwise
  *
  * targets:     (numFilters, numModules, numImages)
+ * 
+ * Note: all of these convolution routines are optimized for the case when
+ * the number of images (i.e. the minibatch size) is a multiple of 128. 
+ * Other batch sizes will work, but but I made no attempt whatsoever
+ * to make them work fast. 
  */
  void _filterActs(NVMatrix& images, NVMatrix& filters, NVMatrix& targets,
                    int numModulesX, int paddingStart, int moduleStride,
@@ -830,6 +835,11 @@ void localFilterActs(NVMatrix& images, NVMatrix& filters, NVMatrix& targets,
  *
  * targets:         (numFilters, numModules, numImages)
  * colorIndices:    (numGroups, numFilterColors)
+ * 
+ * Note: all of these convolution routines are optimized for the case when
+ * the number of images (i.e. the minibatch size) is a multiple of 128. 
+ * Other batch sizes will work, but but I made no attempt whatsoever
+ * to make them work fast. 
  */
 void _filterActsSparse(NVMatrix& images, NVMatrix& filters, NVMatrix& targets, int* dColorIndices,
                           int numModulesX, int paddingStart, int moduleStride,

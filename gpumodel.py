@@ -277,7 +277,7 @@ class IGPUModel:
         op.add_option("test-only", "test_only", BooleanOptionParser, "Test and quit?", default=0)
         op.add_option("zip-save", "zip_save", BooleanOptionParser, "Compress checkpoints?", default=0)
         op.add_option("test-one", "test_one", BooleanOptionParser, "Test on one batch at a time?", default=1)
-        op.add_option("gpu", "gpu", ListOptionParser(IntegerOptionParser), "GPU override", default=[])
+        op.add_option("gpu", "gpu", ListOptionParser(IntegerOptionParser), "GPU override", default=OptionExpression("[-1] * num_gpus"))
         return op
 
     @staticmethod
@@ -287,10 +287,7 @@ class IGPUModel:
             print "    %s: %s" % (dp, desc)
             
     def get_gpus(self):
-        if len(self.op.get_value('gpu')) > 0:
-            self.device_ids = self.op.get_value('gpu')
-        else:
-            self.device_ids = [get_gpu_lock() for i in range(self.op.get_value('num_gpus'))]
+        self.device_ids = [get_gpu_lock(g) for g in self.op.get_value('gpu')]
         if GPU_LOCK_NO_LOCK in self.device_ids:
             print "Not enough free GPUs!"
             sys.exit()

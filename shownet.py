@@ -165,6 +165,12 @@ class ShowConvNet(ConvNet):
                 num_filters *= layer['modules']
 
         filters = filters.reshape(channels, filters.shape[0]/channels, filters.shape[1])
+        # Convert YUV filters to RGB
+        if self.yuv_to_rgb and channels == 3:
+            R = filters[0,:,:] + 1.28033 * filters[2,:,:]
+            G = filters[0,:,:] + -0.21482 * filters[1,:,:] + -0.38059 * filters[2,:,:]
+            B = filters[0,:,:] + 2.12798 * filters[1,:,:]
+            filters[0,:,:], filters[1,:,:], filters[2,:,:] = R, G, B
         combine_chans = not self.no_rgb and channels == 3
         
         # Make sure you don't modify the backing array itself here -- so no -= or /=
@@ -274,6 +280,7 @@ class ShowConvNet(ConvNet):
         op.add_option("input-idx", "input_idx", IntegerOptionParser, "Input index for layer given to --show-filters", default=0)
         op.add_option("cost-idx", "cost_idx", IntegerOptionParser, "Cost function return value index for --show-cost", default=0)
         op.add_option("no-rgb", "no_rgb", BooleanOptionParser, "Don't combine filter channels into RGB in layer given to --show-filters", default=False)
+        op.add_option("yuv-to-rgb", "yuv_to_rgb", BooleanOptionParser, "Convert RGB filters to YUV in layer given to --show-filters", default=False)
         op.add_option("channels", "channels", IntegerOptionParser, "Number of channels in layer given to --show-filters (fully-connected layers only)", default=0)
         op.add_option("show-preds", "show_preds", StringOptionParser, "Show predictions made by given softmax on test set", default="")
         op.add_option("only-errors", "only_errors", BooleanOptionParser, "Show only mistaken predictions (to be used with --show-preds)", default=False, requires=['show_preds'])

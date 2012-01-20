@@ -110,6 +110,10 @@ Layer* ConvNet::initLayer(string& layerType, PyObject* paramsDict) {
         _layers.push_back(new GaussianBlurLayer(this, paramsDict));
     } else if (layerType == "resize") {
         _layers.push_back(new ResizeLayer(this, paramsDict));
+    } else if (layerType == "rgb2yuv") {
+        _layers.push_back(new RGBToYUVLayer(this, paramsDict));
+    } else if (layerType == "rgb2lab") {
+        _layers.push_back(new RGBToLABLayer(this, paramsDict));
     } else if (layerType == "data") {
         DataLayer *d = new DataLayer(this, paramsDict);
         _layers.push_back(d);

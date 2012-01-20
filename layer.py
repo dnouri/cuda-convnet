@@ -359,6 +359,10 @@ class LayerWithInputParser(LayerParser):
             return True
         if 'inputLayers' in dic:
             return any(LayerWithInputParser.grad_consumers_below(l) for l in dic['inputLayers'])
+        
+    def verify_no_grads(self):
+        if LayerWithInputParser.grad_consumers_below(self.dic):
+            raise LayerParsingError("Layer '%s': layers of type '%s' cannot propagate gradient and must not be placed over layers with parameters." % (self.dic['name'], self.dic['type']))
 
 class NailbedLayerParser(LayerWithInputParser):
     def __init__(self):
@@ -449,13 +453,52 @@ class ResizeLayerParser(LayerWithInputParser):
         dic['centerScale'] = dic['imgCenter'] - dic['tgtCenter'] * dic['scale'];
         
         dic['outputs'] = dic['channels'] * dic['tgtPixels']
-        self.verify_img_size()
         
-        if LayerWithInputParser.grad_consumers_below(dic):
-            raise LayerParsingError("Layer '%s': resize layers cannot propagate gradient." % name)
+        self.verify_img_size()
+        self.verify_no_grads()
         
         print "Initialized resize layer '%s', producing %dx%d %d-channel output" % (name, dic['tgtSize'], dic['tgtSize'], dic['channels'])
         
+        return dic
+    
+class ColorTransformLayerParser(LayerWithInputParser):
+    def __init__(self):
+        LayerWithInputParser.__init__(self, num_inputs=1)
+    
+    def parse(self, name, mcp, prev_layers, model=None):
+        dic = LayerWithInputParser.parse(self, name, mcp, prev_layers, model)
+        dic['forceOwnActs'] = False
+        dic['usesActs'] = False
+        dic['usesInputs'] = False
+
+        # Computed values
+        dic['imgPixels'] = dic['numInputs'][0] / 3
+        dic['imgSize'] = int(n.sqrt(dic['imgPixels']))
+        dic['channels'] = 3
+        dic['outputs'] = dic['numInputs'][0]
+        
+        self.verify_img_size()
+        self.verify_no_grads()
+        
+        return dic
+    
+class RGBToYUVLayerParser(ColorTransformLayerParser):
+    def __init__(self):
+        ColorTransformLayerParser.__init__(self)
+        
+    def parse(self, name, mcp, prev_layers, model=None):
+        dic = ColorTransformLayerParser.parse(self, name, mcp, prev_layers, model)
+        print "Initialized RGB --> YUV layer '%s', producing %dx%d %d-channel output" % (name, dic['imgSize'], dic['imgSize'], dic['channels'])
+        return dic
+    
+class RGBToLABLayerParser(ColorTransformLayerParser):
+    def __init__(self):
+        ColorTransformLayerParser.__init__(self)
+        
+    def parse(self, name, mcp, prev_layers, model=None):
+        dic = ColorTransformLayerParser.parse(self, name, mcp, prev_layers, model)
+        dic['center'] = mcp.safe_get_bool(name, 'center', default=False)
+        print "Initialized RGB --> LAB layer '%s', producing %dx%d %d-channel output" % (name, dic['imgSize'], dic['imgSize'], dic['channels'])
         return dic
 
 class NeuronLayerParser(LayerWithInputParser):
@@ -1016,6 +1059,8 @@ layer_parsers = {'data': lambda : DataLayerParser(),
                  'nailbed': lambda : NailbedLayerParser(),
                  'blur': lambda : GaussianBlurLayerParser(),
                  'resize': lambda : ResizeLayerParser(),
+                 'rgb2yuv': lambda : RGBToYUVLayerParser(),
+                 'rgb2lab': lambda : RGBToLABLayerParser(),
                  'cost.logreg': lambda : LogregCostParser(),
                  'cost.sum2': lambda : SumOfSquaresCostParser()}
  

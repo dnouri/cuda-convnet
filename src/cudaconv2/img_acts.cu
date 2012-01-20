@@ -890,6 +890,11 @@ __global__ void img_acts_manycolor_sparse_rand(const float* hidActs, const float
  * filters:     (numFilterColors, filterPixels, numFilters)               if conv
  *              (numModules, numFilterColors, filterPixels, numFilters)   otherwise
  * targets:     (numImageColors, imgPixels, numImages)
+ * 
+ * Note: all of these convolution routines are optimized for the case when
+ * the number of images (i.e. the minibatch size) is a multiple of 128. 
+ * Other batch sizes will work, but but I made no attempt whatsoever
+ * to make them work fast. 
  */
 void _imgActs(NVMatrix& hidActs, NVMatrix& filters, NVMatrix& targets,
               int imgSize, int paddingStart, int moduleStride, int numImgColors, int numGroups,
@@ -1299,7 +1304,11 @@ void localImgActs(NVMatrix& hidActs, NVMatrix& filters, NVMatrix& targets,
  * colorIndices:    (numGroups, numFilterColors)
  * 
  * where overSample := (numFilterColors * numGroups) / numImgColors
- *
+ * 
+ * Note: all of these convolution routines are optimized for the case when
+ * the number of images (i.e. the minibatch size) is a multiple of 128. 
+ * Other batch sizes will work, but but I made no attempt whatsoever
+ * to make them work fast. 
  */
 void _imgActsSparse(NVMatrix& hidActs, NVMatrix& filters, NVMatrix& targets, int* dColorIndices,
                        int imgSize, int paddingStart, int moduleStride, int numImgColors, int numFilterColors, int numGroups,

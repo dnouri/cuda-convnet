@@ -290,6 +290,24 @@ public:
     ResizeLayer(ConvNet* convNet, PyObject* paramsDict);
 };
 
+class RGBToYUVLayer : public Layer {
+public:
+    void fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType);
+    void bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType);
+
+    RGBToYUVLayer(ConvNet* convNet, PyObject* paramsDict);
+};
+
+class RGBToLABLayer : public Layer {
+protected:
+    bool _center;
+public:
+    void fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType);
+    void bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType);
+
+    RGBToLABLayer(ConvNet* convNet, PyObject* paramsDict);
+};
+
 class ResponseNormLayer : public Layer {
 protected:
     int _channels, _sizeX;

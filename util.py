@@ -45,13 +45,17 @@ try:
 except ImportError: # no magic module
     ms = None
 
-def get_gpu_lock():
+def get_gpu_lock(id=-1):
     import imp
     lock_script_path = '/u/tang/bin/gpu_lock2.py'
     if os.path.exists(lock_script_path):
         locker = imp.load_source("", lock_script_path)
-        return locker.obtain_lock_id()
-    return GPU_LOCK_NO_SCRIPT
+        if id == -1:
+            return locker.obtain_lock_id()
+        print id
+        got_id = locker._obtain_lock(id)
+        return id if got_id else GPU_LOCK_NO_LOCK
+    return GPU_LOCK_NO_SCRIPT if id < 0 else id
 
 def pickle(filename, data, compress=False):
     if compress:

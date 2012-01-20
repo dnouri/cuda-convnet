@@ -37,6 +37,123 @@ __device__ inline float square(const float a) {
 }
 
 /*
+ * Block size 4x32
+ * blockIdx.y determines pixel idx in batches of 4
+ * blockIdx.x determines case idx in batches of 32*imgsPerThread
+ * threadIdx.y determines pixel idx
+ * threadIdx.x determines case idx
+ * 
+ * imgs:        (3, imgPixels, numImages) with given imgStride
+ * target:      (3, imgPixels, numImages)
+ * 
+ * Each thread produces (y,u,v) values for a particular (r,g,b) pixel
+ * 
+ * The RGB --> YUV transform is (http://en.wikipedia.org/wiki/YUV):
+ * 
+ * [Y]      [0.2126     0.7152      0.0722  ][R]
+ * [U]  =   [-0.09991   -0.33609    0.436   ][G]
+ * [V]      [0.615      -0.55861    -0.05639][B]
+ */
+template <int imgsPerThread, bool checkCaseBounds>
+__global__ void kRGBToYUV(float* imgs, float* target, const int imgPixels, const int numImages, const int imgStride) {
+    const int caseIdx = blockIdx.x * 32 * imgsPerThread + threadIdx.x;
+    const int pxIdx = blockIdx.y * 4 + threadIdx.y;
+
+    if (pxIdx < imgPixels) {
+        const int imgChannelStride = imgPixels * imgStride;
+        const int tgtChannelStride = imgPixels * numImages;
+        imgs += pxIdx * imgStride + caseIdx;
+        target += pxIdx * numImages + caseIdx;
+        
+        #pragma unroll
+        for (int i = 0; i < imgsPerThread; ++i) {
+            if (!checkCaseBounds || caseIdx + i * 32 < numImages) {
+                const float R = imgs[0 * imgChannelStride + i * 32];
+                const float G = imgs[1 * imgChannelStride + i * 32];
+                const float B = imgs[2 * imgChannelStride + i * 32];
+                target[0 * tgtChannelStride + i * 32] = 0.2126f * R + 0.7152f * G + 0.0722f * B;      // Y
+                target[1 * tgtChannelStride + i * 32] = -0.09991f * R + -0.33609f * G + 0.436f * B;   // U
+                target[2 * tgtChannelStride + i * 32] = 0.615f * R + -0.55861f * G + -0.05639f * B;   // V
+            }
+        }
+    }
+}
+
+__device__ inline float labf(const float x) {
+    if (x > 0.0088564517f) {
+        return __powf(x, 0.3333f);
+    }
+    return 7.787037f * x + 0.13793103f;
+}
+
+/*
+ * Block size 4x32
+ * blockIdx.y determines pixel idx in batches of 4
+ * blockIdx.x determines case idx in batches of 32*imgsPerThread
+ * threadIdx.y determines pixel idx
+ * threadIdx.x determines case idx
+ * 
+ * imgs:        (3, imgPixels, numImages) with given imgStride
+ * target:      (3, imgPixels, numImages)
+ * 
+ * This proceeds in two steps.
+ * 
+ * - First, RGB values are linearly transformed to XYZ as per
+ *   http://en.wikipedia.org/wiki/CIE_XYZ_color_space
+ * - Second, XYZ values are nonlinearly transformed to L*a*b* as per
+ *   http://en.wikipedia.org/wiki/Lab_color_space#The_forward_transformation
+ * 
+ * Each thread produces (L*,a*,b*) values for a particular (r,g,b) pixel
+ * 
+ * The RGB --> XYZ transform is:
+ * 
+ * [X]                  [0.49       0.31        0.2     ][R]
+ * [Y]  =   5.6506753 * [0.17697    0.8124      0.01063 ][G]
+ * [Z]                  [0          0.01        0.99    ][B]
+ * 
+ * NOTE: The input should be in the range 0-1. Don't do mean-subtraction beforehand.
+ * 
+ * Then X_max, Y_max, Z_max = 5.6506753.
+ * 
+ * The range of the L* values is [0, 100].
+ * If the center flag is given, the range will be [-50, 50].
+ * 
+ */
+template <int imgsPerThread, bool checkCaseBounds, bool center>
+__global__ void kRGBToLAB(float* imgs, float* target, const int imgPixels, const int numImages, const int imgStride) {
+    const int caseIdx = blockIdx.x * 32 * imgsPerThread + threadIdx.x;
+    const int pxIdx = blockIdx.y * 4 + threadIdx.y;
+
+    if (pxIdx < imgPixels) {
+        const int imgChannelStride = imgPixels * imgStride;
+        const int tgtChannelStride = imgPixels * numImages;
+        imgs += pxIdx * imgStride + caseIdx;
+        target += pxIdx * numImages + caseIdx;
+        
+        #pragma unroll
+        for (int i = 0; i < imgsPerThread; ++i) {
+            if (!checkCaseBounds || caseIdx + i * 32 < numImages) {
+                const float R = imgs[0 * imgChannelStride + i * 32];
+                const float G = imgs[1 * imgChannelStride + i * 32];
+                const float B = imgs[2 * imgChannelStride + i * 32];
+                
+                const float X = (0.49f * R + 0.31f * G + 0.2f * B);
+                const float Y = (0.17697f * R + 0.8124f * G + 0.01063f * B);
+                const float Z = (0.01f * G + 0.99f * B);
+                
+                const float labX = labf(X);
+                const float labY = labf(Y);
+                const float labZ = labf(Z);
+                
+                target[0 * tgtChannelStride + i * 32] = 116.0f * labY - 16.0f - (center ? 50.0f : 0);  // L*
+                target[1 * tgtChannelStride + i * 32] = 500.0f * (labX - labY); // a*
+                target[2 * tgtChannelStride + i * 32] = 200.0f * (labY - labZ); // b*
+            }
+        }
+    }
+}
+
+/*
  * Block size 16x32.
  * Each block produces a 4x4 chunk of the output image.
  * threadIdx.y determines pixel idx in 4x4 chunk.
@@ -1244,7 +1361,7 @@ void convLocalMaxUndo(NVMatrix& images, NVMatrix& maxGrads, NVMatrix& maxActs, N
     assert(strideX <= subsX);
     
     target.resize(images);
-    
+    assert(target.isContiguous());
     int checkCaseBounds = numImages % 128 != 0;
     dim3 threads(32, 4);
     dim3 blocks(DIVUP(numImages,32*4) * imgSize, (numFilters / (4 * 2)) * imgSize);
@@ -1297,7 +1414,7 @@ void convLocalAvgUndo(NVMatrix& avgGrads, NVMatrix& target,
     assert(strideX <= subsX);
     
     target.resize(numFilters * imgPixels, numImages);
-    
+    assert(target.isContiguous());
     dim3 threads(32, 4);
     dim3 blocks(DIVUP(numImages,32*4) * imgSize, (numFilters / (4 * 4)) * imgSize);
     int checkCaseBounds = numImages % 128 != 0;
@@ -1353,7 +1470,7 @@ void convContrastNorm(NVMatrix& images, NVMatrix& meanDiffs, NVMatrix& denoms, N
 
     target.resize(images);
     denoms.resize(images);
-
+    assert(target.isContiguous());
     if (sizeX >= 6 && numFilters % 4 == 0) {
         // This one is faster for large regions (my tests show regions >= 6...)
         int imgsPerThread = 8;
@@ -1512,7 +1629,7 @@ void convResponseNormUndo(NVMatrix& outGrads, NVMatrix& denoms, NVMatrix& inputs
     assert(numFilters % 16 == 0);
     
     target.resize(outGrads);
-    
+    assert(target.isContiguous());
     // First do acts := -2 x scale x acts x outGrads / denoms
     // so that the main routine only has to do an addition in its inner loop.
     int prelimEltsPerThread = 4;
@@ -1595,7 +1712,7 @@ void convResponseNormUndo(NVMatrix& outGrads, NVMatrix& denoms, NVMatrix& inputs
  * 
  * imgSize = scale * tgtSize
  */
-void resizeBilinear(NVMatrix& images, NVMatrix& target, int imgSize, int tgtSize, float scale) {
+void convResizeBilinear(NVMatrix& images, NVMatrix& target, int imgSize, int tgtSize, float scale) {
     assert(!images.isTrans());
     assert(!target.isTrans());
     int imgPixels = imgSize * imgSize;
@@ -1605,7 +1722,7 @@ void resizeBilinear(NVMatrix& images, NVMatrix& target, int imgSize, int tgtSize
     assert(images.getNumRows() == numChannels * imgPixels);
     
     target.resize(numChannels * tgtPixels, numImages);
-    
+    assert(target.isContiguous());
     int numChunksX = DIVUP(tgtSize, 4);
     int numChunks = numChunksX * numChunksX;
     double imgCenter = imgSize * 0.5;
@@ -1623,5 +1740,68 @@ void resizeBilinear(NVMatrix& images, NVMatrix& target, int imgSize, int tgtSize
         cudaFuncSetCacheConfig(kResizeBilinear<4, false>, cudaFuncCachePreferL1);
         kResizeBilinear<4, false><<<blocks, threads>>>(images.getDevData(), target.getDevData(), imgSize, tgtSize, numImages, images.getStride(), scale, centerScale);
     }
-    cutilCheckMsg("resizeBilinear: kernel execution failed");
+    cutilCheckMsg("convResizeBilinear: kernel execution failed");
+}
+
+/*
+ * imgs:        (3, imgPixels, numImages) with given imgStride
+ * target:      (3, imgPixels, numImages)
+ */
+void convRGBToYUV(NVMatrix& images, NVMatrix& target) {
+    assert(!images.isTrans());
+    assert(!target.isTrans());
+    int imgPixels = images.getNumRows() / 3;
+    int numImages = images.getNumCols();
+    assert(images.getNumRows() == 3 * imgPixels);
+    
+    target.resize(3 * imgPixels, numImages);
+    assert(target.isContiguous());
+    bool checkCaseBounds = numImages % 128 != 0;
+    dim3 threads(32, 4);
+    dim3 blocks(DIVUP(numImages, 4 * 32), DIVUP(imgPixels, 4));
+    if (checkCaseBounds) {
+        cudaFuncSetCacheConfig(kRGBToYUV<4, true>, cudaFuncCachePreferL1);
+        kRGBToYUV<4, true><<<blocks, threads>>>(images.getDevData(), target.getDevData(), imgPixels, numImages, images.getStride());
+    } else {
+        cudaFuncSetCacheConfig(kRGBToYUV<4, false>, cudaFuncCachePreferL1);
+        kRGBToYUV<4, false><<<blocks, threads>>>(images.getDevData(), target.getDevData(), imgPixels, numImages, images.getStride());
+    }
+    cutilCheckMsg("convRGBToYUV: kernel execution failed");
+}
+
+/*
+ * imgs:        (3, imgPixels, numImages) with given imgStride
+ * target:      (3, imgPixels, numImages)
+ */
+void convRGBToLAB(NVMatrix& images, NVMatrix& target, bool center) {
+    assert(!images.isTrans());
+    assert(!target.isTrans());
+    int imgPixels = images.getNumRows() / 3;
+    int numImages = images.getNumCols();
+    assert(images.getNumRows() == 3 * imgPixels);
+    
+    target.resize(3 * imgPixels, numImages);
+    assert(target.isContiguous());
+    bool checkCaseBounds = numImages % 128 != 0;
+    dim3 threads(32, 4);
+    dim3 blocks(DIVUP(numImages, 4 * 32), DIVUP(imgPixels, 4));
+    
+    if (center) {
+        if (checkCaseBounds) {
+            cudaFuncSetCacheConfig(kRGBToLAB<4, true, true>, cudaFuncCachePreferL1);
+            kRGBToLAB<4, true, true><<<blocks, threads>>>(images.getDevData(), target.getDevData(), imgPixels, numImages, images.getStride());
+        } else {
+            cudaFuncSetCacheConfig(kRGBToLAB<4, false, true>, cudaFuncCachePreferL1);
+            kRGBToLAB<4, false, true><<<blocks, threads>>>(images.getDevData(), target.getDevData(), imgPixels, numImages, images.getStride());
+        }
+    } else {
+        if (checkCaseBounds) {
+            cudaFuncSetCacheConfig(kRGBToLAB<4, true, false>, cudaFuncCachePreferL1);
+            kRGBToLAB<4, true, false><<<blocks, threads>>>(images.getDevData(), target.getDevData(), imgPixels, numImages, images.getStride());
+        } else {
+            cudaFuncSetCacheConfig(kRGBToLAB<4, false, false>, cudaFuncCachePreferL1);
+            kRGBToLAB<4, false, false><<<blocks, threads>>>(images.getDevData(), target.getDevData(), imgPixels, numImages, images.getStride());
+        }
+    }
+    cutilCheckMsg("kRGBToLAB: kernel execution failed");
 }

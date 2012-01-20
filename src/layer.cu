@@ -803,11 +803,46 @@ ResizeLayer::ResizeLayer(ConvNet* convNet, PyObject* paramsDict) : Layer(convNet
 }
 
 void ResizeLayer::fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType) {
-    resizeBilinear(*_inputs[0], getActs(), _imgSize, _tgtSize, _scale);
+    convResizeBilinear(*_inputs[0], getActs(), _imgSize, _tgtSize, _scale);
 }
 
 // Can't do this
 void ResizeLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType) {
+    assert(false);
+}
+
+/* 
+ * =====================
+ * RGBToYUVLayer
+ * =====================
+ */
+RGBToYUVLayer::RGBToYUVLayer(ConvNet* convNet, PyObject* paramsDict) : Layer(convNet, paramsDict, false) {
+}
+
+void RGBToYUVLayer::fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType) {
+    convRGBToYUV(*_inputs[0], getActs());
+}
+
+// Can't do this
+void RGBToYUVLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType) {
+    assert(false);
+}
+
+/* 
+ * =====================
+ * RGBToLABLayer
+ * =====================
+ */
+RGBToLABLayer::RGBToLABLayer(ConvNet* convNet, PyObject* paramsDict) : Layer(convNet, paramsDict, false) {
+    _center = pyDictGetInt(paramsDict, "center");
+}
+
+void RGBToLABLayer::fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType) {
+    convRGBToLAB(*_inputs[0], getActs(), _center);
+}
+
+// Can't do this
+void RGBToLABLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType) {
     assert(false);
 }
 

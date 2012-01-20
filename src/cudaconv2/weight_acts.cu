@@ -570,6 +570,11 @@ __global__ void conv_weight_acts_mc_mf_rand(float* images, float* hidActs, float
  * 
  * TODO: you can get a slight speed boost for local non-convolutional units by writing special
  * routines for partialSum = 1. But I dunno if the code duplication is worth it...
+ * 
+ * Note: all of these convolution routines are optimized for the case when
+ * the number of images (i.e. the minibatch size) is a multiple of 128. 
+ * Other batch sizes will work, but but I made no attempt whatsoever
+ * to make them work fast. 
  */
 void _weightActs(NVMatrix& images, NVMatrix& hidActs, NVMatrix& targets,
         int numModulesX, int filterSize, int paddingStart, int moduleStride, int numImgColors,
@@ -974,6 +979,11 @@ void localWeightActs(NVMatrix& images, NVMatrix& hidActs, NVMatrix& targets,
  *
  * targets:         (numModules/partialSum, numFilterColors, filterPixels, numFilters)
  * colorIndices:    (numGroups, numFilterColors)
+ * 
+ * Note: all of these convolution routines are optimized for the case when
+ * the number of images (i.e. the minibatch size) is a multiple of 128. 
+ * Other batch sizes will work, but but I made no attempt whatsoever
+ * to make them work fast. 
  */
 void _weightActsSparse(NVMatrix& images, NVMatrix& hidActs, NVMatrix& targets, int* dColorIndices,
                         int numModulesX, int filterSize, int paddingStart, int moduleStride, int numImgColors, int numFilterColors,

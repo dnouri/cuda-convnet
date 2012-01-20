@@ -54,7 +54,9 @@ void convBedOfNails(NVMatrix& images, NVMatrix& target, int numChannels, int img
 void convBedOfNailsUndo(NVMatrix& actsGrad, NVMatrix& target, int numChannels, int imgSize,
                         int startX, int strideX, float scaleTargets, float scaleOutput);
 
-void resizeBilinear(NVMatrix& images, NVMatrix& target, int imgSize, int tgtSize, float scale);
+void convResizeBilinear(NVMatrix& images, NVMatrix& target, int imgSize, int tgtSize, float scale);
+void convRGBToYUV(NVMatrix& images, NVMatrix& target);
+void convRGBToLAB(NVMatrix& images, NVMatrix& target, bool center);
 
 class AvgPooler {
 private:
