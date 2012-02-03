@@ -137,11 +137,6 @@ void ConvNet::initCuda() {
     cudaDeviceSetCacheConfig(cudaFuncCachePreferShared);
     cublasInit();
     NVMatrix::initRandom(time(0));
-    
-    // Uncomment these lines to save memory
-//    Layer::_saveActsGrad = false;
-//    Layer::_saveActs = false;
-    
     copyToGPU();
 }
 

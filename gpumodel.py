@@ -97,6 +97,7 @@ class IGPUModel:
         pass
     
     def init_data_providers(self):
+        self.dp_params['convnet'] = self
         try:
             self.test_data_provider = DataProvider.get_instance(self.data_path, self.test_batch_range,
                                                                 type=self.dp_type, dp_params=self.dp_params, test=True)
@@ -231,7 +232,18 @@ class IGPUModel:
                 test_outputs += [self.finish_batch()]
                 break            
         return self.aggregate_test_outputs(test_outputs)
-            
+    
+    def set_var(self, var_name, var_val):
+        setattr(self, var_name, var_val)
+        self.model_state[var_name] = var_val
+        return var_val
+        
+    def get_var(self, var_name):
+        return self.model_state[var_name]
+        
+    def has_var(self, var_name):
+        return var_name in self.model_state
+        
     def save_state(self):
         for att in self.model_state:
             if hasattr(self, att):

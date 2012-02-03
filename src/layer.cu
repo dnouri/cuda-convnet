@@ -40,15 +40,6 @@ using namespace std;
  * Layer
  * =======================
  */
-/*
- * Static variables that control whether the matrices storing the
- * unit activities and their gradients get destroyed after they are used.
- * 
- * Setting these to true might net a performance benefit of a few percent
- * while increasing memory consumption.
- */
-bool Layer::_saveActs = true;
-bool Layer::_saveActsGrad = true;
 
 Layer::Layer(ConvNet* convNet, PyObject* paramsDict, bool trans) : 
              _convNet(convNet),  _trans(trans) {
@@ -60,6 +51,7 @@ Layer::Layer(ConvNet* convNet, PyObject* paramsDict, bool trans) :
     _gradConsumer = pyDictGetInt(paramsDict, "gradConsumer");
     _actsTarget = pyDictGetInt(paramsDict, "actsTarget");
     _actsGradTarget = pyDictGetInt(paramsDict, "actsGradTarget");
+    _conserveMem = pyDictGetInt(paramsDict, "conserveMem");
     _outputs = _actsTarget < 0 ? new NVMatrix() : NULL;
     _actsGrad = _actsGradTarget < 0 ? new NVMatrix() : NULL;
 }
@@ -72,10 +64,10 @@ void Layer::fpropNext(PASS_TYPE passType) {
 
 void Layer::truncBwdActs() {
     // Only truncate actsGrad if I own it
-    if (!_saveActsGrad && _actsGradTarget < 0) { 
+    if (_conserveMem && _actsGradTarget < 0) { 
         getActsGrad().truncate();
     }
-    if (!_saveActs) {
+    if (_conserveMem) {
         getActs().truncate();
     }
 }
@@ -522,7 +514,7 @@ void ConvLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE
 
 void ConvLayer::truncBwdActs() {
     LocalLayer::truncBwdActs();
-    if (!_saveActsGrad) {
+    if (_conserveMem) {
         _weightGradTmp.truncate();
         _actGradTmp.truncate();
     }
@@ -869,7 +861,7 @@ void ResponseNormLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, P
 
 void ResponseNormLayer::truncBwdActs() {
     Layer::truncBwdActs();
-    if (!_saveActs) {
+    if (_conserveMem) {
         _denoms.truncate();
     }
 }
@@ -896,7 +888,7 @@ void ContrastNormLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, P
 
 void ContrastNormLayer::truncBwdActs() {
     ResponseNormLayer::truncBwdActs();
-    if (!_saveActs) {
+    if (_conserveMem) {
         _meanDiffs.truncate();
     }
 }

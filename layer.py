@@ -190,14 +190,14 @@ class LayerParser:
         self.dic['forceOwnActs'] = True
         
         # Does this layer need the gradient at all?
-        # Should only be true for layers with parameters (weights)
-        # or layers which have layers with parameters below them.
+        # Should only be true for layers with parameters (weights).
         self.dic['gradConsumer'] = False
         
     def parse(self, name, mcp, prev_layers, model=None):
         self.prev_layers = prev_layers
         self.dic['name'] = name
         self.dic['type'] = mcp.safe_get(name, 'type')
+        self.dic['conserveMem'] = model.op.get_value('conserve_mem') if model is not None else 0
 
         return self.dic  
 
@@ -640,7 +640,7 @@ class WeightLayerParser(LayerWithInputParser):
             unshare(layer, layers, range(len(layer['inputs'])) if matrix_idx is None else [matrix_idx])
 
     # Load weight/biases initialization module
-    def call_init_func(self, param_name, shapes):
+    def call_init_func(self, param_name, shapes, input_idx=-1):
         dic = self.dic
         func_pat = re.compile('^([^\.]+)\.([^\(\)]+)\s*(?:\(([^,]+(?:,[^,]+)*)\))?$')
         m = func_pat.match(dic[param_name])
@@ -650,7 +650,7 @@ class WeightLayerParser(LayerWithInputParser):
         params = m.group(3).split(',') if m.group(3) is not None else []
         try:
             mod = __import__(module)
-            return getattr(mod, func)(dic['name'], shapes, params=params)
+            return getattr(mod, func)(dic['name'], input_idx, shapes, params=params) if input_idx >= 0 else getattr(mod, func)(dic['name'], shapes, params=params)
         except (ImportError, AttributeError, TypeError), e:
             raise LayerParsingError("Layer '%s': %s." % (dic['name'], e))
         
@@ -660,22 +660,19 @@ class WeightLayerParser(LayerWithInputParser):
         if dic['initWFunc']: # Initialize weights from user-supplied python function
             # Initialization function is supplied in the format
             # module.func
-            dic['weights'] = self.call_init_func('initWFunc', zip(rows, cols))
-            if type(dic['weights']) != list:
-                raise LayerParsingError("Layer '%s': weight initialization function %s must return list of weight matrices. Got: %s." % (dic['name'], dic['initWFunc'], type(dic['weights'])))
-            if len(dic['weights']) != len(rows):
-                raise LayerParsingError("Layer '%s': weight initialization function %s returned %d weight matrices; should be %d." % (dic['name'], dic['initWFunc'], len(dic['weights']), len(rows)))
-            for i in xrange(len(dic['weights'])):
+            for i in xrange(len(dic['inputs'])):
+                dic['weights'] += [self.call_init_func('initWFunc', (rows[i], cols[i]), input_idx=i)]
+
                 if type(dic['weights'][i]) != n.ndarray:
-                    raise LayerParsingError("Layer '%s': weight initialization function %s must return list of weight matrices as numpy.ndarray objects. Got: %s." % (dic['name'], dic['initWFunc'], type(dic['weights'][i])))
+                    raise LayerParsingError("Layer '%s[%d]': weight initialization function %s must return numpy.ndarray object. Got: %s." % (dic['name'], i, dic['initWFunc'], type(dic['weights'][i])))
                 if dic['weights'][i].dtype != n.float32:
-                    raise LayerParsingError("Layer '%s': weight initialization function %s must return list of weight matrices consisting of single-precision floats. Got: %s." % (dic['name'], dic['initWFunc'], dic['weights'][i].dtype))
+                    raise LayerParsingError("Layer '%s[%d]': weight initialization function %s must weight matrices consisting of single-precision floats. Got: %s." % (dic['name'], i, dic['initWFunc'], dic['weights'][i].dtype))
                 if dic['weights'][i].shape != (rows[i], cols[i]):
-                    raise LayerParsingError("Layer '%s': weight matrix %d returned by weight initialization function %s has wrong shape. Should be: %s; got: %s." % (dic['name'], i, dic['initWFunc'], (rows[i], cols[i]), dic['weights'][i].shape))
-                # Convert to desired order
-                dic['weights'][i] = n.require(dic['weights'][i], requirements=order)
-            dic['weightsInc'] = [n.zeros_like(w) for w in dic['weights']]
-            print "Layer '%s' initialized weight matrices from function %s" % (dic['name'], dic['initWFunc'])
+                    raise LayerParsingError("Layer '%s[%d]': weight matrix returned by weight initialization function %s has wrong shape. Should be: %s; got: %s." % (dic['name'], i, dic['initWFunc'], (rows[i], cols[i]), dic['weights'][i].shape))
+                    # Convert to desired order
+                    dic['weights'][i] = n.require(dic['weights'][i], requirements=order)
+                dic['weightsInc'] += [n.zeros_like(dic['weights'][i])]
+                print "Layer '%s[%d]' initialized weight matrices from function %s" % (dic['name'], i, dic['initWFunc'])
         else:
             for i in xrange(len(dic['inputs'])):
                 if dic['weightSourceLayerIndices'][i] >= 0: # Shared weight matrix
@@ -802,9 +799,30 @@ class LocalLayerParser(WeightLayerParser):
         
     # Returns (groups, filterChannels) array that represents the set
     # of image channels to which each group is connected
-    def gen_rand_conns(self, groups, channels, filterChannels):
+    def gen_rand_conns(self, groups, channels, filterChannels, inputIdx):
+        dic = self.dic
         overSample = groups * filterChannels / channels
-        return [x for i in xrange(overSample) for x in nr.permutation(range(channels))]
+        filterConns = [x for i in xrange(overSample) for x in nr.permutation(range(channels))]
+        
+        if dic['initCFunc']: # Initialize connectivity from outside source
+            filterConns = self.call_init_func('initCFunc', (groups, channels, filterChannels), input_idx=inputIdx)
+            if len(filterConns) != overSample * channels:
+                raise LayerParsingError("Layer '%s[%d]': random connectivity initialization function %s must return list of length <groups> * <filterChannels> = %d; got: %d" % (dic['name'], inputIdx, dic['initCFunc'], len(filterConns)))
+            if any(c not in range(channels) for c in filterConns):
+                raise LayerParsingError("Layer '%s[%d]': random connectivity initialization function %s must return list of channel indices in the range 0-<channels-1> = 0-%d." % (dic['name'], inputIdx, dic['initCFunc'], channels-1))
+            # Every "channels" sub-slice should be a permutation of range(channels)
+            if any(len(set(c)) != len(c) for c in [filterConns[o*channels:(o+1)*channels] for o in xrange(overSample)]):
+                raise LayerParsingError("Layer '%s[%d]': random connectivity initialization function %s must return list of channel indices such that every non-overlapping sub-list of <channels> = %d elements is a permutation of the integers 0-<channels-1> = 0-%d." % (dic['name'], inputIdx, dic['initCFunc'], channels, channels-1))
+
+        elif dic['weightSourceLayerIndices'][inputIdx] >= 0: # Shared weight matrix
+            src_layer = self.prev_layers[dic['weightSourceLayerIndices'][inputIdx]] if dic['weightSourceLayerIndices'][inputIdx] < len(self.prev_layers) else dic
+            src_inp = dic['weightSourceMatrixIndices'][inputIdx]
+            if 'randSparse' not in src_layer or not src_layer['randSparse']:
+                raise LayerParsingError("Layer '%s[%d]': randSparse is true in this layer but false in weight sharing source layer '%s[%d]'." % (dic['name'], inputIdx, src_layer['name'], src_inp))
+            if (groups, channels, filterChannels) != (src_layer['groups'][src_inp], src_layer['channels'][src_inp], src_layer['filterChannels'][src_inp]):
+                raise LayerParsingError("Layer '%s[%d]': groups, channels, filterChannels set to %d, %d, %d, respectively. Does not match setting in weight sharing source layer '%s[%d]': %d, %d, %d." % (dic['name'], inputIdx, groups, channels, filterChannels, src_layer['name'], src_inp, src_layer['groups'][src_inp], src_layer['channels'][src_inp], src_layer['filterChannels'][src_inp]))
+            filterConns = src_layer['filterConns'][src_inp]
+        return filterConns
         
     def parse(self, name, mcp, prev_layers, model):
         dic = WeightLayerParser.parse(self, name, mcp, prev_layers, model)
@@ -819,12 +837,13 @@ class LocalLayerParser(WeightLayerParser):
         dic['groups'] = mcp.safe_get_int_list(name, 'groups', default=[1]*len(dic['inputs']))
         dic['randSparse'] = mcp.safe_get_bool_list(name, 'randSparse', default=[False]*len(dic['inputs']))
         dic['initW'] = mcp.safe_get_float_list(name, 'initW')
+        dic['initCFunc'] = mcp.safe_get(name, 'initCFunc', default='')
         
         self.verify_num_params(['channels', 'padding', 'stride', 'filterSize', \
                                                      'filters', 'groups', 'randSparse', 'initW'])
         
         self.verify_num_range(dic['stride'], 'stride', 1, None)
-        self.verify_num_range(dic['filterSize'],'filterSize', 1, None)
+        self.verify_num_range(dic['filterSize'],'filterSize', 1, None)  
         self.verify_num_range(dic['padding'], 'padding', 0, None)
         self.verify_num_range(dic['channels'], 'channels', 1, None)
         self.verify_num_range(dic['groups'], 'groups', 1, None)
@@ -864,7 +883,7 @@ class LocalLayerParser(WeightLayerParser):
                 self.verify_divisible(dic['channels'][i], dic['filterChannels'][i], 'channels', 'filterChannels', input_idx=i)
                 self.verify_divisible(dic['filterChannels'][i], 4, 'filterChannels', input_idx=i)
                 self.verify_divisible( dic['groups'][i]*dic['filterChannels'][i], dic['channels'][i], 'groups * filterChannels', 'channels', input_idx=i)
-                dic['filterConns'][i] = self.gen_rand_conns(dic['groups'][i], dic['channels'][i], dic['filterChannels'][i])
+                dic['filterConns'][i] = self.gen_rand_conns(dic['groups'][i], dic['channels'][i], dic['filterChannels'][i], i)
             else:
                 if dic['groups'][i] > 1:
                     self.verify_divisible(dic['channels'][i], 4*dic['groups'][i], 'channels', '4 * groups', input_idx=i)

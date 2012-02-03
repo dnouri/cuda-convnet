@@ -56,6 +56,7 @@ protected:
     NVMatrix *_outputs; // TODO: make this a pointer so you can reuse previous layers' matrices
     NVMatrix *_actsGrad; // Layer activity gradients
     bool _gradConsumer, _foundGradConsumers, _trans;
+    bool _conserveMem;
     int _numGradProducersNext;
     int _actsTarget, _actsGradTarget;
     std::string _name, _type;
@@ -218,6 +219,7 @@ public:
 
 class LocalUnsharedLayer : public LocalLayer {
 protected:
+    NVMatrix _sexMask;
     void fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType);
     void bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType);
     void bpropBiases(NVMatrix& v, PASS_TYPE passType);
