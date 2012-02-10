@@ -197,7 +197,6 @@ class LayerParser:
         self.prev_layers = prev_layers
         self.dic['name'] = name
         self.dic['type'] = mcp.safe_get(name, 'type')
-        self.dic['conserveMem'] = model.op.get_value('conserve_mem') if model is not None else 0
 
         return self.dic  
 
@@ -282,6 +281,7 @@ class LayerParser:
                     raise LayerParsingError("Layer '%s' of type '%s' requires extra parameters, but none given in file '%s'." % (l['name'], l['type'], param_cfg_path))
                 lp = layer_parsers[l['type']]().init(l)
                 lp.add_params(mcp)
+                lp.dic['conserveMem'] = model.op.get_value('conserve_mem')
         except LayerParsingError, e:
             print e
             sys.exit(1)
@@ -438,26 +438,54 @@ class ResizeLayerParser(LayerWithInputParser):
         dic['usesInputs'] = False
         
         dic['channels'] = mcp.safe_get_int(name, 'channels')
+        dic['imgPixels'] = dic['numInputs'][0] / dic['channels']
+        dic['imgSize'] = int(n.sqrt(dic['imgPixels']))
+        
         dic['scale'] = mcp.safe_get_float(name, 'scale')
         dic['tgtSize'] = int(floor(dic['imgSize'] / dic['scale']))
-        dic['tgtPixels'] = dic['tgtSize']**2;
+        dic['tgtPixels'] = dic['tgtSize']**2
         self.verify_num_range(dic['channels'], 'channels', 1, None)
         # Really not recommended to use this for such severe scalings
         self.verify_float_range(dic['scale'], 'scale', 0.5, 2) 
 
-        # Computed values
-        dic['imgPixels'] = dic['numInputs'][0] / dic['channels']
-        dic['imgSize'] = int(n.sqrt(dic['imgPixels']))
-        dic['imgCenter'] = float(dic['imgSize']) / 2;
-        dic['tgtCenter'] = float(dic['tgtSize']) / 2;
-        dic['centerScale'] = dic['imgCenter'] - dic['tgtCenter'] * dic['scale'];
-        
         dic['outputs'] = dic['channels'] * dic['tgtPixels']
         
         self.verify_img_size()
         self.verify_no_grads()
         
         print "Initialized resize layer '%s', producing %dx%d %d-channel output" % (name, dic['tgtSize'], dic['tgtSize'], dic['channels'])
+        
+        return dic
+    
+class RandomScaleLayerParser(LayerWithInputParser):
+    def __init__(self):
+        LayerWithInputParser.__init__(self, num_inputs=1)
+        
+    def parse(self, name, mcp, prev_layers, model=None):
+        dic = LayerWithInputParser.parse(self, name, mcp, prev_layers, model)
+        dic['forceOwnActs'] = False
+        dic['usesActs'] = False
+        dic['usesInputs'] = False
+        
+        dic['channels'] = mcp.safe_get_int(name, 'channels')
+        self.verify_num_range(dic['channels'], 'channels', 1, None)
+        
+        # Computed values
+        dic['imgPixels'] = dic['numInputs'][0] / dic['channels']
+        dic['imgSize'] = int(n.sqrt(dic['imgPixels']))
+        
+        dic['maxScale'] = mcp.safe_get_float(name, 'maxScale')
+        dic['tgtSize'] = int(floor(dic['imgSize'] / dic['maxScale']))
+        dic['tgtPixels'] = dic['tgtSize']**2
+        
+        self.verify_float_range(dic['maxScale'], 'maxScale', 1, 2) 
+
+        dic['outputs'] = dic['channels'] * dic['tgtPixels']
+        
+        self.verify_img_size()
+        self.verify_no_grads()
+        
+        print "Initialized random scale layer '%s', producing %dx%d %d-channel output" % (name, dic['tgtSize'], dic['tgtSize'], dic['channels'])
         
         return dic
     
@@ -1080,6 +1108,7 @@ layer_parsers = {'data': lambda : DataLayerParser(),
                  'resize': lambda : ResizeLayerParser(),
                  'rgb2yuv': lambda : RGBToYUVLayerParser(),
                  'rgb2lab': lambda : RGBToLABLayerParser(),
+                 'rscale': lambda : RandomScaleLayerParser(),
                  'cost.logreg': lambda : LogregCostParser(),
                  'cost.sum2': lambda : SumOfSquaresCostParser()}
  
