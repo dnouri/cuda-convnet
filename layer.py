@@ -1022,6 +1022,10 @@ class PoolLayerParser(LayerWithInputParser):
         return dic
     
 class NormLayerParser(LayerWithInputParser):
+    RESPONSE_NORM = 'response'
+    CONTRAST_NORM = 'contrast'
+    CROSSMAP_RESPONSE_NORM = 'cross-map response'
+    
     def __init__(self, norm_type):
         LayerWithInputParser.__init__(self, num_inputs=1)
         self.norm_type = norm_type
@@ -1031,29 +1035,26 @@ class NormLayerParser(LayerWithInputParser):
         dic['channels'] = mcp.safe_get_int(name, 'channels')
         dic['size'] = mcp.safe_get_int(name, 'size')
         dic['pow'] = mcp.safe_get_float(name, 'pow')
-        dic['crossMap'] = mcp.safe_get_bool(name, 'crossMap', default=False)
         
         dic['imgPixels'] = dic['numInputs'][0] / dic['channels']
         dic['imgSize'] = int(n.sqrt(dic['imgPixels']))
         
         # Contrast normalization layer does not use its inputs
-        dic['usesInputs'] = self.norm_type != 'contrast'
+        dic['usesInputs'] = self.norm_type != self.CONTRAST_NORM
         
         self.verify_num_range(dic['channels'], 'channels', 1, None)
-        if dic['crossMap']: 
+        if self.norm_type == self.CROSSMAP_RESPONSE_NORM: 
             self.verify_num_range(dic['size'], 'size', 2, dic['channels'])
             dic['scale'] = mcp.safe_get_float(name, 'scale') / dic['size']
+            if dic['channels'] % 16 != 0:
+                raise LayerParsingError("Layer '%s': number of channels must be divisible by 16 when using crossMap" % name)
         else:
             self.verify_num_range(dic['size'], 'size', 1, dic['imgSize'])
             dic['scale'] = mcp.safe_get_float(name, 'scale') / (dic['size']**2)
         
-        if not dic['crossMap'] and dic['channels'] > 3 and dic['channels'] % 4 != 0:
+        if self.norm_type != self.CROSSMAP_RESPONSE_NORM and dic['channels'] > 3 and dic['channels'] % 4 != 0:
             raise LayerParsingError("Layer '%s': number of channels must be smaller than 4 or divisible by 4" % name)
-        if dic['crossMap'] and dic['channels'] % 16 != 0:
-            raise LayerParsingError("Layer '%s': number of channels must be divisible by 16 when using crossMap" % name)
-        if self.norm_type == 'contrast' and dic['crossMap']:
-            raise LayerParsingError("Layer '%s': contrast-normalization layers must set crossMap=false" % name)
-        
+
         self.verify_img_size()
 
         dic['outputs'] = dic['imgPixels'] * dic['channels']
@@ -1110,8 +1111,9 @@ layer_parsers = {'data': lambda : DataLayerParser(),
                  'eltmax': lambda : EltwiseMaxLayerParser(),
                  'neuron': lambda : NeuronLayerParser(),
                  'pool': lambda : PoolLayerParser(),
-                 'rnorm': lambda : NormLayerParser('response'),
-                 'cnorm': lambda : NormLayerParser('contrast'),
+                 'rnorm': lambda : NormLayerParser(NormLayerParser.RESPONSE_NORM),
+                 'cnorm': lambda : NormLayerParser(NormLayerParser.CONTRAST_NORM),
+                 'cmrnorm': lambda : NormLayerParser(NormLayerParser.CROSSMAP_RESPONSE_NORM),
                  'nailbed': lambda : NailbedLayerParser(),
                  'blur': lambda : GaussianBlurLayerParser(),
                  'resize': lambda : ResizeLayerParser(),

@@ -94,6 +94,8 @@ Layer* ConvNet::initLayer(string& layerType, PyObject* paramsDict) {
         _layers.push_back(&PoolLayer::makePoolLayer(this, paramsDict));
     } else if (layerType == "rnorm") {
         _layers.push_back(new ResponseNormLayer(this, paramsDict));
+    } else if (layerType == "cmrnorm") {
+        _layers.push_back(new CrossMapResponseNormLayer(this, paramsDict));
     } else if (layerType == "cnorm") {
         _layers.push_back(new ContrastNormLayer(this, paramsDict));
     } else if (layerType == "softmax") {

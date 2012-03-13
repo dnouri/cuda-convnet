@@ -847,26 +847,17 @@ void RGBToLABLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_
 ResponseNormLayer::ResponseNormLayer(ConvNet* convNet, PyObject* paramsDict) : Layer(convNet, paramsDict, false) {
     _channels = pyDictGetInt(paramsDict, "channels");
     _size = pyDictGetInt(paramsDict, "size");
-    _crossMap = pyDictGetInt(paramsDict, "crossMap");
 
     _scale = pyDictGetFloat(paramsDict, "scale");
     _pow = pyDictGetFloat(paramsDict, "pow");
 }
 
 void ResponseNormLayer::fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType) {
-    if (_crossMap) {
-        convResponseNormCrossMap(*_inputs[0], _denoms, getActs(), _channels, _size, _scale, _pow);
-    } else {
-        convResponseNorm(*_inputs[0], _denoms, getActs(), _channels, _size, _scale, _pow);
-    }
+    convResponseNorm(*_inputs[0], _denoms, getActs(), _channels, _size, _scale, _pow);
 }
 
 void ResponseNormLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType) {
-    if (_crossMap) {
-        convResponseNormCrossMapUndo(v, _denoms, _prev[0]->getActs(), getActs(), _prev[0]->getActsGrad(), _channels, _size, _scale, _pow, scaleTargets, 1);
-    } else {
-        convResponseNormUndo(v, _denoms, _prev[0]->getActs(), getActs(), _prev[0]->getActsGrad(), _channels, _size, _scale, _pow, scaleTargets, 1);
-    }
+    convResponseNormUndo(v, _denoms, _prev[0]->getActs(), getActs(), _prev[0]->getActsGrad(), _channels, _size, _scale, _pow, scaleTargets, 1);
 }
 
 void ResponseNormLayer::truncBwdActs() {
@@ -875,6 +866,18 @@ void ResponseNormLayer::truncBwdActs() {
         _denoms.truncate();
     }
 }
+
+CrossMapResponseNormLayer::CrossMapResponseNormLayer(ConvNet* convNet, PyObject* paramsDict) : ResponseNormLayer(convNet, paramsDict) {
+}
+
+void CrossMapResponseNormLayer::fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType) {
+    convResponseNormCrossMap(*_inputs[0], _denoms, getActs(), _channels, _size, _scale, _pow);
+}
+
+void CrossMapResponseNormLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType) {
+    convResponseNormCrossMapUndo(v, _denoms, _prev[0]->getActs(), getActs(), _prev[0]->getActsGrad(), _channels, _size, _scale, _pow, scaleTargets, 1);
+}
+
 
 /* 
  * =====================
