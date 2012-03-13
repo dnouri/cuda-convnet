@@ -59,6 +59,13 @@ void convRGBToYUV(NVMatrix& images, NVMatrix& target);
 void convRGBToLAB(NVMatrix& images, NVMatrix& target, bool center);
 void convCrop(NVMatrix& imgs, NVMatrix& target, int imgSize, int tgtSize, int startY, int startX);
 void normalizeLocalWeights(NVMatrix& weights, int numModules, float norm);
+void convTICAGrad(NVMatrix& images, NVMatrix& ticas, NVMatrix& target, int numFilters, int sizeX, float scaleTarget, float scaleOutput);
+void convTICA(NVMatrix& images, NVMatrix& target, int numFilters, int sizeX, float scaleTarget, float scaleOutput);
+void convContrastNormCrossMap(NVMatrix& images, NVMatrix& meanDiffs, NVMatrix& denoms, NVMatrix& target,
+                             int numFilters, int sizeF, float addScale, float powScale);
+void convResponseNormCrossMapUndo(NVMatrix& outGrads, NVMatrix& denoms, NVMatrix& inputs, NVMatrix& acts, NVMatrix& target, int numFilters,
+                         int sizeF, float addScale, float powScale, float scaleTargets, float scaleOutput);
+void convResponseNormCrossMap(NVMatrix& images, NVMatrix& denoms, NVMatrix& target, int numFilters, int sizeF, float addScale, float powScale);
 
 class AvgPooler {
 private:

@@ -443,12 +443,13 @@ ConvLayer::ConvLayer(ConvNet* convNet, PyObject* paramsDict) : LocalLayer(convNe
 void ConvLayer::fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType) {
     if (_randSparse->at(inpIdx)) {
         convFilterActsSparse(*_inputs[inpIdx], *_weights[inpIdx], getActs(), _filterConns->at(inpIdx).dFilterConns,
-                             _modulesX, _padding->at(inpIdx), _stride->at(inpIdx), _channels->at(inpIdx),
+                             _imgSize->at(inpIdx), _modulesX, _modulesX, _padding->at(inpIdx), _stride->at(inpIdx), _channels->at(inpIdx),
                              _filterChannels->at(inpIdx), _groups->at(inpIdx), scaleTargets, 1);
     } else {
-        convFilterActs(*_inputs[inpIdx], *_weights[inpIdx], getActs(), _modulesX, _padding->at(inpIdx),
+        convFilterActs(*_inputs[inpIdx], *_weights[inpIdx], getActs(), _imgSize->at(inpIdx), _modulesX, _modulesX, _padding->at(inpIdx),
                        _stride->at(inpIdx), _channels->at(inpIdx), _groups->at(inpIdx), scaleTargets, 1);
     }
+    
     if (scaleTargets == 0) {
         if (_sharedBiases) {
             getActs().reshape(_numFilters, getActs().getNumElements() / _numFilters);
@@ -479,13 +480,12 @@ void ConvLayer::bpropWeights(NVMatrix& v, int inpIdx, PASS_TYPE passType) {
     float scaleWGrad = passType == PASS_GC ? 1 : _weights[inpIdx].getEps() / numCases;
     float scaleTargets = _weights[inpIdx].getNumUpdates() > 0 && _partialSum == 0; // ? 1 : 0;
     if (_randSparse->at(inpIdx)) {
-        convWeightActsSparse(_prev[inpIdx]->getActs(), v, tgt, _filterConns->at(inpIdx).dFilterConns, _modulesX,
+        convWeightActsSparse(_prev[inpIdx]->getActs(), v, tgt, _filterConns->at(inpIdx).dFilterConns, _imgSize->at(inpIdx), _modulesX, _modulesX,
                              _filterSize->at(inpIdx), _padding->at(inpIdx), _stride->at(inpIdx), _channels->at(inpIdx),
                              _filterChannels->at(inpIdx), _groups->at(inpIdx), _partialSum, scaleTargets, scaleWGrad);
     } else {
-        convWeightActs(_prev[inpIdx]->getActs(), v, tgt, _modulesX, _filterSize->at(inpIdx), _padding->at(inpIdx),
+        convWeightActs(_prev[inpIdx]->getActs(), v, tgt, _imgSize->at(inpIdx), _modulesX, _modulesX, _filterSize->at(inpIdx), _padding->at(inpIdx),
                        _stride->at(inpIdx), _channels->at(inpIdx), _groups->at(inpIdx), _partialSum, scaleTargets, scaleWGrad);
-
     }
     if (_partialSum > 0) {
         scaleTargets = _weights[inpIdx].getNumUpdates() > 0;
@@ -499,7 +499,7 @@ void ConvLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE
     if (_randSparse->at(inpIdx)) {
         NVMatrix& tgt = _overSample->at(inpIdx) > 1 ? _actGradTmp : _prev[inpIdx]->getActsGrad();
         convImgActsSparse(v, *_weights[inpIdx], tgt, _filterConns->at(inpIdx).dFilterConns,
-                          _imgSize->at(inpIdx), _padding->at(inpIdx), _stride->at(inpIdx),
+                          _imgSize->at(inpIdx), _imgSize->at(inpIdx), _modulesX, _padding->at(inpIdx), _stride->at(inpIdx),
                           _channels->at(inpIdx), _filterChannels->at(inpIdx), _groups->at(inpIdx), scaleTargets, 1);
         if (_overSample->at(inpIdx) > 1) {
             _actGradTmp.reshape(_overSample->at(inpIdx), _actGradTmp.getNumElements() / _overSample->at(inpIdx));
@@ -507,7 +507,7 @@ void ConvLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE
             _prev[inpIdx]->getActsGrad().reshape(_prev[inpIdx]->getActsGrad().getNumElements() / v.getNumCols(), v.getNumCols());
         }
     } else {
-        convImgActs(v, *_weights[inpIdx], _prev[inpIdx]->getActsGrad(), _imgSize->at(inpIdx),
+        convImgActs(v, *_weights[inpIdx], _prev[inpIdx]->getActsGrad(), _imgSize->at(inpIdx), _imgSize->at(inpIdx), _modulesX,
                     _padding->at(inpIdx), _stride->at(inpIdx), _channels->at(inpIdx), _groups->at(inpIdx), scaleTargets, 1);
     }
 }
@@ -530,12 +530,13 @@ LocalUnsharedLayer::LocalUnsharedLayer(ConvNet* convNet, PyObject* paramsDict) :
 void LocalUnsharedLayer::fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType) {
     if (_randSparse->at(inpIdx)) {
         localFilterActsSparse(*_inputs[inpIdx], *_weights[inpIdx], getActs(), _filterConns->at(inpIdx).dFilterConns,
-                              _modulesX, _padding->at(inpIdx), _stride->at(inpIdx), _channels->at(inpIdx),
+                              _imgSize->at(inpIdx), _modulesX, _modulesX, _padding->at(inpIdx), _stride->at(inpIdx), _channels->at(inpIdx),
                               _filterChannels->at(inpIdx), _groups->at(inpIdx), scaleTargets, 1);
     } else {
-        localFilterActs(*_inputs[inpIdx], *_weights[inpIdx], getActs(), _modulesX, _padding->at(inpIdx),
+        localFilterActs(*_inputs[inpIdx], *_weights[inpIdx], getActs(), _imgSize->at(inpIdx), _modulesX, _modulesX, _padding->at(inpIdx),
                         _stride->at(inpIdx), _channels->at(inpIdx), _groups->at(inpIdx), scaleTargets, 1);
-    }
+
+    }  
     if (scaleTargets == 0) {
         getActs().addVector(_biases->getW());
     }
@@ -554,10 +555,10 @@ void LocalUnsharedLayer::bpropWeights(NVMatrix& v, int inpIdx, PASS_TYPE passTyp
     float scaleWGrad = passType == PASS_GC ? 1 : _weights[inpIdx].getEps() / numCases; // eps / numCases
     if (_randSparse->at(inpIdx)) {
         localWeightActsSparse(_prev[inpIdx]->getActs(), v, _weights[inpIdx].getInc(), _filterConns->at(inpIdx).dFilterConns,
-                              _modulesX, _filterSize->at(inpIdx), _padding->at(inpIdx), _stride->at(inpIdx),
+                              _imgSize->at(inpIdx), _modulesX, _modulesX, _filterSize->at(inpIdx), _padding->at(inpIdx), _stride->at(inpIdx),
                               _channels->at(inpIdx), _filterChannels->at(inpIdx), _groups->at(inpIdx), scaleInc, scaleWGrad);
     } else {
-        localWeightActs(_prev[inpIdx]->getActs(), v, _weights[inpIdx].getInc(), _modulesX, _filterSize->at(inpIdx),
+        localWeightActs(_prev[inpIdx]->getActs(), v, _weights[inpIdx].getInc(), _imgSize->at(inpIdx), _modulesX, _modulesX, _filterSize->at(inpIdx),
                         _padding->at(inpIdx), _stride->at(inpIdx), _channels->at(inpIdx), _groups->at(inpIdx), scaleInc, scaleWGrad);
     }
 }
@@ -565,11 +566,11 @@ void LocalUnsharedLayer::bpropWeights(NVMatrix& v, int inpIdx, PASS_TYPE passTyp
 void LocalUnsharedLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType) {
     if (_randSparse->at(inpIdx)) {
         localImgActsSparse(v, *_weights[inpIdx], _prev[inpIdx]->getActsGrad(), _filterConns->at(inpIdx).dFilterConns,
-                           _imgSize->at(inpIdx), _padding->at(inpIdx), _stride->at(inpIdx), _channels->at(inpIdx),
+                           _imgSize->at(inpIdx), _imgSize->at(inpIdx), _modulesX, _padding->at(inpIdx), _stride->at(inpIdx), _channels->at(inpIdx),
                            _filterChannels->at(inpIdx), _groups->at(inpIdx), scaleTargets, 1);
     } else {
-        localImgActs(v, *_weights[inpIdx], _prev[inpIdx]->getActsGrad(), _imgSize->at(inpIdx), _padding->at(inpIdx),
-                     _stride->at(inpIdx), _channels->at(inpIdx), _groups->at(inpIdx), scaleTargets, 1);
+        localImgActs(v, *_weights[inpIdx], _prev[inpIdx]->getActsGrad(),_imgSize->at(inpIdx), _imgSize->at(inpIdx), _modulesX,
+                    _padding->at(inpIdx),  _stride->at(inpIdx), _channels->at(inpIdx), _groups->at(inpIdx), scaleTargets, 1);
     }
 }
 
@@ -845,18 +846,27 @@ void RGBToLABLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_
  */
 ResponseNormLayer::ResponseNormLayer(ConvNet* convNet, PyObject* paramsDict) : Layer(convNet, paramsDict, false) {
     _channels = pyDictGetInt(paramsDict, "channels");
-    _sizeX = pyDictGetInt(paramsDict, "sizeX");
+    _size = pyDictGetInt(paramsDict, "size");
+    _crossMap = pyDictGetInt(paramsDict, "crossMap");
 
     _scale = pyDictGetFloat(paramsDict, "scale");
     _pow = pyDictGetFloat(paramsDict, "pow");
 }
 
 void ResponseNormLayer::fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType) {
-    convResponseNorm(*_inputs[0], _denoms, getActs(), _channels, _sizeX, _scale, _pow);
+    if (_crossMap) {
+        convResponseNormCrossMap(*_inputs[0], _denoms, getActs(), _channels, _size, _scale, _pow);
+    } else {
+        convResponseNorm(*_inputs[0], _denoms, getActs(), _channels, _size, _scale, _pow);
+    }
 }
 
 void ResponseNormLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType) {
-    convResponseNormUndo(v, _denoms, _prev[0]->getActs(), getActs(), _prev[0]->getActsGrad(), _channels, _sizeX, _scale, _pow, scaleTargets, 1);
+    if (_crossMap) {
+        convResponseNormCrossMapUndo(v, _denoms, _prev[0]->getActs(), getActs(), _prev[0]->getActsGrad(), _channels, _size, _scale, _pow, scaleTargets, 1);
+    } else {
+        convResponseNormUndo(v, _denoms, _prev[0]->getActs(), getActs(), _prev[0]->getActsGrad(), _channels, _size, _scale, _pow, scaleTargets, 1);
+    }
 }
 
 void ResponseNormLayer::truncBwdActs() {
@@ -877,13 +887,13 @@ ContrastNormLayer::ContrastNormLayer(ConvNet* convNet, PyObject* paramsDict) : R
 
 void ContrastNormLayer::fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType) {
     NVMatrix& images = *_inputs[0];
-    convLocalPool(images, _meanDiffs, _channels, _sizeX, -_sizeX/2, 1, _imgSize, AvgPooler(_sizeX*_sizeX));
+    convLocalPool(images, _meanDiffs, _channels, _size, -_size/2, 1, _imgSize, AvgPooler(_size*_size));
     _meanDiffs.add(images, -1, 1);
-    convContrastNorm(images, _meanDiffs, _denoms, getActs(), _channels, _sizeX, _scale, _pow);
+    convContrastNorm(images, _meanDiffs, _denoms, getActs(), _channels, _size, _scale, _pow);
 }
 
 void ContrastNormLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType) {
-    convContrastNormUndo(v, _denoms, _meanDiffs, getActs(), _prev[inpIdx]->getActsGrad(), _channels, _sizeX, _scale, _pow, scaleTargets, 1);
+    convContrastNormUndo(v, _denoms, _meanDiffs, getActs(), _prev[inpIdx]->getActsGrad(), _channels, _size, _scale, _pow, scaleTargets, 1);
 }
 
 void ContrastNormLayer::truncBwdActs() {

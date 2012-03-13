@@ -1029,9 +1029,9 @@ class NormLayerParser(LayerWithInputParser):
     def parse(self, name, mcp, prev_layers, model):
         dic = LayerWithInputParser.parse(self, name, mcp, prev_layers, model)
         dic['channels'] = mcp.safe_get_int(name, 'channels')
-        dic['sizeX'] = mcp.safe_get_int(name, 'sizeX')
+        dic['size'] = mcp.safe_get_int(name, 'size')
         dic['pow'] = mcp.safe_get_float(name, 'pow')
-        dic['scale'] = mcp.safe_get_float(name, 'scale') / (dic['sizeX']**2)
+        dic['crossMap'] = mcp.safe_get_bool(name, 'crossMap', default=False)
         
         dic['imgPixels'] = dic['numInputs'][0] / dic['channels']
         dic['imgSize'] = int(n.sqrt(dic['imgPixels']))
@@ -1039,11 +1039,20 @@ class NormLayerParser(LayerWithInputParser):
         # Contrast normalization layer does not use its inputs
         dic['usesInputs'] = self.norm_type != 'contrast'
         
-        self.verify_num_range(dic['sizeX'], 'sizeX', 1, dic['imgSize'])
         self.verify_num_range(dic['channels'], 'channels', 1, None)
+        if dic['crossMap']: 
+            self.verify_num_range(dic['size'], 'size', 2, dic['channels'])
+            dic['scale'] = mcp.safe_get_float(name, 'scale') / dic['size']
+        else:
+            self.verify_num_range(dic['size'], 'size', 1, dic['imgSize'])
+            dic['scale'] = mcp.safe_get_float(name, 'scale') / (dic['size']**2)
         
-        if dic['channels'] > 3 and dic['channels'] % 4 != 0:
+        if not dic['crossMap'] and dic['channels'] > 3 and dic['channels'] % 4 != 0:
             raise LayerParsingError("Layer '%s': number of channels must be smaller than 4 or divisible by 4" % name)
+        if dic['crossMap'] and dic['channels'] % 16 != 0:
+            raise LayerParsingError("Layer '%s': number of channels must be divisible by 16 when using crossMap" % name)
+        if self.norm_type == 'contrast' and dic['crossMap']:
+            raise LayerParsingError("Layer '%s': contrast-normalization layers must set crossMap=false" % name)
         
         self.verify_img_size()
 

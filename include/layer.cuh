@@ -312,7 +312,8 @@ public:
 
 class ResponseNormLayer : public Layer {
 protected:
-    int _channels, _sizeX;
+    bool _crossMap;
+    int _channels, _size;
     float _scale, _pow;
     NVMatrix _denoms;
 
