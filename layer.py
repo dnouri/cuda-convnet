@@ -697,8 +697,8 @@ class WeightLayerParser(LayerWithInputParser):
                     raise LayerParsingError("Layer '%s[%d]': weight initialization function %s must weight matrices consisting of single-precision floats. Got: %s." % (dic['name'], i, dic['initWFunc'], dic['weights'][i].dtype))
                 if dic['weights'][i].shape != (rows[i], cols[i]):
                     raise LayerParsingError("Layer '%s[%d]': weight matrix returned by weight initialization function %s has wrong shape. Should be: %s; got: %s." % (dic['name'], i, dic['initWFunc'], (rows[i], cols[i]), dic['weights'][i].shape))
-                    # Convert to desired order
-                    dic['weights'][i] = n.require(dic['weights'][i], requirements=order)
+                # Convert to desired order
+                dic['weights'][i] = n.require(dic['weights'][i], requirements=order)
                 dic['weightsInc'] += [n.zeros_like(dic['weights'][i])]
                 print "Layer '%s[%d]' initialized weight matrices from function %s" % (dic['name'], i, dic['initWFunc'])
         else:
@@ -1030,11 +1030,18 @@ class NormLayerParser(LayerWithInputParser):
         LayerWithInputParser.__init__(self, num_inputs=1)
         self.norm_type = norm_type
         
+    def add_params(self, mcp):
+        dic, name = self.dic, self.dic['name']
+        dic['scale'] = mcp.safe_get_float(name, 'scale')
+        dic['scale'] /= dic['size'] if self.norm_type == self.CROSSMAP_RESPONSE_NORM else dic['size']**2
+        dic['pow'] = mcp.safe_get_float(name, 'pow')
+        
     def parse(self, name, mcp, prev_layers, model):
         dic = LayerWithInputParser.parse(self, name, mcp, prev_layers, model)
+        dic['requiresParams'] = True
         dic['channels'] = mcp.safe_get_int(name, 'channels')
         dic['size'] = mcp.safe_get_int(name, 'size')
-        dic['pow'] = mcp.safe_get_float(name, 'pow')
+        dic['blocked'] = mcp.safe_get_bool(name, 'blocked', default=False)
         
         dic['imgPixels'] = dic['numInputs'][0] / dic['channels']
         dic['imgSize'] = int(n.sqrt(dic['imgPixels']))
@@ -1045,12 +1052,10 @@ class NormLayerParser(LayerWithInputParser):
         self.verify_num_range(dic['channels'], 'channels', 1, None)
         if self.norm_type == self.CROSSMAP_RESPONSE_NORM: 
             self.verify_num_range(dic['size'], 'size', 2, dic['channels'])
-            dic['scale'] = mcp.safe_get_float(name, 'scale') / dic['size']
             if dic['channels'] % 16 != 0:
                 raise LayerParsingError("Layer '%s': number of channels must be divisible by 16 when using crossMap" % name)
         else:
             self.verify_num_range(dic['size'], 'size', 1, dic['imgSize'])
-            dic['scale'] = mcp.safe_get_float(name, 'scale') / (dic['size']**2)
         
         if self.norm_type != self.CROSSMAP_RESPONSE_NORM and dic['channels'] > 3 and dic['channels'] % 4 != 0:
             raise LayerParsingError("Layer '%s': number of channels must be smaller than 4 or divisible by 4" % name)

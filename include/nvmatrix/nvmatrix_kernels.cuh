@@ -628,10 +628,11 @@ public:
     }
 };
 
+template <bool var>
 class AddGaussianBinaryRandomizer {
 public:
     __device__ inline float operator ()(float data, float stdev, curandState* state) {
-        return data + stdev * curand_normal(state);
+        return data + (var ? stdev : 1) * stdev * curand_normal(state);
     }
 };
 

@@ -62,10 +62,11 @@ void normalizeLocalWeights(NVMatrix& weights, int numModules, float norm);
 void convTICAGrad(NVMatrix& images, NVMatrix& ticas, NVMatrix& target, int numFilters, int sizeX, float scaleTarget, float scaleOutput);
 void convTICA(NVMatrix& images, NVMatrix& target, int numFilters, int sizeX, float scaleTarget, float scaleOutput);
 void convContrastNormCrossMap(NVMatrix& images, NVMatrix& meanDiffs, NVMatrix& denoms, NVMatrix& target,
-                             int numFilters, int sizeF, float addScale, float powScale);
+                             int numFilters, int sizeF, float addScale, float powScale, bool blocked);
 void convResponseNormCrossMapUndo(NVMatrix& outGrads, NVMatrix& denoms, NVMatrix& inputs, NVMatrix& acts, NVMatrix& target, int numFilters,
-                         int sizeF, float addScale, float powScale, float scaleTargets, float scaleOutput);
-void convResponseNormCrossMap(NVMatrix& images, NVMatrix& denoms, NVMatrix& target, int numFilters, int sizeF, float addScale, float powScale);
+                         int sizeF, float addScale, float powScale, bool blocked, float scaleTargets, float scaleOutput);
+void convResponseNormCrossMap(NVMatrix& images, NVMatrix& denoms, NVMatrix& target, int numFilters, int sizeF, float addScale,
+                              float powScale, bool blocked);
 
 class AvgPooler {
 private:
@@ -87,10 +88,23 @@ public:
 class MaxPooler {
 public:
     __device__ inline float operator()(const float a, const float b) const {
-        return a > b ? a : b;
+        return fmaxf(a, b);
     }
     __device__ inline float getBaseValue() const {
         return -2e38; 
+    }
+    __device__ inline float output(const float a) const {
+        return a;
+    }
+};
+
+class MaxAbsPooler {
+public:
+    __device__ inline float operator()(const float a, const float b) const {
+        return fabsf(a) > fabsf(b) ? a : b;
+    }
+    __device__ inline float getBaseValue() const {
+        return 0.0f;
     }
     __device__ inline float output(const float a) const {
         return a;

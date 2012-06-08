@@ -330,12 +330,20 @@ void NVMatrix::addGaussianNoise(float stdev, NVMatrix& target) {
     _unaryRandomize(target, AddGaussianUnaryRandomizer(stdev));
 }
 
-void NVMatrix::addGaussianNoise(NVMatrix& stdevs) {
-    addGaussianNoise(stdevs, *this);
+void NVMatrix::addGaussianNoise(NVMatrix& stdevs, bool var) {
+    addGaussianNoise(stdevs, var, *this);
 }
 
-void NVMatrix::addGaussianNoise(NVMatrix& stdevs, NVMatrix& target) {
-    _binaryRandomize(stdevs, target, AddGaussianBinaryRandomizer());
+void NVMatrix::addGaussianNoise(NVMatrix& stdevs) {
+    addGaussianNoise(stdevs, false, *this);
+}
+
+void NVMatrix::addGaussianNoise(NVMatrix& stdevs, bool var, NVMatrix& target) {
+    if (var) {
+        _binaryRandomize(stdevs, target, AddGaussianBinaryRandomizer<true>());
+    } else {
+        _binaryRandomize(stdevs, target, AddGaussianBinaryRandomizer<false>());
+    }
 }
 
 void NVMatrix::biggerThan(NVMatrix& b, NVMatrix& target) {

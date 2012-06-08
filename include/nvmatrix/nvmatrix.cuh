@@ -210,8 +210,9 @@ public:
     void rightMult(const NVMatrix &b, NVMatrix &target) const;
     void rightMult(const NVMatrix &b, float scaleAB);
     void randomizeUniform();
-    void addGaussianNoise(NVMatrix& stdevs, NVMatrix& target);
+    void addGaussianNoise(NVMatrix& stdevs, bool var, NVMatrix& target);
     void addGaussianNoise(float stdev, NVMatrix& target);
+    void addGaussianNoise(NVMatrix& stdevs, bool var);
     void addGaussianNoise(NVMatrix& stdevs);
     void addGaussianNoise(float stdev);
     void addGaussianNoise();
