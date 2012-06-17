@@ -24,6 +24,8 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <set>
+#include <vector>
 #include <assert.h>
 #include <cublas.h>
 #include <cutil_inline.h>
@@ -35,17 +37,22 @@
 #include <typeinfo>
 #include <nvmatrix.cuh>
 #include <nvmatrix_operators.cuh>
+#include <map>
 
-//unsigned int NVMatrix::hostRndMults[NUM_RND_STREAMS];
-bool NVMatrix::rndInitialized = false;
+using namespace std;
 
 /*
  * Device random number generator pointers.
  */
-//unsigned int *NVMatrix::devRndMults;
-//unsigned long long *NVMatrix::devRndWords;
-curandGenerator_t NVMatrix::rndGen;
-curandState* NVMatrix::rndDevStates;
+//map<int,curandGenerator_t> NVMatrix::rndGen;
+map<int,curandState*> NVMatrix::rndDevStates;
+pthread_mutex_t* NVMatrix::_rndMutex = makeMutex();
+
+pthread_mutex_t* NVMatrix::makeMutex() {
+    pthread_mutex_t* m = (pthread_mutex_t*) malloc(sizeof(pthread_mutex_t));
+    pthread_mutex_init(m, NULL);
+    return m;
+}
 
 void NVMatrix::_init(int numRows, int numCols, int stride, bool isTrans) {
     _numRows = numRows;
@@ -237,19 +244,19 @@ void NVMatrix::addProduct(const NVMatrix& a, const NVMatrix &b) {
 
 template <class Randomizer>
 void NVMatrix::_unaryRandomize(NVMatrix& target, Randomizer rnd) {
-    assert(rndInitialized);
+    assert(isRndInitialized());
     assert(isContiguous() && target.isContiguous());
     if (!isSameDims(target)) {
         target.resize(*this);
     }
     assert(isTrans() == target.isTrans());
-    kUnaryRandomize<<<NUM_RND_BLOCKS,NUM_RND_THREADS_PER_BLOCK>>>(getDevData(), target.getDevData(), rndDevStates, getNumElements(), rnd);
+    kUnaryRandomize<<<NUM_RND_BLOCKS,NUM_RND_THREADS_PER_BLOCK>>>(getDevData(), target.getDevData(), getCurandState(), getNumElements(), rnd);
     cutilCheckMsg("kUnaryRandomize: Kernel execution failed");
 }
 
 template <class Randomizer>
 void NVMatrix::_binaryRandomize(NVMatrix& data2, NVMatrix& target, Randomizer rnd) {
-    assert(rndInitialized);
+    assert(isRndInitialized());
     assert(isContiguous() && data2.isContiguous() && target.isContiguous());
     assert(isSameDims(data2));
     assert(isTrans() == data2.isTrans());
@@ -257,27 +264,56 @@ void NVMatrix::_binaryRandomize(NVMatrix& data2, NVMatrix& target, Randomizer rn
         target.resize(*this);
     }
     assert(isTrans() == target.isTrans());
-    kBinaryRandomize<<<NUM_RND_BLOCKS,NUM_RND_THREADS_PER_BLOCK>>>(getDevData(), data2.getDevData(), target.getDevData(), rndDevStates, getNumElements(), rnd);
+    kBinaryRandomize<<<NUM_RND_BLOCKS,NUM_RND_THREADS_PER_BLOCK>>>(getDevData(), data2.getDevData(), target.getDevData(), getCurandState(), getNumElements(), rnd);
     cutilCheckMsg("kBinaryRandomize: Kernel execution failed");
 }
 
 void NVMatrix::initRandom(unsigned long long seed) {
-    assert(!rndInitialized);
-    CUDA_CALL(cudaMalloc((void **)&rndDevStates, NUM_RND_STREAMS * sizeof(curandState)));
-    kSetupCurand<<<NUM_RND_BLOCKS, NUM_RND_THREADS_PER_BLOCK>>>(rndDevStates, 1 + seed*2); // so there's no chance it'll be correlated with the other one
+    assert(!isRndInitialized());
+    pthread_mutex_lock(_rndMutex);
+    int d = getDeviceID();
+    rndDevStates[d] = NULL;
+    CUDA_CALL(cudaMalloc((void **)&rndDevStates[d], NUM_RND_STREAMS * sizeof(curandState)));
+    pthread_mutex_unlock(_rndMutex);
+    printf("initialized random for %d\n", d);
+    kSetupCurand<<<NUM_RND_BLOCKS, NUM_RND_THREADS_PER_BLOCK>>>(getCurandState(), 1 + seed*2); // so there's no chance it'll be correlated with the other one
     cutilCheckMsg("initRandom: Kernel execution failed");
-    rndInitialized = true;
 }
 
 void NVMatrix::initRandom() {
     NVMatrix::initRandom(time(0));
 }
 
+curandState* NVMatrix::getCurandState() {
+    pthread_mutex_lock(_rndMutex);
+    int d = getDeviceID();
+    assert(rndDevStates.count(d) != 0);
+    curandState* r = rndDevStates[d];
+    pthread_mutex_unlock(_rndMutex);
+    return r;
+}
+
+int NVMatrix::getDeviceID() {
+    int d;
+    cudaGetDevice(&d);
+    return d;
+}
+
+bool NVMatrix::isRndInitialized() {
+    pthread_mutex_lock(_rndMutex);
+    bool b = rndDevStates.count(getDeviceID()) != 0;
+    pthread_mutex_unlock(_rndMutex);
+    return b;
+}
+
 void NVMatrix::destroyRandom() {
-    assert(rndInitialized);
-//    CURAND_CALL(curandDestroyGenerator(rndGen));
-    CUDA_CALL(cudaFree(rndDevStates));
-    rndInitialized = false;
+    assert(isRndInitialized());
+    int d = getDeviceID();
+    
+    pthread_mutex_lock(_rndMutex);
+    CUDA_CALL(cudaFree(rndDevStates[d]));
+    rndDevStates.erase(d);
+    pthread_mutex_unlock(_rndMutex);
 }
 
 void NVMatrix::binarizeProbs() {
@@ -290,7 +326,7 @@ void NVMatrix::binarizeProbs(NVMatrix& target) {
 
 void NVMatrix::randomizeUniform() {
     assert(isContiguous());
-    assert(rndInitialized);
+    assert(isRndInitialized());
 //    CURAND_CALL(curandGenerateUniform(rndGen, _devData, getNumElements()));
     _unaryRandomize(*this, UniformUnaryRandomizer());
 }
@@ -305,7 +341,7 @@ void NVMatrix::randomizeGaussian(float stdev) {
 
 void NVMatrix::randomizeGaussian(float mean, float stdev) {
     assert(isContiguous());
-    assert(rndInitialized);
+    assert(isRndInitialized());
 //    CURAND_CALL(curandGenerateNormal(rndGen, _devData, getNumElements(), mean, stdev));
     _unaryRandomize(*this, GaussianUnaryRandomizer(mean, stdev));
 }

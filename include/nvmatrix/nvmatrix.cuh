@@ -32,6 +32,7 @@
 #define RND_MULTIPLIERS_FILE ("rnd_multipliers_32bit.txt")
 #endif
 
+#include <map>
 #include <cublas.h>
 #include <cuda.h>
 #include <curand.h>
@@ -65,12 +66,9 @@ private:
     bool _isTrans;
     bool _ownsData;
 
-//    static unsigned int hostRndMults[NUM_RND_STREAMS];
-    static bool rndInitialized;
-//    static unsigned int *devRndMults;
-//    static unsigned long long *devRndWords;
-    static curandGenerator_t rndGen;
-    static curandState *rndDevStates;
+//    static std::map<int,curandGenerator_t> rndGen;
+    static std::map<int,curandState*> rndDevStates;
+    static pthread_mutex_t *_rndMutex;
 
     static void checkCublasError(const char* msg) {
         cublasStatus status = cublasGetError();
@@ -110,7 +108,11 @@ public:
 
     static void initRandom(unsigned long long seed);
     static void initRandom();
+    static int getDeviceID();
+    static bool isRndInitialized();
+    static curandState* getCurandState();
     static void destroyRandom();
+    static pthread_mutex_t* makeMutex();
 
     /*
      * DO NOT DEREFERENCE IN HOST CODE! This is a device memory pointer.
@@ -197,6 +199,7 @@ public:
     void truncate() {
         resize(0,0);
     }
+   
 
     void copyFromHost(const Matrix& hostMatrix);
     void copyFromHost(const Matrix& hostMatrix, bool resizeDeviceMatrix);

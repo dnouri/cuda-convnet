@@ -579,7 +579,7 @@ void _convBedOfNails(NVMatrix& images, NVMatrix& target, int numChannels, int im
     bool checkCaseBounds = numImages % (32*imgsPerThread) != 0;
     int chansPerThread = numChannels % 8 == 0 ? 2 : 1;
     dim3 threads(32, 4);
-    dim3 blocks(DIVUP(numImages,32*4) * outputsX, DIVUP(numChannels, 4 * chansPerThread) * outputsX);
+    dim3 blocks(DIVUP(numImages,32*imgsPerThread) * outputsX, DIVUP(numChannels, 4 * chansPerThread) * outputsX);
     
     if (imgsPerThread == 4) {
         if (chansPerThread == 1) {
