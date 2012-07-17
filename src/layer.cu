@@ -712,7 +712,7 @@ AvgPoolLayer::AvgPoolLayer(ConvNet* convNet, PyObject* paramsDict) : PoolLayer(c
 }
 
 void AvgPoolLayer::fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType) {
-    convLocalPool(*_inputs[0], getActs(), _channels, _sizeX, _start, _stride, _outputsX, AvgPooler(_sizeX*_sizeX));
+    convLocalPool(*_inputs[0], getActs(), _channels, _sizeX, _start, _stride, _outputsX, AvgPooler());
 }
 
 void AvgPoolLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType) {
@@ -896,7 +896,7 @@ ContrastNormLayer::ContrastNormLayer(ConvNet* convNet, PyObject* paramsDict) : R
 
 void ContrastNormLayer::fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType) {
     NVMatrix& images = *_inputs[0];
-    convLocalPool(images, _meanDiffs, _channels, _size, -_size/2, 1, _imgSize, AvgPooler(_size*_size));
+    convLocalPool(images, _meanDiffs, _channels, _size, -_size/2, 1, _imgSize, AvgPooler());
     _meanDiffs.add(images, -1, 1);
     convContrastNorm(images, _meanDiffs, _denoms, getActs(), _channels, _size, _scale, _pow);
 }

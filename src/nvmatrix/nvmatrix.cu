@@ -275,7 +275,6 @@ void NVMatrix::initRandom(unsigned long long seed) {
     rndDevStates[d] = NULL;
     CUDA_CALL(cudaMalloc((void **)&rndDevStates[d], NUM_RND_STREAMS * sizeof(curandState)));
     pthread_mutex_unlock(_rndMutex);
-    printf("initialized random for %d\n", d);
     kSetupCurand<<<NUM_RND_BLOCKS, NUM_RND_THREADS_PER_BLOCK>>>(getCurandState(), 1 + seed*2); // so there's no chance it'll be correlated with the other one
     cutilCheckMsg("initRandom: Kernel execution failed");
 }
@@ -518,6 +517,8 @@ NVMatrix& NVMatrix::reshaped(int numRows, int numCols) {
 void NVMatrix::copy(NVMatrix &dest, int srcStartRow, int srcEndRow,
                     int srcStartCol, int srcEndCol,
                     int destStartRow, int destStartCol) const {
+    srcEndRow = srcEndRow < 0 ? _numRows : srcEndRow;
+    srcEndCol = srcEndCol < 0 ? _numCols : srcEndCol;
     NVMatrix* srcSlice = &slice(srcStartRow, srcEndRow, srcStartCol, srcEndCol);
     NVMatrix* destSlice = &dest.slice(destStartRow, destStartRow + srcEndRow - srcStartRow, destStartCol, destStartCol + srcEndCol - srcStartCol);
     srcSlice->apply(NVMatrixOps::Identity(), *destSlice);

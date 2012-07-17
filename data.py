@@ -45,7 +45,7 @@ class DataProvider:
         self.batch_meta = self.get_batch_meta(data_dir)
         self.data_dic = None
         self.test = test
-        self.batch_range_idx = batch_range.index(init_batchnum)
+        self.batch_idx = batch_range.index(init_batchnum)
 
     def get_next_batch(self):
         if self.data_dic is None or len(self.batch_range) > 1:
@@ -84,13 +84,13 @@ class DataProvider:
         return self.batch_meta['num_vis']
     
     def advance_batch(self):
-        self.batch_range_idx = self.get_next_batch_idx()
-        self.curr_batchnum = self.batch_range[self.batch_range_idx]
-        if self.batch_range_idx == 0: # we wrapped
+        self.batch_idx = self.get_next_batch_idx()
+        self.curr_batchnum = self.batch_range[self.batch_idx]
+        if self.batch_idx == 0: # we wrapped
             self.curr_epoch += 1
             
     def get_next_batch_idx(self):
-        return (self.batch_range_idx + 1) % len(self.batch_range)
+        return (self.batch_idx + 1) % len(self.batch_range)
     
     def get_next_batch_num(self):
         return self.batch_range[self.get_next_batch_idx()]
@@ -150,7 +150,7 @@ class DummyDataProvider(DataProvider):
         self.batch_meta = {'num_vis': data_dim, 'data_in_rows':True}
         self.curr_epoch = 1
         self.curr_batchnum = 1
-        self.batch_range_idx = 0
+        self.batch_idx = 0
         
     def get_next_batch(self):
         epoch,  batchnum = self.curr_epoch, self.curr_batchnum
@@ -170,7 +170,7 @@ class LabeledDummyDataProvider(DummyDataProvider):
         self.num_classes = num_classes
         self.curr_epoch = 1
         self.curr_batchnum = 1
-        self.batch_range_idx=0
+        self.batch_idx=0
         
     def get_num_classes(self):
         return self.num_classes
@@ -197,6 +197,9 @@ class MemoryDataProvider(DataProvider):
         return epoch, batchnum, self.data_dic[batchnum - self.batch_range[0]]
 
 class LabeledDataProvider(DataProvider):   
+    def __init__(self, data_dir, batch_range=None, init_epoch=1, init_batchnum=None, dp_params={}, test=False):
+        DataProvider.__init__(self, data_dir, batch_range, init_epoch, init_batchnum, dp_params, test)
+        
     def get_num_classes(self):
         return len(self.batch_meta['label_names'])
     

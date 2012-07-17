@@ -225,12 +225,16 @@ class IGPUModel:
         while True:
             data = next_data
             self.start_batch(data, train=False)
-            if not self.test_one and data[1] < self.test_batch_range[-1]: # load next batch
+            load_next = not self.test_one and data[1] < self.test_batch_range[-1]
+            if load_next: # load next batch
                 next_data = self.get_next_batch(train=False)
-                test_outputs += [self.finish_batch()]
-            else:
-                test_outputs += [self.finish_batch()]
-                break            
+            test_outputs += [self.finish_batch()]
+            if self.test_only: # Print the individual batch results for safety
+                print "batch %d: %s" % (data[1], str(test_outputs[-1]))
+            if not load_next:
+                break
+            sys.stdout.flush()
+            
         return self.aggregate_test_outputs(test_outputs)
     
     def set_var(self, var_name, var_val):

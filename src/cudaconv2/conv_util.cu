@@ -1423,18 +1423,27 @@ __global__ void kLocalAvgUndo(float* avgGrads, float* target, const int imgSize,
         }
     }
     
-    if  (blockPxX >= startX && blockPxX < startX + strideX * (outputsX-1) + subsX 
+    if (blockPxX >= startX && blockPxX < startX + strideX * (outputsX-1) + subsX 
             && blockPxY >= startX && blockPxY < startX + strideX * (outputsX-1) + subsX) {
         
         for (int my = startOutputY; my < endOutputY; my++) {
+            const float regionStartY = fmaxf(0, startX + my * strideX);
+            const float regionEndY = fminf(imgSize, startX + my * strideX + subsX);
+            const float regionSizeY = regionEndY - regionStartY;
             for (int mx = startOutputX; mx < endOutputX; mx++) {
                 const int outputIdx = my * outputsX + mx;
+                const float regionStartX = fmaxf(0, startX + mx * strideX);
+                const float regionEndX = fminf(imgSize, startX + mx * strideX + subsX);
+                const float regionSizeX = regionEndX - regionStartX;
+                // It's important to do the division here, because pushing division into the below
+                // loops makes the code 4x slower. 
+                const float regionSizeInv = 1.0f / (regionSizeX * regionSizeY);
                 #pragma unroll
                 for (int i = 0; i < imgsPerThread; i++) {
                     if (!checkCaseBounds || imgIdx + i * B_X < numImages) {
                         #pragma unroll
                         for (int f = 0; f < filtersPerThread; f++) {
-                            prod[f][i] += avgGrads[(f * B_Y * numOutputs + outputIdx) * numImages + i * B_X];
+                            prod[f][i] += avgGrads[(f * B_Y * numOutputs + outputIdx) * numImages + i * B_X] * regionSizeInv;
                         }
                     }
                 }
@@ -1448,7 +1457,7 @@ __global__ void kLocalAvgUndo(float* avgGrads, float* target, const int imgSize,
             if (!checkCaseBounds || imgIdx + i * B_X < numImages) {
                 #pragma unroll
                 for (int f = 0; f < filtersPerThread; f++) {
-                    target[f * B_Y * imgPixels * numImages + i * B_X] = prod[f][i] / (subsX * subsX);
+                    target[f * B_Y * imgPixels * numImages + i * B_X] = prod[f][i];
                 }
             }
         }
@@ -1458,7 +1467,7 @@ __global__ void kLocalAvgUndo(float* avgGrads, float* target, const int imgSize,
             if (!checkCaseBounds || imgIdx + i * B_X < numImages) {
                 #pragma unroll
                 for (int f = 0; f < filtersPerThread; f++) {
-                    target[f * B_Y * imgPixels * numImages + i * B_X] = scaleTargets * target[f * B_Y * imgPixels * numImages + i * B_X] + scaleOutputs * prod[f][i] / (subsX * subsX);
+                    target[f * B_Y * imgPixels * numImages + i * B_X] = scaleTargets * target[f * B_Y * imgPixels * numImages + i * B_X] + scaleOutputs * prod[f][i];
                 }
             }
         }
@@ -2335,7 +2344,6 @@ void convResponseNormUndo(NVMatrix& outGrads, NVMatrix& denoms, NVMatrix& inputs
                 }
             }
         }
-
     } else {
         int imgsPerThread = numImages % 64 == 0 ? 2 : 1;
         bool checkCaseBounds = numImages % (32*imgsPerThread) != 0;

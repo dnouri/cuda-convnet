@@ -69,19 +69,15 @@ void convResponseNormCrossMap(NVMatrix& images, NVMatrix& denoms, NVMatrix& targ
                               float powScale, bool blocked);
 
 class AvgPooler {
-private:
-    float _num;
 public:
-    AvgPooler(float num) : _num(num) {
-    }
     __device__ inline float operator()(const float a, const float b) const {
         return a + b;
     }
     __device__ inline float getBaseValue() const {
         return 0;
     }
-    __device__ inline float output(const float a) const {
-        return a / _num;
+    __device__ inline float output(const float a, const int regionSize) const {
+        return a / regionSize;
     }
 };
 
@@ -93,7 +89,7 @@ public:
     __device__ inline float getBaseValue() const {
         return -2e38; 
     }
-    __device__ inline float output(const float a) const {
+    __device__ inline float output(const float a, const int regionSize) const {
         return a;
     }
 };
@@ -106,7 +102,7 @@ public:
     __device__ inline float getBaseValue() const {
         return 0.0f;
     }
-    __device__ inline float output(const float a) const {
+    __device__ inline float output(const float a, const int regionSize) const {
         return a;
     }
 };
@@ -166,6 +162,7 @@ __global__ void kLocalPool(float* imgs, float* target, const int imgSize, const 
     const int loopStartX = MAX(0, startImgPxX);
     const int loopEndY = MIN(imgSize, startImgPxY + subsX);
     const int loopEndX = MIN(imgSize, startImgPxX + subsX);
+    const int regionSize = (loopEndY - loopStartY) * (loopEndX - loopStartX);
     for (int y = loopStartY; y < loopEndY; y++) {
         for (int x = loopStartX; x < loopEndX; x++) {
             const int imgPx = y * imgSize + x;
@@ -186,7 +183,7 @@ __global__ void kLocalPool(float* imgs, float* target, const int imgSize, const 
         if (!checkCaseBounds || imgIdx + i * B_X < numImages) {
             #pragma unroll
             for (int f = 0; f < filtersPerThread; f++) {
-                target[f * numOutputs * numImages + i * B_X] = agg.output(prod[f][i]); 
+                target[f * numOutputs * numImages + i * B_X] = agg.output(prod[f][i], regionSize); 
             }
         }
     }
@@ -259,7 +256,7 @@ __global__ void kLocalPool2(float* imgs, float* target, const int imgSize, const
     const int loopStartX = MAX(startImgPxX, 0);
     const int loopEndY = MIN(imgSize, endImgPxY + 3);
     const int loopEndX = MIN(imgSize, endImgPxX + 3);
-
+    
     const int imgIdx = blockImgIdx + threadIdx.x;
     
     imgs += (blockFilterIdx + loadY) * imgPixels * numImages + blockImgIdx + loadX;
@@ -273,7 +270,7 @@ __global__ void kLocalPool2(float* imgs, float* target, const int imgSize, const
             prod[f][i] = agg.getBaseValue(); 
         }
     }
-
+    int regionSize = 0;
     for (int y = loopStartY; y < loopEndY; y++) {
         const bool isInY = y >= myStartImgPxY && y < myEndImgPxY ;
         for (int x = loopStartX; x < loopEndX; x++) {
@@ -303,6 +300,7 @@ __global__ void kLocalPool2(float* imgs, float* target, const int imgSize, const
                         }
                     }
                 }
+                ++regionSize;
             }
             __syncthreads();
 
@@ -314,7 +312,7 @@ __global__ void kLocalPool2(float* imgs, float* target, const int imgSize, const
             if (!checkCaseBounds || imgIdx + i * B_X < numImages) {
                 #pragma unroll
                 for (int f = 0; f < filtersPerThread; f++) {
-                    target[f * numOutputs * numImages + i * B_X] = agg.output(prod[f][i]); 
+                    target[f * numOutputs * numImages + i * B_X] = agg.output(prod[f][i], regionSize); 
                 }
             }
         }
