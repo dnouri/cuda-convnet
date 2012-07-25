@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # Fill in these environment variables.
-# Make sure you're using CUDA 4.0.
+# I have tested this code with CUDA 4.0, 4.1, and 4.2. 
 # Only use Fermi-generation cards. Older cards won't work.
 
 # If you're not sure what these paths should be, 
