@@ -131,7 +131,7 @@ class ConvNet(IGPUModel):
             print ", ".join("%6f" % v for v in costs[errname]),
             if sum(m.isnan(v) for v in costs[errname]) > 0 or sum(m.isinf(v) for v in costs[errname]):
                 print "^ got nan or inf!"
-                sys.exit(1)
+                # sys.exit(1)
         
     def print_train_results(self):
         self.print_costs(self.train_outputs[-1])
@@ -193,6 +193,14 @@ class ConvNet(IGPUModel):
         DataProvider.register_data_provider('dummy-cn-n', 'Dummy ConvNet', DummyConvNetDataProvider)
         DataProvider.register_data_provider('cifar-cropped', 'Cropped CIFAR', CroppedCIFARDataProvider)
         
+        try:
+            # If a module with the name 'moredataproviders' exist,
+            # import it to allow hooking more data providers.
+            import moredataproviders
+            moredataproviders.register(DataProvider)
+        except ImportError:
+            pass
+
         return op
     
 if __name__ == "__main__":
