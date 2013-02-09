@@ -1,0 +1,6 @@
+*.pyc
+bin/
+obj/
+_ConvNet.so
+moredataproviders.py
+whales
