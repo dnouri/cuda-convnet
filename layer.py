@@ -151,7 +151,10 @@ class LayerParser:
     
     # Add parameters from layer parameter file
     def add_params(self, mcp):
-        pass
+        dic, name = self.dic, self.dic['name']
+        dic['dropout'] = 0.0
+        if name in mcp.sections():
+            dic['dropout'] = mcp.safe_get_float(name, 'dropout', default=0.0)
     
     def init(self, dic):
         self.dic = dic
@@ -639,6 +642,8 @@ class WeightLayerParser(LayerWithInputParser):
         return m.group(1), m.group(2)
     
     def add_params(self, mcp):
+        LayerWithInputParser.add_params(self, mcp)
+
         dic, name = self.dic, self.dic['name']
         dic['epsW'] = mcp.safe_get_float_list(name, 'epsW')
         dic['epsB'] = mcp.safe_get_float(name, 'epsB')
@@ -1031,6 +1036,8 @@ class NormLayerParser(LayerWithInputParser):
         self.norm_type = norm_type
         
     def add_params(self, mcp):
+        LayerWithInputParser.add_params(self, mcp)
+
         dic, name = self.dic, self.dic['name']
         dic['scale'] = mcp.safe_get_float(name, 'scale')
         dic['scale'] /= dic['size'] if self.norm_type == self.CROSSMAP_RESPONSE_NORM else dic['size']**2
@@ -1077,6 +1084,8 @@ class CostParser(LayerWithInputParser):
         return dic
 
     def add_params(self, mcp):
+        LayerWithInputParser.add_params(self, mcp)
+
         dic, name = self.dic, self.dic['name']
         dic['coeff'] = mcp.safe_get_float(name, 'coeff')
             
