@@ -2,11 +2,14 @@ This is my fork of the ``cuda-convnet`` convolutional neural network
 implementation written by Alex Krizhevsky.
 
 ``cuda-convnet`` has quite extensive documentation itself.  Find the
-`main documentation here <http://code.google.com/p/cuda-convnet/>`_.
+`MAIN DOCUMENTATION HERE <http://code.google.com/p/cuda-convnet/>`_.
+
+===================
+Additional features
+===================
 
 This document will only describe the small differences between
 ``cuda-convnet`` as hosted on Google Code and this version.
-
 
 Dropout
 =======
@@ -28,6 +31,10 @@ by modifying the section for the fc10 layer to look like so::
   epsB=0.002
   # ...
   dropout=0.5
+
+In practice, you'll probably also want to increase the number of
+hidden units in that layer (``outputs``), and change the ``wc`` and
+``initW`` parameters, too.
 
 
 CURAND random seeding
