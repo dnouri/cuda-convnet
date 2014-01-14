@@ -138,7 +138,7 @@ void ConvNet::initCuda() {
     int randomSeed = time(0);
     char* randomSeedEnv;
 
-    cudaSetDevice(_deviceID < 0 ? cutGetMaxGflopsDeviceId() : _deviceID);
+    cudaSetDevice(_deviceID < 0 ? gpuGetMaxGflopsDeviceId() : _deviceID);
     cudaDeviceSetCacheConfig(cudaFuncCachePreferShared);
     cublasInit();
 

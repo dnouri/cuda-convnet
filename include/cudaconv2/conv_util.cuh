@@ -27,6 +27,7 @@
 #ifndef CONV_UTIL_CUH
 #define	CONV_UTIL_CUH
 
+#include <helper_image.h>
 #include <nvmatrix.cuh>
 
 void convLocalMaxUndo(NVMatrix& images, NVMatrix& maxGrads, NVMatrix& maxActs, NVMatrix& target,
@@ -512,7 +513,7 @@ void convLocalPool(NVMatrix& images, NVMatrix& target, int numFilters,
 
     }
 
-    cutilCheckMsg("convLocalPool: kernel execution failed");
+    getLastCudaError("convLocalPool: kernel execution failed");
 }
 
 #endif	/* CONV_UTIL_CUH */

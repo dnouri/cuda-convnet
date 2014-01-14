@@ -30,7 +30,7 @@
 #include <assert.h>
 #include <string>
 #include <nvmatrix.cuh>
-#include <cutil_inline.h>
+#include <helper_cuda.h>
 
 template <class GradientOp>
 class AddGradientBinaryOperator {

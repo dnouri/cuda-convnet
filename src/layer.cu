@@ -23,7 +23,7 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-#include <cutil_inline.h>
+#include <helper_cuda.h>
 #include <iostream>
 
 #include <layer_kernels.cuh>
@@ -444,7 +444,7 @@ void LocalLayer::copyToGPU() {
             cudaMalloc(&_filterConns->at(i).dFilterConns, sizeof(int) * _groups->at(i) * _filterChannels->at(i));
             cudaMemcpy(_filterConns->at(i).dFilterConns, _filterConns->at(i).hFilterConns,
                        sizeof(int) * _groups->at(i) * _filterChannels->at(i), cudaMemcpyHostToDevice);
-            cutilCheckMsg("cudaMemcpy: failed");
+            getLastCudaError("cudaMemcpy: failed");
         }
     }
 }

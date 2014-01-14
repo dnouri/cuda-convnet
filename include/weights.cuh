@@ -30,7 +30,7 @@
 #include <string>
 #include <vector>
 #include <iostream>
-#include <cutil_inline.h>
+#include <helper_cuda.h>
 #include <assert.h>
 #include <nvmatrix.cuh>
 #include <matrix.h>

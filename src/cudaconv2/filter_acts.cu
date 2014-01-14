@@ -24,7 +24,7 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <cutil_inline.h>
+#include <helper_cuda.h>
 #include <nvmatrix.cuh>
 #include <cudaconv2.cuh>
 
@@ -1176,7 +1176,7 @@ __global__ void filterActs_YxX_sparse_random(float* images, float* filters, floa
         }
     }
     
-    cutilCheckMsg("filterActs: kernel execution failed");
+    getLastCudaError("filterActs: kernel execution failed");
 }
 
 void convFilterActs(NVMatrix& images, NVMatrix& filters, NVMatrix& targets,
@@ -1410,7 +1410,7 @@ void _filterActsSparse(NVMatrix& images, NVMatrix& filters, NVMatrix& targets, i
         }
     }
     
-    cutilCheckMsg("filterActsSparse: kernel execution failed");
+    getLastCudaError("filterActsSparse: kernel execution failed");
 }
 
 void convFilterActsSparse(NVMatrix& images, NVMatrix& filters, NVMatrix& targets, int* dColorIndices,

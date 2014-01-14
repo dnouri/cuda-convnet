@@ -29,7 +29,7 @@
 
 #include <vector>
 #include <map>
-#include <cutil_inline.h>
+#include <helper_cuda.h>
 
 #include "layer.cuh"
 #include "util.cuh"

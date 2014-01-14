@@ -1954,7 +1954,7 @@ void convLocalMaxUndo(NVMatrix& images, NVMatrix& maxGrads, NVMatrix& maxActs, N
         }
     }
 
-    cutilCheckMsg("convLocalMaxUndo: kernel execution failed");
+    getLastCudaError("convLocalMaxUndo: kernel execution failed");
 }
 
 void convLocalAvgUndo(NVMatrix& avgGrads, NVMatrix& target, int subsX, int startX, int strideX, int outputsX, int imgSize) {
@@ -2058,7 +2058,7 @@ void convLocalAvgUndo(NVMatrix& avgGrads, NVMatrix& target,
         }
     }
 
-    cutilCheckMsg("convLocalAvgUndo: kernel execution failed");
+    getLastCudaError("convLocalAvgUndo: kernel execution failed");
 }
 
 void convResponseNorm(NVMatrix& images, NVMatrix& denoms, NVMatrix& target, int numFilters, int sizeX, float addScale, float powScale) {
@@ -2208,7 +2208,7 @@ void convContrastNorm(NVMatrix& images, NVMatrix& meanDiffs, NVMatrix& denoms, N
             }
         }
     }
-    cutilCheckMsg("convResponseNorm: kernel execution failed");
+    getLastCudaError("convResponseNorm: kernel execution failed");
 }
 
 void convContrastNormUndo(NVMatrix& outGrads, NVMatrix& denoms, NVMatrix& meanDiffs, NVMatrix& acts, NVMatrix& target, int numFilters,
@@ -2404,7 +2404,7 @@ void convResponseNormUndo(NVMatrix& outGrads, NVMatrix& denoms, NVMatrix& inputs
             }
         }
     }
-    cutilCheckMsg("kRNormUndo: kernel execution failed");
+    getLastCudaError("kRNormUndo: kernel execution failed");
 }
 
 /*
@@ -2460,7 +2460,7 @@ void convResizeBilinear(NVMatrix& images, NVMatrix& target, int imgSize, int tgt
             kResizeBilinear<1, false><<<blocks, threads>>>(images.getDevData(), target.getDevData(), imgSize, tgtSize, numImages, images.getStride(), scale, centerScale);
         }
     }
-    cutilCheckMsg("convResizeBilinear: kernel execution failed");
+    getLastCudaError("convResizeBilinear: kernel execution failed");
 }
 
 /*
@@ -2506,7 +2506,7 @@ void convRGBToYUV(NVMatrix& images, NVMatrix& target) {
             kRGBToYUV<1, false><<<blocks, threads>>>(images.getDevData(), target.getDevData(), imgPixels, numImages, images.getStride());
         }
     }
-    cutilCheckMsg("convRGBToYUV: kernel execution failed");
+    getLastCudaError("convRGBToYUV: kernel execution failed");
 }
 
 /*
@@ -2583,7 +2583,7 @@ void convRGBToLAB(NVMatrix& images, NVMatrix& target, bool center) {
             }
         }
     }
-    cutilCheckMsg("convRGBToLAB: kernel execution failed");
+    getLastCudaError("convRGBToLAB: kernel execution failed");
 }
 
 /*
@@ -2626,7 +2626,7 @@ void convCrop(NVMatrix& imgs, NVMatrix& target, int imgSize, int tgtSize, int st
             kCrop<1, false><<<blocks, threads>>>(imgs.getDevData(), target.getDevData(), numImages, imgs.getStride(), imgSize, tgtSize, startY, startX);
         }
     }
-    cutilCheckMsg("convCrop: kernel execution failed");
+    getLastCudaError("convCrop: kernel execution failed");
 }
 
 /*
@@ -2678,7 +2678,7 @@ void convTICAGrad(NVMatrix& images, NVMatrix& ticas, NVMatrix& target, int numFi
                                                                       imgSize, numFilters, numImages, sizeX, scaleTarget, scaleOutput);
     }
  
-    cutilCheckMsg("convTICAGrad: kernel execution failed");
+    getLastCudaError("convTICAGrad: kernel execution failed");
 }
 
 /*
@@ -2726,7 +2726,7 @@ void convTICA(NVMatrix& images, NVMatrix& target, int numFilters, int sizeX, flo
                                                                   imgSize, numFilters, numImages, sizeX, scaleTarget, scaleOutput);
     }
  
-    cutilCheckMsg("convTICA: kernel execution failed");
+    getLastCudaError("convTICA: kernel execution failed");
 }
 
 
@@ -2786,7 +2786,7 @@ void convContrastNormCrossMap(NVMatrix& images, NVMatrix& meanDiffs, NVMatrix& d
         }
     }
 
-    cutilCheckMsg("convContrastNormCrossMap: kernel execution failed");
+    getLastCudaError("convContrastNormCrossMap: kernel execution failed");
 }
 
 /*
@@ -2886,7 +2886,7 @@ void convResponseNormCrossMapUndo(NVMatrix& outGrads, NVMatrix& denoms, NVMatrix
         }
     }
 
-    cutilCheckMsg("convResponseNormCrossMapUndo: kernel execution failed");
+    getLastCudaError("convResponseNormCrossMapUndo: kernel execution failed");
 }
 
 void convResponseNormCrossMap(NVMatrix& images, NVMatrix& denoms, NVMatrix& target, int numFilters, int sizeF, float addScale, float powScale, bool blocked) {

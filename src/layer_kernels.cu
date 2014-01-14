@@ -182,7 +182,7 @@ void computeEltwiseMaxGrad(NVMatrix& actGrad, NVMatrix& input, NVMatrix& output,
         kEltwiseMaxGrad<128, false><<<blocks, threads>>>(actGrad.getDevData(), input.getDevData(), output.getDevData(), target.getDevData(), actGrad.getNumElements());
     }
     
-    cutilCheckMsg("computeEltwiseMaxGrad: Kernel execution failed");
+    getLastCudaError("computeEltwiseMaxGrad: Kernel execution failed");
 }
 
 /*
@@ -215,7 +215,7 @@ void computeLogregCost(NVMatrix& labels, NVMatrix& probs, NVMatrix& labelLogProb
     kLogregCost<<<blocks, threads>>>(probs.getDevData(), labels.getDevData(), maxProbs.getDevData(),
                                      labelLogProbs_out.getDevData(), correctProbs_out.getDevData(),
                                      numCases, numOut);
-    cutilCheckMsg("computeLogregCost: Kernel execution failed");
+    getLastCudaError("computeLogregCost: Kernel execution failed");
 //    cudaThreadSynchronize();
     delete &maxProbs;
 }
@@ -241,7 +241,7 @@ void computeLogregGrad(NVMatrix& labels, NVMatrix& probs, NVMatrix& target, bool
                                                      numCases, numOut, coeff);
     }
 
-    cutilCheckMsg("computeLogregGrad: Kernel execution failed");
+    getLastCudaError("computeLogregGrad: Kernel execution failed");
 }
 
 void computeSoftmaxGrad(NVMatrix& acts, NVMatrix& actsGrad, NVMatrix& target, bool add) {
@@ -263,7 +263,7 @@ void computeSoftmaxGrad(NVMatrix& acts, NVMatrix& actsGrad, NVMatrix& target, bo
     } else {
         kSoftmaxGrad<true><<<blocks, threads>>>(actsGrad.getDevData(), acts.getDevData(), target.getDevData(), numCases, numOut);
     }
-    cutilCheckMsg("computeSoftmaxGrad: Kernel execution failed");
+    getLastCudaError("computeSoftmaxGrad: Kernel execution failed");
 }
 
 void computeLogregSoftmaxGrad(NVMatrix& labels, NVMatrix& probs, NVMatrix& target, bool add, float coeff) {
@@ -286,5 +286,5 @@ void computeLogregSoftmaxGrad(NVMatrix& labels, NVMatrix& probs, NVMatrix& targe
                                                      numCases, numOut, coeff);
     }
 
-    cutilCheckMsg("computeLogregSoftmaxGrad: Kernel execution failed");
+    getLastCudaError("computeLogregSoftmaxGrad: Kernel execution failed");
 }

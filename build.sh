@@ -1,7 +1,9 @@
 #!/bin/sh
 
 # Fill in these environment variables.
-# I have tested this code with CUDA 4.0, 4.1, and 4.2. 
+
+# This file and others have been updated to work with CUDA 5.0.
+
 # Only use Fermi-generation cards. Older cards won't work.
 
 # If you're not sure what these paths should be, 
@@ -14,11 +16,10 @@
 # (it'll almost certainly be under /usr)
 
 # CUDA toolkit installation directory.
-export CUDA_INSTALL_PATH=/usr/local/cuda
-export CUDA_INSTALL_PATH=/usr/lib/nvidia-cuda-toolkit
+export CUDA_INSTALL_PATH=/usr/local/cuda-5.0
 
 # CUDA SDK installation directory.
-export CUDA_SDK_PATH=$HOME/NVIDIA_GPU_Computing_SDK
+export CUDA_SDK_PATH=$CUDA_INSTALL_PATH
 
 # Python include directory. This should contain the file Python.h, among others.
 export PYTHON_INCLUDE_PATH=/usr/include/python2.7
@@ -27,7 +28,7 @@ export PYTHON_INCLUDE_PATH=/usr/include/python2.7
 export NUMPY_INCLUDE_PATH=/usr/lib/python2.7/dist-packages/numpy/core/include/numpy/
 
 # ATLAS library directory. This should contain the file libcblas.so, among others.
-export ATLAS_LIB_PATH=/usr/lib/atlas-base
+#export ATLAS_LIB_PATH=/usr/lib/atlas-base
 
 make $*
 

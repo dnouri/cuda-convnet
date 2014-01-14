@@ -32,9 +32,8 @@ by modifying the section for the fc10 layer to look like so::
   # ...
   dropout=0.5
 
-In practice, you'll probably also want to increase the number of
-hidden units in that layer (``outputs``), and change the ``wc`` and
-``initW`` parameters, too.
+In practice, you'll probably also want to double the number of
+``outputs`` in that layer.
 
 
 CURAND random seeding
@@ -45,8 +44,12 @@ to set the CURAND library's random seed.  This is important in order
 to get reproducable results.
 
 
-Minor changes
-=============
+Updated to work with CUDA 5.0
+=============================
 
-Minor changes include using more Debian/Ubuntu default for the paths
-defined in the ``build.sh`` script and ``Makefile``.
+The build configuration and code has been updated to work with CUDA
+5.0.  The paths in ``build.sh`` and ``Makefile`` were updated to work
+with the default install directory ``/usr/loca/cuda-5.0`` of the `CUDA
+Toolkit 5.0 <https://developer.nvidia.com/cuda-toolkit-50-archive>`_
+and the default install directory ``/usr/lib/nvidia-310-updates`` of
+the ``nvidia-310-updates`` Ubuntu package.
