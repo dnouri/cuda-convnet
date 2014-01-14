@@ -49,7 +49,8 @@ Updated to work with CUDA 5.0
 
 The build configuration and code has been updated to work with CUDA
 5.0.  The paths in ``build.sh`` and ``Makefile`` were updated to work
-with the default install directory ``/usr/loca/cuda-5.0`` of the `CUDA
-Toolkit 5.0 <https://developer.nvidia.com/cuda-toolkit-50-archive>`_
-and the default install directory ``/usr/lib/nvidia-310-updates`` of
-the ``nvidia-310-updates`` Ubuntu package.
+with the default install directory ``/usr/local/cuda-5.0`` of the
+`CUDA Toolkit 5.0
+<https://developer.nvidia.com/cuda-toolkit-50-archive>`_ and the
+default install directory ``/usr/lib/nvidia-310-updates`` of the
+``nvidia-310-updates`` Ubuntu package.
