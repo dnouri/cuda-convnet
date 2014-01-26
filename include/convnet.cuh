@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (c) 2011, Alex Krizhevsky (akrizhevsky@gmail.com)
  * All rights reserved.
  *
@@ -7,7 +7,7 @@
  *
  * - Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * - Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
@@ -55,25 +55,25 @@ protected:
 
     DataProvider* _dp;
     int _deviceID;
-    
+
     Queue<Worker*> _workerQueue;
     Queue<WorkResult*> _resultQueue;
-    
+
     // For gradient checking
     int _numFailures;
     int _numTests;
     double _baseErr;
-    
+
     virtual Layer* initLayer(string& layerType, PyObject* paramsDict);
     void initCuda();
     void* run();
 public:
     ConvNet(PyListObject* layerParams, int minibatchSize, int deviceID);
-    
+
     Queue<Worker*>& getWorkerQueue();
     Queue<WorkResult*>& getResultQueue();
     DataProvider& getDataProvider();
-    
+
     Layer& operator[](int idx);
     Layer& getLayer(int idx);
     void copyToCPU();
@@ -81,13 +81,13 @@ public:
     void updateWeights();
     void reset();
     int getNumLayers();
-    
+
     void bprop(PASS_TYPE passType);
     void fprop(PASS_TYPE passType);
     void fprop(int miniIdx, PASS_TYPE passType);
     void fprop(GPUData& data, PASS_TYPE passType);
 
-    bool checkGradient(const std::string& name, float eps, Weights& weights); 
+    bool checkGradient(const std::string& name, float eps, Weights& weights);
     void checkGradients();
     Cost& getCost();
     Cost& getCost(Cost& cost);

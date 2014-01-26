@@ -19,7 +19,7 @@ CCFILES				:= $(shell echo src/common/*.cpp)
 C_DEPS				:= $(shell echo include/common/*.h)
 
 include common-gcc-cuda-4.0.mk
-	
+
 makedirectories:
 	$(VERBOSE)mkdir -p $(LIBDIR)
 	$(VERBOSE)mkdir -p $(OBJDIR)/src/cudaconv2

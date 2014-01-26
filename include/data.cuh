@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (c) 2011, Alex Krizhevsky (akrizhevsky@gmail.com)
  * All rights reserved.
  *
@@ -7,7 +7,7 @@
  *
  * - Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * - Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
@@ -37,7 +37,7 @@ protected:
     std::vector<T*>* _data;
 public:
     typedef typename std::vector<T*>::iterator T_iter;
-    
+
     Data(std::vector<T*>& data) : _data(&data) {
         assert(_data->size() > 0);
         for (int i = 1; i < data.size(); i++) {
@@ -52,15 +52,15 @@ public:
         }
         delete _data;
     }
-    
+
     T& operator [](int idx) {
         return *_data->at(idx);
     }
-    
+
     int getSize() {
         return _data->size();
     }
-    
+
     std::vector<T*>& getData() {
         return *_data;
     }

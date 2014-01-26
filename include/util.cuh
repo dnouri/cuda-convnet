@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (c) 2011, Alex Krizhevsky (akrizhevsky@gmail.com)
  * All rights reserved.
  *
@@ -7,7 +7,7 @@
  *
  * - Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * - Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
@@ -49,8 +49,8 @@ enum PASS_TYPE {PASS_TRAIN, PASS_TEST, PASS_GC};
 /*
  * Store entire data matrix on GPU if its size does not exceed this many MB.
  * Otherwise store only one minibatch at a time.
- */ 
-#define MAX_DATA_ON_GPU             200 
+ */
+#define MAX_DATA_ON_GPU             200
 
 typedef std::vector<Matrix*> MatrixV;
 typedef std::vector<NVMatrix*> NVMatrixV;

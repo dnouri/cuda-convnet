@@ -6,7 +6,7 @@
 #
 # - Redistributions of source code must retain the above copyright notice,
 #   this list of conditions and the following disclaimer.
-# 
+#
 # - Redistributions in binary form must reproduce the above copyright notice,
 #   this list of conditions and the following disclaimer in the documentation
 #   and/or other materials provided with the distribution.
@@ -45,17 +45,17 @@ class CIFARDataProvider(LabeledMemoryDataProvider):
         return epoch, batchnum, [datadic['data'], datadic['labels']]
 
     # Returns the dimensionality of the two data matrices returned by get_next_batch
-    # idx is the index of the matrix. 
+    # idx is the index of the matrix.
     def get_data_dims(self, idx=0):
         return self.img_size**2 * self.num_colors if idx == 0 else 1
-    
+
     # Takes as input an array returned by get_next_batch
     # Returns a (numCases, imgSize, imgSize, 3) array which can be
     # fed to pylab for plotting.
     # This is used by shownet.py to plot test case predictions.
     def get_plottable_data(self, data):
         return n.require((data + self.data_mean).T.reshape(data.shape[1], 3, self.img_size, self.img_size).swapaxes(1,3).swapaxes(1,2) / 255.0, dtype=n.single)
-    
+
 class CroppedCIFARDataProvider(LabeledMemoryDataProvider):
     def __init__(self, data_dir, batch_range=None, init_epoch=1, init_batchnum=None, dp_params=None, test=False):
         LabeledMemoryDataProvider.__init__(self, data_dir, batch_range, init_epoch, init_batchnum, dp_params, test)
@@ -66,11 +66,11 @@ class CroppedCIFARDataProvider(LabeledMemoryDataProvider):
         self.num_views = 5*2
         self.data_mult = self.num_views if self.multiview else 1
         self.num_colors = 3
-        
+
         for d in self.data_dic:
             d['data'] = n.require(d['data'], requirements='C')
             d['labels'] = n.require(n.tile(d['labels'].reshape((1, d['data'].shape[1])), (1, self.data_mult)), requirements='C')
-        
+
         self.cropped_data = [n.zeros((self.get_data_dims(), self.data_dic[0]['data'].shape[1]*self.data_mult), dtype=n.single) for x in xrange(2)]
 
         self.batches_generated = 0
@@ -85,7 +85,7 @@ class CroppedCIFARDataProvider(LabeledMemoryDataProvider):
         cropped -= self.data_mean
         self.batches_generated += 1
         return epoch, batchnum, [cropped, datadic['labels']]
-        
+
     def get_data_dims(self, idx=0):
         return self.inner_size**2 * 3 if idx == 0 else 1
 
@@ -95,7 +95,7 @@ class CroppedCIFARDataProvider(LabeledMemoryDataProvider):
     # This is used by shownet.py to plot test case predictions.
     def get_plottable_data(self, data):
         return n.require((data + self.data_mean).T.reshape(data.shape[1], 3, self.inner_size, self.inner_size).swapaxes(1,3).swapaxes(1,2) / 255.0, dtype=n.single)
-    
+
     def __trim_borders(self, x, target):
         y = x.reshape(3, 32, 32, x.shape[1])
 
@@ -120,19 +120,19 @@ class CroppedCIFARDataProvider(LabeledMemoryDataProvider):
                 if nr.randint(2) == 0: # also flip the image with 50% probability
                     pic = pic[:,:,::-1]
                 target[:,c] = pic.reshape((self.get_data_dims(),))
-    
+
 class DummyConvNetDataProvider(LabeledDummyDataProvider):
     def __init__(self, data_dim):
         LabeledDummyDataProvider.__init__(self, data_dim)
-        
+
     def get_next_batch(self):
         epoch, batchnum, dic = LabeledDummyDataProvider.get_next_batch(self)
-        
+
         dic['data'] = n.require(dic['data'].T, requirements='C')
         dic['labels'] = n.require(dic['labels'].T, requirements='C')
-        
+
         return epoch, batchnum, [dic['data'], dic['labels']]
-    
+
     # Returns the dimensionality of the two data matrices returned by get_next_batch
     def get_data_dims(self, idx=0):
         return self.batch_meta['num_vis'] if idx == 0 else 1

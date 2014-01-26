@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (c) 2011, Alex Krizhevsky (akrizhevsky@gmail.com)
  * All rights reserved.
  *
@@ -7,7 +7,7 @@
  *
  * - Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * - Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
@@ -86,7 +86,7 @@ public:
             return (a > 0) - (a < 0);
         }
     };
-    
+
     class Identity {
     public:
         __device__ inline float operator()(const float a) const {
@@ -107,7 +107,7 @@ public:
             return 1;
         }
     };
-    
+
     class SmallerThanScalar {
     private:
         const float scalar;
@@ -263,21 +263,21 @@ public:
             return a + b;
         }
     };
-    
+
     class First {
     public:
         __device__ inline float operator()(const float a, const float b) const {
             return a;
         }
     };
-    
+
     class Second {
     public:
         __device__ inline float operator()(const float a, const float b) const {
             return b;
         }
     };
-    
+
     class SecondScaled {
     private:
         const float scale;

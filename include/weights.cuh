@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (c) 2011, Alex Krizhevsky (akrizhevsky@gmail.com)
  * All rights reserved.
  *
@@ -7,7 +7,7 @@
  *
  * - Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * - Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
@@ -42,31 +42,31 @@ class Weights {
 private:
     Matrix* _hWeights, *_hWeightsInc;
     NVMatrix* _weights, *_weightsInc, *_weightsGrad;
-    
+
     float _epsW, _wc, _mom;
     bool _onGPU, _useGrad;
     int _numUpdates;
     static bool _autoCopyToGPU;
-    
+
     // Non-NULL if these weights are really shared from some other layer
     Weights* _srcWeights;
- 
+
 public:
     NVMatrix& operator*() {
         return getW();
     }
-    
+
     Weights(Weights& srcWeights, float epsW) : _srcWeights(&srcWeights), _epsW(epsW), _wc(0), _onGPU(false), _numUpdates(0),
                                                _weights(NULL), _weightsInc(NULL), _weightsGrad(NULL){
         _hWeights = &srcWeights.getCPUW();
         _hWeightsInc = &srcWeights.getCPUWInc();
         _mom = srcWeights.getMom();
-        _useGrad = srcWeights.isUseGrad();   
+        _useGrad = srcWeights.isUseGrad();
         if (_autoCopyToGPU) {
             copyToGPU();
         }
     }
-    
+
     Weights(Matrix& hWeights, Matrix& hWeightsInc, float epsW, float wc, float mom, bool useGrad)
         : _srcWeights(NULL), _hWeights(&hWeights), _hWeightsInc(&hWeightsInc), _numUpdates(0),
           _epsW(epsW), _wc(wc), _mom(mom), _useGrad(useGrad), _onGPU(false), _weights(NULL),
@@ -75,7 +75,7 @@ public:
             copyToGPU();
         }
     }
-        
+
     ~Weights() {
         delete _hWeights;
         delete _hWeightsInc;
@@ -89,38 +89,38 @@ public:
     static void setAutoCopyToGPU(bool autoCopyToGPU) {
         _autoCopyToGPU = autoCopyToGPU;
     }
-    
+
     NVMatrix& getW() {
         assert(_onGPU);
         return *_weights;
     }
-    
+
     NVMatrix& getInc() {
         assert(_onGPU);
         return *_weightsInc;
     }
-        
+
     NVMatrix& getGrad() {
         assert(_onGPU);
         return _useGrad ? *_weightsGrad : *_weightsInc;
     }
-    
+
     Matrix& getCPUW() {
         return *_hWeights;
     }
-    
+
     Matrix& getCPUWInc() {
         return *_hWeightsInc;
     }
-    
+
     int getNumRows() const {
         return _hWeights->getNumRows();
     }
-    
+
     int getNumCols() const {
         return _hWeights->getNumCols();
     }
-    
+
     void copyToCPU() {
         if (_srcWeights == NULL) {
             assert(_onGPU);
@@ -128,7 +128,7 @@ public:
             _weightsInc->copyToHost(*_hWeightsInc);
         }
     }
-    
+
     // This function is assumed to be called in the order in which the layers
     // were defined
     void copyToGPU() {
@@ -145,7 +145,7 @@ public:
         }
         _onGPU = true;
     }
-    
+
     // Scale your gradient by epsW / numCases!
     void update() {
         // Only true owner of weights updates
@@ -161,14 +161,14 @@ public:
             _numUpdates = 0;
         }
     }
-    
+
     int incNumUpdates() {
         if (_srcWeights != NULL) {
             return _srcWeights->incNumUpdates();
         }
         return _numUpdates++;
     }
-    
+
     // Returns the number of times a gradient has been computed for this
     // weight matrix during the current pass (interval between two calls of update())
     // through the net. This number will only be greater than 1 if this weight matrix
@@ -179,19 +179,19 @@ public:
         }
         return _numUpdates;
     }
-    
+
     float getEps() const {
         return _epsW;
     }
-    
+
     float getMom() const {
         return _mom;
     }
-    
+
     float getWC() const {
         return _wc;
     }
-    
+
     bool isUseGrad() const { // is good grammar
         return _useGrad;
     }
@@ -205,20 +205,20 @@ public:
     Weights& operator[](const int idx) const {
         return *_weightList[idx];
     }
-    
+
     ~WeightList() {
         for (int i = 0; i < _weightList.size(); i++) {
             delete _weightList[i];
         }
     }
-    
+
 //    WeightList(MatrixV& hWeights, MatrixV& hWeightsInc, floatv& epsW, floatv& wc, floatv& mom, bool useGrads) : _initialized(false) {
 //        initialize(hWeights, hWeightsInc, epsW, wc, mom, useGrads);
 //    }
-    
+
     WeightList() {
     }
-    
+
 //    void initialize(MatrixV& hWeights, MatrixV& hWeightsInc, floatv& epsW, floatv& wc, floatv& mom, bool useGrads) {
 //        for (int i = 0; i < hWeights.size(); i++) {
 //            _weightList.push_back(new Weights(*hWeights[i], *hWeightsInc[i], epsW[i], wc[i], mom[i], useGrads));
@@ -230,17 +230,17 @@ public:
 //        delete &wc;
 //        delete &mom;
 //    }
-    
+
     void addWeights(Weights& w) {
         _weightList.push_back(&w);
     }
-    
+
 //    void addWeights(WeightList& wl) {
 //        for (int i = 0; i < wl.getSize(); i++) {
 //            addWeights(wl[i]);
 //        }
 //    }
-    
+
     void update() {
         for (int i = 0; i < getSize(); i++) {
             _weightList[i]->update();
@@ -258,7 +258,7 @@ public:
             _weightList[i]->copyToGPU();
         }
     }
-    
+
     int getSize() {
         return _weightList.size();
     }

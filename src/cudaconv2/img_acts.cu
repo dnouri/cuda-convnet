@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (c) 2011, Alex Krizhevsky (akrizhevsky@gmail.com)
  * All rights reserved.
  *
@@ -7,7 +7,7 @@
  *
  * - Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * - Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
@@ -95,7 +95,7 @@ __global__ void img_acts_color(const float* hidActs, const float* filters, float
     const int startX = blockRegionLeft - paddingStart < filterSize ? 0
                         : 1 + (blockRegionLeft - paddingStart - filterSize) / moduleStride;
     const int endX = MIN(numModulesX, 1 + (blockRegionLeft + 3 - paddingStart) / moduleStride);
-    
+
     float* shilterLoad = &shFilters[threadIdx.y][threadIdx.x];
     float* shHidActLoad = &shHidActs[loadY][loadX];
 
@@ -128,7 +128,7 @@ __global__ void img_acts_color(const float* hidActs, const float* filters, float
                         }
                     }
                 }
-                
+
                 if (isPxInImg && isPxInModule) {
                     // This half-warp is interested, so it's going to load the weights from this module to its pixel.
                     // Not fully coalesced read :(
@@ -140,7 +140,7 @@ __global__ void img_acts_color(const float* hidActs, const float* filters, float
                         shilterLoad[c * 16 * (16 + 1)] = fLoad[c * filterPixels * numFilters];
                     }
 
-                    
+
                 }
 
                 __syncthreads();
@@ -211,7 +211,7 @@ __global__ void img_acts_color(const float* hidActs, const float* filters, float
  * This version loads 32 cases at a time, so it gets full coalescing on that load.
  * It only loads 16 weights at a time, so those aren't fully coalesced.
  * This version conserves shared memory by loading 16 filters at a time rather than 32.
- * 
+ *
  * To be used when there are 4-16 color channels.
  */
 template <int imgsPerThread, int colorsPerThread,  bool scale, bool checkCaseBounds, bool conv>
@@ -232,7 +232,7 @@ __global__ void img_acts_mediumcolor(const float* hidActs, const float* filters,
     const int filterColorIdx = imgColorIdx % numFilterColors; // color idx within group
     const int numFiltersPerGroup = numFilters / numGroups;
     const int blockFilterIdx = blockGroupIdx * numFiltersPerGroup;
-    
+
     const int numRegionsX = DIVUP(imgSizeX, 4);
     const int blockRegionIdx = blockIdx.y;
     const int blockRegionIdxX = blockRegionIdx % numRegionsX;
@@ -304,7 +304,7 @@ __global__ void img_acts_mediumcolor(const float* hidActs, const float* filters,
 
                 if (isPxInImg && isPxInModule) {
                     // This half-warp is interested, so it's going to load the weights from this module to its pixel.
-         
+
                     // Not fully coalesced read :(
                     // But taking out this read entirely only reduces the runtime by ~2.8%, so it isn't costing me much.
                     const float* fLoad = conv ? &filters[pxIdxInModule * numFilters + f]
@@ -378,7 +378,7 @@ __global__ void img_acts_mediumcolor(const float* hidActs, const float* filters,
  *
  * numImages must be divisible by B_X*imgsPerThread if checkCaseBounds is false.
  * numFiltersPerGroup must be divisible by 16.
- * 
+ *
  * B_X * imgsPerThread must be divisible by 32.
  * numFilterColors must be divisible by B_Y*colorsPerThread.
  * B_X*B_Y must be divisible by 32.
@@ -386,7 +386,7 @@ __global__ void img_acts_mediumcolor(const float* hidActs, const float* filters,
  * This version loads 32 cases at a time, so it gets full coalescing on that load.
  * It only loads 16 weights at a time, so those aren't fully coalesced.
  * This version conserves shared memory by loading 16 filters at a time rather than 32.
- * 
+ *
  * To be used when there are >= 16 color channels.
  */
 template <int B_Y, int B_X, int imgsPerThread, int colorsPerThread, bool scale, bool checkCaseBounds, bool conv>
@@ -400,7 +400,7 @@ __global__ void conv_img_acts_manycolor(const float* hidActs, const float* filte
 
     const int numImgBlocks = DIVUP(numImages,B_X*imgsPerThread);
     const int blockCaseIdx = (blockIdx.x % numImgBlocks) * B_X*imgsPerThread;
-    
+
     const int imgColorIdx = (blockIdx.x / numImgBlocks) * B_Y*colorsPerThread; // color idx globally
     const int numFilterColors = numImgColors / numGroups;
     const int blockGroupIdx = imgColorIdx / numFilterColors;
@@ -450,7 +450,7 @@ __global__ void conv_img_acts_manycolor(const float* hidActs, const float* filte
             const int moduleIdx = my * numModulesX + mx;
             const int moduleLeft = paddingStart + mx * moduleStride;
             const int pxInFilterX = blockPixelIdxX - moduleLeft;
-            
+
             const int pxIdxInFilter = pxInFilterY * filterSize + pxInFilterX;
 
             for (int f = 0; f < numFiltersPerGroup; f += 16) { // multiply with 16 filters at a time
@@ -477,7 +477,7 @@ __global__ void conv_img_acts_manycolor(const float* hidActs, const float* filte
                         shFilterLoad[i * (16 + 1)] = fLoad[i * filterPixels * numFilters];
                     }
                 }
-                
+
                 __syncthreads();
                 // Do some actual computation
                 #pragma unroll
@@ -532,12 +532,12 @@ __global__ void conv_img_acts_manycolor(const float* hidActs, const float* filte
  *
  * overSample := numFilterColors*numGroups/numImgColors
  *     ^ this is the number of groups that each color channel is connected to
- * 
+ *
  * hidActs:         (numFilters, numModulesY, numModulesX, numImages)
  * filters:         (numFilterColors, filterPixels, numFilters)                             if conv
  *                  (numModulesY, numModulesX, numFilterColors, filterPixels, numFilters)   otherwise
  * targets:         (overSample, numImgColors, imgSizeY, imgSizeX, numImages)
- * 
+ *
  * colorIndices:    (numGroups, numFilterColors)
  *
  * Each block reconstructs one 4x4 pixels from 16*imgsPerThread cases.
@@ -549,7 +549,7 @@ __global__ void conv_img_acts_manycolor(const float* hidActs, const float* filte
  * This version loads 32 cases at a time, so it gets full coalescing on that load.
  * It only loads 16 weights at a time, so those aren't fully coalesced.
  * This version conserves shared memory by loading 16 filters at a time rather than 32.
- * 
+ *
  * To be used when there are 4-16 color channels.
  */
 template <int imgsPerThread, int colorsPerThread, bool scale, bool checkCaseBounds, bool conv>
@@ -571,13 +571,13 @@ __global__ void img_acts_mediumcolor_sparse_rand(const float* hidActs, const flo
 
     const int filterColorIdx = imgColorIdx % numFilterColors; // color idx within group
     const int numFiltersPerGroup = numFilters / numGroups;
-    
+
     const int overSample = gridDim.y / numRegions;
     const int blockSample = blockIdx.y / numRegions;
     const int groupsPerSample = numGroups / overSample;
     const int blockGroupIdx = imgColorIdx / numFilterColors + blockSample * groupsPerSample;
     const int blockFilterIdx = blockGroupIdx * numFiltersPerGroup;
-    
+
     const int blockRegionIdx = blockIdx.y % numRegions;
     const int blockRegionIdxX = blockRegionIdx % numRegionsX;
     const int blockRegionIdxY = blockRegionIdx / numRegionsX;
@@ -615,7 +615,7 @@ __global__ void img_acts_mediumcolor_sparse_rand(const float* hidActs, const flo
 
     float* shFilterLoad = &shFilters[threadIdx.y][threadIdx.x];
     float* shHidActLoad = &shHidActs[loadY][loadX];
-    
+
     if (tidx < colorsPerThread) {
         shColors[tidx] = colorIndices[blockGroupIdx * numFilterColors + filterColorIdx + tidx] * imgPixels * numImages;
     }
@@ -652,7 +652,7 @@ __global__ void img_acts_mediumcolor_sparse_rand(const float* hidActs, const flo
 
                 if (isPxInImg && isPxInModule) {
                     // This half-warp is interested, so it's going to load the weights from this module to its pixel.
-         
+
                     // Not fully coalesced read :(
                     // But taking out this read entirely only reduces the runtime by ~2.8%, so it isn't costing me much.
                     const float* fLoad = conv ? &filters[pxIdxInModule * numFilters + f]
@@ -718,15 +718,15 @@ __global__ void img_acts_mediumcolor_sparse_rand(const float* hidActs, const flo
  *
  * threadIdx.x determines case.
  * threadIdx.y determines color.
- * 
+ *
  * overSample := numFilterColors*numGroups/numImgColors
  *     ^ this is the number of groups that each color channel is connected to
- * 
+ *
  * hidActs:         (numFilters, numModulesY, numModulesX, numImages)
  * filters:         (numFilterColors, filterPixels, numFilters)                             if conv
  *                  (numModulesY, numModulesX, numFilterColors, filterPixels, numFilters)   otherwise
  * targets:         (overSample, numImgColors, imgSizeY, imgSizeX, numImages)
- * 
+ *
  * colorIndices:    (numGroups, numFilterColors)
  *
  * Each block reconstructs one B_Y*colorsPerThread colors from 1 pixel from B_X*imgsPerThread cases.
@@ -734,7 +734,7 @@ __global__ void img_acts_mediumcolor_sparse_rand(const float* hidActs, const flo
  * numImages must be divisible by B_X*imgsPerThread if checkCaseBounds is false.
  * numFiltersPerGroup must be divisible by 16.
  * numFilterColors*numGroups must be divisible by numImgColors.
- * 
+ *
  * B_X * imgsPerThread must be divisible by 32.
  * numFilterColors must be divisible by B_Y*colorsPerThread.
  * B_X*B_Y must be divisible by 32.
@@ -742,7 +742,7 @@ __global__ void img_acts_mediumcolor_sparse_rand(const float* hidActs, const flo
  * This version loads 32 cases at a time, so it gets full coalescing on that load.
  * It only loads 16 weights at a time, so those aren't fully coalesced.
  * This version conserves shared memory by loading 16 filters at a time rather than 32.
- * 
+ *
  * To be used when there are >= 16 color channels.
  */
 template <int B_Y, int B_X, int imgsPerThread, int colorsPerThread, bool scale, bool checkCaseBounds, bool conv>
@@ -757,18 +757,18 @@ __global__ void img_acts_manycolor_sparse_rand(const float* hidActs, const float
 
     const int numImgBlocks = DIVUP(numImages,B_X*imgsPerThread);
     const int blockCaseIdx = (blockIdx.x % numImgBlocks) * B_X*imgsPerThread;
-    
+
     const int filterPixels = filterSize * filterSize;
     const int imgPixels = imgSizeY * imgSizeX;
     const int tidx = threadIdx.y * B_X + threadIdx.x;
     const int hidActLoadY = tidx / 32, hidActLoadX = tidx % 32;
     const int filtersLoadY = tidx / 16, filtersLoadX = tidx % 16;
     const int numModules = numModulesY * numModulesX;
-    
+
     const int overSample = gridDim.y / imgPixels;
     const int blockSample = blockIdx.y / imgPixels;
     const int groupsPerSample = numGroups / overSample;
-    
+
 //    const int overSample = (numFilterColors * numGroups) / numImgColors;
     const int imgColorIdx = (blockIdx.x / numImgBlocks) * B_Y * colorsPerThread; // color idx globally
     const int blockGroupIdx = imgColorIdx / numFilterColors + blockSample * groupsPerSample;
@@ -777,7 +777,7 @@ __global__ void img_acts_manycolor_sparse_rand(const float* hidActs, const float
     const int blockPixelIdx = blockIdx.y % imgPixels;
     const int blockPixelIdxX = blockPixelIdx % imgSizeX;
     const int blockPixelIdxY = blockPixelIdx / imgSizeX;
-    
+
     const int filterColorIdx = imgColorIdx % numFilterColors; // color idx within group
     const int numFiltersPerGroup = numFilters / numGroups;
     const int blockFilterIdx = blockGroupIdx * numFiltersPerGroup;
@@ -808,7 +808,7 @@ __global__ void img_acts_manycolor_sparse_rand(const float* hidActs, const float
     if (tidx < colorsPerThread * B_Y) {
         shColors[tidx] = colorIndices[blockGroupIdx * numFilterColors + filterColorIdx + tidx] * imgPixels * numImages;
     }
-    
+
     for (int my = startY; my < endY; my++) {
         const int moduleTop = paddingStart + my * moduleStride;
         const int pxInFilterY = blockPixelIdxY - moduleTop;
@@ -817,7 +817,7 @@ __global__ void img_acts_manycolor_sparse_rand(const float* hidActs, const float
             const int moduleIdx = my * numModulesX + mx;
             const int moduleLeft = paddingStart + mx * moduleStride;
             const int pxInFilterX = blockPixelIdxX - moduleLeft;
-            
+
             const int pxIdxInFilter = pxInFilterY * filterSize + pxInFilterX;
 
             for (int f = 0; f < numFiltersPerGroup; f += 16) { // multiply with 16 filters at a time
@@ -845,7 +845,7 @@ __global__ void img_acts_manycolor_sparse_rand(const float* hidActs, const float
                         shFilterLoad[i * (16 + 1)] = fLoad[i * filterPixels * numFilters];
                     }
                 }
-                
+
                 __syncthreads();
                 // Do some actual computation
                 #pragma unroll
@@ -862,7 +862,7 @@ __global__ void img_acts_manycolor_sparse_rand(const float* hidActs, const float
             }
         }
     }
-    
+
     if (scale) {
         #pragma unroll
         for (int i = 0; i < imgsPerThread; i++) {
@@ -891,11 +891,11 @@ __global__ void img_acts_manycolor_sparse_rand(const float* hidActs, const float
  * filters:         (numFilterColors, filterPixels, numFilters)               if conv
  *                  (numModules, numFilterColors, filterPixels, numFilters)   otherwise
  * targets:         (overSample, numImgColors, imgPixels, numImages)
- * 
+ *
  * Note: all of these convolution routines are optimized for the case when
- * the number of images (i.e. the minibatch size) is a multiple of 128. 
+ * the number of images (i.e. the minibatch size) is a multiple of 128.
  * Other batch sizes will work, but but I made no attempt whatsoever
- * to make them work fast. 
+ * to make them work fast.
  */
 void _imgActs(NVMatrix& hidActs, NVMatrix& filters, NVMatrix& targets,
               int imgSizeY, int imgSizeX, int numModulesY, int paddingStart, int moduleStride, int numImgColors, int numGroups,
@@ -909,7 +909,7 @@ void _imgActs(NVMatrix& hidActs, NVMatrix& filters, NVMatrix& targets,
     int filterSize = sqrt(filterPixels);
     int imgPixels = imgSizeY * imgSizeX;
     int numModulesX = numModules / numModulesY;
-    
+
     assert(numImgColors % numGroups == 0);
     assert(numFilters % (16*numGroups) == 0);
     assert(numGroups > 1 || (numImgColors > 0 && (numImgColors <= 3 || numImgColors % 2 == 0)));
@@ -931,7 +931,7 @@ void _imgActs(NVMatrix& hidActs, NVMatrix& filters, NVMatrix& targets,
     assert(paddingStart + (numModulesX-1)*moduleStride + filterSize >= imgSizeX);
     assert(paddingStart + (numModulesY-1)*moduleStride + filterSize >= imgSizeY);
     assert(moduleStride <= filterSize);
-    
+
     assert(targets.isContiguous()); // no stride support here!
 
     dim3 blocks;
@@ -943,7 +943,7 @@ void _imgActs(NVMatrix& hidActs, NVMatrix& filters, NVMatrix& targets,
         colorsPerThread = numFilterColors % 16 == 0 ? 4 : 2;
         imgsPerThread = numImages % 128 == 0 ? 4 : numImages % 64 == 0 ? 2 : 1;
         assert(numFilterColors % (threads.y * colorsPerThread) == 0);
-        
+
         blocks = dim3(DIVUP(numImages, threads.x*imgsPerThread) * (numImgColors/(threads.y*colorsPerThread)), imgPixels);
     } else if (numFilterColors > 3) {
         colorsPerThread = numFilterColors % 4 == 0 ? 4 : 2;
@@ -952,7 +952,7 @@ void _imgActs(NVMatrix& hidActs, NVMatrix& filters, NVMatrix& targets,
         blocks = dim3(DIVUP(numImages,threads.x*imgsPerThread), DIVUP(imgSizeY,4) * DIVUP(imgSizeX,4));
     }
     bool checkCaseBounds = numImages % (threads.x * imgsPerThread) != 0;
-    
+
     if (scaleTargets == 0) { // do not scale or use targets matrix
         targets.resize(numImgColors*imgPixels, numImages);
     } else {
@@ -1884,7 +1884,7 @@ void _imgActs(NVMatrix& hidActs, NVMatrix& filters, NVMatrix& targets,
             }
         }
     }
-    
+
     cutilCheckMsg("imgActs: kernel execution failed");
 }
 
@@ -1918,13 +1918,13 @@ void localImgActs(NVMatrix& hidActs, NVMatrix& filters, NVMatrix& targets,
  *                  (numModulesY, numModulesX, numFilterColors, filterPixels, numFilters)   otherwise
  * targets:         (overSample, numImgColors, imgSizeY, imgSizeX, numImages)
  * colorIndices:    (numGroups, numFilterColors)
- * 
+ *
  * where overSample := (numFilterColors * numGroups) / numImgColors
- * 
+ *
  * Note: all of these convolution routines are optimized for the case when
- * the number of images (i.e. the minibatch size) is a multiple of 128. 
+ * the number of images (i.e. the minibatch size) is a multiple of 128.
  * Other batch sizes will work, but but I made no attempt whatsoever
- * to make them work fast. 
+ * to make them work fast.
  */
 void _imgActsSparse(NVMatrix& hidActs, NVMatrix& filters, NVMatrix& targets, int* dColorIndices,
                        int imgSizeY, int imgSizeX, int numModulesY, int paddingStart, int moduleStride,
@@ -1940,7 +1940,7 @@ void _imgActsSparse(NVMatrix& hidActs, NVMatrix& filters, NVMatrix& targets, int
     int imgPixels = imgSizeY * imgSizeX;
     int numModulesX = numModules / numModulesY;
     int overSample = (numFilterColors * numGroups) / numImgColors;
-    
+
     assert(numImgColors % numFilterColors == 0);
     assert(numFilters % (16*numGroups) == 0);
     assert((numFilterColors * numGroups) % numImgColors == 0);
@@ -1963,7 +1963,7 @@ void _imgActsSparse(NVMatrix& hidActs, NVMatrix& filters, NVMatrix& targets, int
     assert(paddingStart + (numModulesX-1)*moduleStride + filterSize >= imgSizeX);
     assert(paddingStart + (numModulesY-1)*moduleStride + filterSize >= imgSizeY);
     assert(moduleStride <= filterSize);
-    
+
     assert(targets.isContiguous()); // no stride support here!
 
     dim3 blocks;
@@ -1982,16 +1982,16 @@ void _imgActsSparse(NVMatrix& hidActs, NVMatrix& filters, NVMatrix& targets, int
         colorsPerThread = numFilterColors % 4 == 0 ? 4 : 2;
         blocks = dim3(DIVUP(numImages,16*imgsPerThread) * (numImgColors / colorsPerThread), overSample * DIVUP(imgSizeY,4) * DIVUP(imgSizeX,4));
     }
-    
+
     bool checkCaseBounds = numImages % (threads.x * imgsPerThread) != 0;
-    
+
     if (scaleTargets == 0) { // do not scale or use targets matrix
         targets.resize(overSample*numImgColors*imgPixels, numImages);
     } else {
         assert(targets.getNumRows() == overSample * numImgColors * imgPixels);
         assert(targets.getNumCols() == numImages);
     }
-    
+
     if (conv) {
         if (scaleTargets == 0) { // do not scale or use targets matrix
             if (numFilterColors % 8 == 0) {
@@ -2552,7 +2552,7 @@ void _imgActsSparse(NVMatrix& hidActs, NVMatrix& filters, NVMatrix& targets, int
             }
         }
     }
-    
+
     cutilCheckMsg("imgActsSparse: kernel execution failed");
 }
 

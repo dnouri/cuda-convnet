@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (c) 2011, Alex Krizhevsky (akrizhevsky@gmail.com)
  * All rights reserved.
  *
@@ -7,7 +7,7 @@
  *
  * - Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * - Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
@@ -308,7 +308,7 @@ bool NVMatrix::isRndInitialized() {
 void NVMatrix::destroyRandom() {
     assert(isRndInitialized());
     int d = getDeviceID();
-    
+
     pthread_mutex_lock(_rndMutex);
     CUDA_CALL(cudaFree(rndDevStates[d]));
     rndDevStates.erase(d);
@@ -422,7 +422,7 @@ NVMatrix& NVMatrix::slice(int startRow, int endRow, int startCol, int endCol) co
     _checkBounds(startRow, endRow, startCol, endCol);
     if (!isTrans()) {
         return *new NVMatrix(this->_devData + startRow * _stride + startCol, endRow - startRow, endCol - startCol, _stride, false);
-    } 
+    }
     return *new NVMatrix(this->_devData + startCol * _stride + startRow, endRow - startRow, endCol - startCol, _stride, true);
 }
 
@@ -754,7 +754,7 @@ void NVMatrix::_aggregate(int axis, NVMatrix& target, Agg agg, BinaryOp op) {
 //                    dim3 threads(AWR_NUM_THREADS);
 //                    dim3 blocks(1, std::min(1024, height));
 //                    kAggRows_wholerow<<<blocks, threads>>>(_devData, target._devData, width, height, agg, op);
-                    
+
                 } else {
 //                    dim3 threads(AWR_NUM_THREADS);
 //                    dim3 blocks(1, std::min(1024, height));

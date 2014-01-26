@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (c) 2011, Alex Krizhevsky (akrizhevsky@gmail.com)
  * All rights reserved.
  *
@@ -7,7 +7,7 @@
  *
  * - Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * - Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
@@ -29,7 +29,7 @@
 
 using namespace std;
 
-DataProvider::DataProvider(int minibatchSize) : 
+DataProvider::DataProvider(int minibatchSize) :
     _minibatchSize(minibatchSize), _hData(NULL) {
 
 }
@@ -72,9 +72,9 @@ GPUData& DataProvider::getMinibatch(int idx) {
 GPUData& DataProvider::getDataSlice(int startCase, int endCase) {
     assert(_hData != NULL);
     assert(_hData->getNumCases() > 0);
-    
+
     NVMatrixV& miniData = *new NVMatrixV();
-    
+
     for (int i = 0; i < _hData->getData().size(); i++) {
         miniData.push_back(new NVMatrix());
         if (_dataSize < MAX_DATA_ON_GPU) {

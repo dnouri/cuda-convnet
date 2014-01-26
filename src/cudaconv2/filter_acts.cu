@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (c) 2011, Alex Krizhevsky (akrizhevsky@gmail.com)
  * All rights reserved.
  *
@@ -7,7 +7,7 @@
  *
  * - Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * - Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
@@ -167,7 +167,7 @@ __global__ void filterActs_YxX_color(float* images, float* filters, float* targe
         }
         __syncthreads();
     }
-    
+
     if (scale) {
         #pragma unroll
         for (int g = 0; g < imgsPerThread; g++) {
@@ -227,7 +227,7 @@ __global__ void filterActs_YxX_sparse(float* images, float* filters, float* targ
                                        const int imgSizeY, const int imgSizeX, const int filterSize, const int paddingStart,
                                        const int moduleStride,
                                        const int numModulesY, const int numModulesX, const int imgStride, const int numImgColors,
-                                       const int numGroups, 
+                                       const int numGroups,
                                        const float scaleTargets, const float scaleOutputs,
                                        const bool conv) {
     __shared__ float shFilters[B_Y*colorCache][B_Y * filtersPerThread]; // pre-load B_Y pixels from B_Y*filtersPerThread filters
@@ -403,7 +403,7 @@ __global__ void filterActs_YxX_sparse_random(float* images, float* filters, floa
                                              const int imgSizeY, const int imgSizeX, const int filterSize, const int paddingStart,
                                              const int moduleStride,
                                              const int numModulesY, const int numModulesX, const int imgStride,
-                                             /*const int numImgColors,*/ const int numFilterColors, const int numGroups, 
+                                             /*const int numImgColors,*/ const int numFilterColors, const int numGroups,
                                              const float scaleTargets, const float scaleOutputs,
                                              const bool conv) {
     __shared__ float shFilters[B_Y*colorCache][B_Y * filtersPerThread]; // pre-load B_Y pixels from B_Y*filtersPerThread filters
@@ -435,7 +435,7 @@ __global__ void filterActs_YxX_sparse_random(float* images, float* filters, floa
     if (!conv) {
         filters += moduleIdx * numFilterColors * filterPixels * numFilters;
     }
-    
+
     targets += moduleIdx * numImages
             + (blockFilterIdx + threadIdx.y) * numImages * numModules
             + myImgIdx;
@@ -451,7 +451,7 @@ __global__ void filterActs_YxX_sparse_random(float* images, float* filters, floa
     }
 //    __shared__ int imgPos[]
     for (int oc = 0; oc < numFilterColors; oc += colorCache) { // oc stands for outer color (loop)
-        
+
         // Kinda wasteful here but...shouldn't matter
         if (tidx < colorCache) {
             shColors[tidx] = colorIndices[oc + tidx] * imgStride * imgPixels;
@@ -556,24 +556,24 @@ __global__ void filterActs_YxX_sparse_random(float* images, float* filters, floa
  *              (numModules, numFilterColors, filterPixels, numFilters) otherwise
  *
  * targets:     (numFilters, numModules, numImages)
- * 
+ *
  * Note: all of these convolution routines are optimized for the case when
- * the number of images (i.e. the minibatch size) is a multiple of 128. 
+ * the number of images (i.e. the minibatch size) is a multiple of 128.
  * Other batch sizes will work, but but I made no attempt whatsoever
- * to make them work fast. 
+ * to make them work fast.
  */
  void _filterActs(NVMatrix& images, NVMatrix& filters, NVMatrix& targets,
                    int imgSizeY, int numModulesY, int numModulesX, int paddingStart, int moduleStride,
                    int numImgColors, int numGroups,
                    float scaleTargets, float scaleOutput, bool conv) {
-    int numFilterColors = numImgColors / numGroups;      
+    int numFilterColors = numImgColors / numGroups;
     int numFilters = filters.getNumCols();
     int numModules = numModulesY * numModulesX;
     int numImages = images.getNumCols();
     int imgPixels = images.getNumRows()/numImgColors;
     int imgSizeX = imgPixels / imgSizeY;
     int filterModuleMult = conv ? 1 : numModules;
-    
+
     assert(numGroups > 1 || (numImgColors > 0 && (numImgColors <= 3 || numImgColors % 2 == 0)));
     assert(numGroups == 1 || numFilterColors % 2 == 0);
     assert(numFilters % (16 * numGroups) == 0);
@@ -594,7 +594,7 @@ __global__ void filterActs_YxX_sparse_random(float* images, float* filters, floa
     assert(paddingStart + (numModulesX-1)*moduleStride + filterSize >= imgSizeX);
     assert(paddingStart + (numModulesY-1)*moduleStride + filterSize >= imgSizeY);
     assert(moduleStride <= filterSize);
-    
+
     assert(!images.isTrans());
     assert(!filters.isTrans());
     assert(!targets.isTrans());
@@ -612,7 +612,7 @@ __global__ void filterActs_YxX_sparse_random(float* images, float* filters, floa
         assert(targets.getNumRows() == numFilters * numModules);
         assert(targets.getNumCols() == numImages);
     }
-    
+
     if (imgsPerThread == 4) {
         if (numImgColors <= 3) {
             assert(numGroups == 1); // It has to be based on above definitions, but just to be sure.
@@ -986,7 +986,7 @@ __global__ void filterActs_YxX_sparse_random(float* images, float* filters, floa
                     }
                 }
             }
-        }    
+        }
     } else {
         if (numImgColors <= 3) {
             assert(numGroups == 1); // It has to be based on above definitions, but just to be sure.
@@ -1175,7 +1175,7 @@ __global__ void filterActs_YxX_sparse_random(float* images, float* filters, floa
             }
         }
     }
-    
+
     cutilCheckMsg("filterActs: kernel execution failed");
 }
 
@@ -1212,11 +1212,11 @@ void localFilterActs(NVMatrix& images, NVMatrix& filters, NVMatrix& targets,
  *
  * targets:         (numFilters, numModulesY, numModulesX, numImages)
  * colorIndices:    (numGroups, numFilterColors)
- * 
+ *
  * Note: all of these convolution routines are optimized for the case when
- * the number of images (i.e. the minibatch size) is a multiple of 128. 
+ * the number of images (i.e. the minibatch size) is a multiple of 128.
  * Other batch sizes will work, but but I made no attempt whatsoever
- * to make them work fast. 
+ * to make them work fast.
  */
 void _filterActsSparse(NVMatrix& images, NVMatrix& filters, NVMatrix& targets, int* dColorIndices,
                           int imgSizeY, int numModulesY, int numModulesX, int paddingStart, int moduleStride,
@@ -1228,13 +1228,13 @@ void _filterActsSparse(NVMatrix& images, NVMatrix& filters, NVMatrix& targets, i
     int imgPixels = images.getNumRows() / numImgColors;
     int imgSizeX = imgPixels / imgSizeY;
     int filterModuleMult = conv ? 1 : numModules;
-    
+
     assert(numGroups > 1);
     assert(numImgColors % numFilterColors == 0);
     assert((numFilterColors * numGroups) % numImgColors == 0);
     assert(numFilters % (16 * numGroups) == 0);
     assert(numFilterColors % 2 == 0);
-    
+
     assert(imgSizeY * imgSizeX == imgPixels);
     assert(images.getNumRows() == imgPixels * numImgColors);
     int numFiltersPerGroup = numFilters / numGroups;
@@ -1251,7 +1251,7 @@ void _filterActsSparse(NVMatrix& images, NVMatrix& filters, NVMatrix& targets, i
     assert(paddingStart + (numModulesX-1) * moduleStride + filterSize >= imgSizeX);
     assert(paddingStart + (numModulesY-1) * moduleStride + filterSize >= imgSizeY);
     assert(moduleStride <= filterSize);
-    
+
     assert(!images.isTrans());
     assert(!filters.isTrans());
     assert(!targets.isTrans());
@@ -1269,7 +1269,7 @@ void _filterActsSparse(NVMatrix& images, NVMatrix& filters, NVMatrix& targets, i
         assert(targets.getNumRows() == numFilters * numModules);
         assert(targets.getNumCols() == numImages);
     }
-    
+
     if (imgsPerThread == 4) {
         if (scaleTargets == 0) { // don't scale
             if (checkImgBounds) {
@@ -1409,14 +1409,14 @@ void _filterActsSparse(NVMatrix& images, NVMatrix& filters, NVMatrix& targets, i
             }
         }
     }
-    
+
     cutilCheckMsg("filterActsSparse: kernel execution failed");
 }
 
 void convFilterActsSparse(NVMatrix& images, NVMatrix& filters, NVMatrix& targets, int* dColorIndices,
                           int imgSizeY, int numModulesY, int numModulesX, int paddingStart, int moduleStride,
                           int numImgColors, int numFilterColors, int numGroups,
-                          float scaleTargets, float scaleOutput) { 
+                          float scaleTargets, float scaleOutput) {
     _filterActsSparse(images, filters, targets, dColorIndices, imgSizeY, numModulesY, numModulesX, paddingStart, moduleStride,
                       numImgColors,  numFilterColors, numGroups, scaleTargets, scaleOutput, true);
 }
@@ -1431,7 +1431,7 @@ void convFilterActsSparse(NVMatrix& images, NVMatrix& filters, NVMatrix& targets
 void localFilterActsSparse(NVMatrix& images, NVMatrix& filters, NVMatrix& targets, int* dColorIndices,
                           int imgSizeY, int numModulesY, int numModulesX, int paddingStart, int moduleStride,
                           int numImgColors, int numFilterColors, int numGroups,
-                          float scaleTargets, float scaleOutput) { 
+                          float scaleTargets, float scaleOutput) {
     _filterActsSparse(images, filters, targets, dColorIndices, imgSizeY, numModulesY, numModulesX, paddingStart, moduleStride,
                       numImgColors,  numFilterColors, numGroups, scaleTargets, scaleOutput, false);
 }

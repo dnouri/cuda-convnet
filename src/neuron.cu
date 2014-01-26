@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (c) 2011, Alex Krizhevsky (akrizhevsky@gmail.com)
  * All rights reserved.
  *
@@ -7,7 +7,7 @@
  *
  * - Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * - Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
@@ -32,15 +32,15 @@ using namespace std;
 Neuron& Neuron::makeNeuron(PyObject* neuronDict) {
     string type = pyDictGetString(neuronDict, "type");
     PyObject* neuronParamsDict = PyDict_GetItemString(neuronDict, "params");
-    
+
     if (type == "relu") {
         return *new ReluNeuron();
     }
-    
+
     if (type == "softrelu") {
         return *new SoftReluNeuron();
     }
-    
+
     if (type == "brelu") {
         float a = pyDictGetFloat(neuronParamsDict, "a");
         return *new BoundedReluNeuron(a);
@@ -53,22 +53,22 @@ Neuron& Neuron::makeNeuron(PyObject* neuronDict) {
     if (type == "logistic") {
         return *new LogisticNeuron();
     }
-    
+
     if (type == "tanh") {
         float a = pyDictGetFloat(neuronParamsDict, "a");
         float b = pyDictGetFloat(neuronParamsDict, "b");
-        
+
         return *new TanhNeuron(a, b);
     }
-    
+
     if (type == "square") {
         return *new SquareNeuron();
     }
-    
+
     if (type == "sqrt") {
         return *new SqrtNeuron();
     }
-    
+
     if (type == "linear") {
         float a = pyDictGetFloat(neuronParamsDict, "a");
         float b = pyDictGetFloat(neuronParamsDict, "b");
@@ -78,6 +78,6 @@ Neuron& Neuron::makeNeuron(PyObject* neuronDict) {
     if (type == "ident") {
         return *new Neuron();
     }
-    
+
     throw string("Unknown neuron type: ") + type;
 }

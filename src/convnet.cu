@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (c) 2011, Alex Krizhevsky (akrizhevsky@gmail.com)
  * All rights reserved.
  *
@@ -7,7 +7,7 @@
  *
  * - Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * - Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
@@ -25,7 +25,7 @@
  */
 
 #include <vector>
-#include <iostream> 
+#include <iostream>
 #include <string>
 
 #include <nvmatrix.cuh>
@@ -36,7 +36,7 @@
 
 using namespace std;
 
-/* 
+/*
  * =======================
  * ConvNet
  * =======================
@@ -44,11 +44,11 @@ using namespace std;
 ConvNet::ConvNet(PyListObject* layerParams, int minibatchSize, int deviceID) : Thread(false),  _deviceID(deviceID), _data(NULL) {
     try {
         int numLayers = PyList_GET_SIZE(layerParams);
-    
+
         for (int i = 0; i < numLayers; i++) {
             PyObject* paramsDict = PyList_GET_ITEM(layerParams, i);
             string layerType = pyDictGetString(paramsDict, "type");
-            
+
             Layer* l = initLayer(layerType, paramsDict);
             // Connect backward links in graph for this layer
             intv* inputLayers = pyDictGetIntV(paramsDict, "inputs");
@@ -67,12 +67,12 @@ ConvNet::ConvNet(PyListObject* layerParams, int minibatchSize, int deviceID) : T
                 prev[j]->addNext(_layers[i]);
             }
         }
-         
+
         // Execute post-initialization stuff
         for (int i = 0; i < _layers.size(); i++) {
             _layers[i]->postInit();
         }
-        
+
         _dp = new DataProvider(minibatchSize);
     } catch (string& s) {
         cout << "Error creating ConvNet: " << s << endl;
@@ -132,9 +132,9 @@ Layer* ConvNet::initLayer(string& layerType, PyObject* paramsDict) {
 }
 
 /*
- * This executes in a new CPU thread so it's OK to initialize CUDA stuff here. 
+ * This executes in a new CPU thread so it's OK to initialize CUDA stuff here.
  */
-void ConvNet::initCuda() { 
+void ConvNet::initCuda() {
     cudaSetDevice(_deviceID < 0 ? cutGetMaxGflopsDeviceId() : _deviceID);
     cudaDeviceSetCacheConfig(cudaFuncCachePreferShared);
     cublasInit();
@@ -258,11 +258,11 @@ void ConvNet::checkGradients() {
     fprop(0, PASS_GC);
     _baseErr = getCostValue();
     bprop(PASS_GC);
-    
+
     for (vector<Layer*>::iterator it = _layers.begin(); it != _layers.end(); ++it) {
         (*it)->checkGradients();
     }
-    
+
     cout << "------------------------" << endl;
     if (_numFailures > 0) {
         cout << _numFailures << "/" << _numTests << " TESTS FAILED" << endl;

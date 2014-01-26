@@ -6,7 +6,7 @@
 #
 # - Redistributions of source code must retain the above copyright notice,
 #   this list of conditions and the following disclaimer.
-# 
+#
 # - Redistributions in binary form must reproduce the above copyright notice,
 #   this list of conditions and the following disclaimer in the documentation
 #   and/or other materials provided with the distribution.
@@ -41,16 +41,16 @@ class ConvNet(IGPUModel):
         dp_params['multiview_test'] = op.get_value('multiview_test')
         dp_params['crop_border'] = op.get_value('crop_border')
         IGPUModel.__init__(self, "ConvNet", op, load_dic, filename_options, dp_params=dp_params)
-        
+
     def import_model(self):
         lib_name = "pyconvnet" if is_windows_machine() else "_ConvNet"
         print "========================="
         print "Importing %s C++ module" % lib_name
-        self.libmodel = __import__(lib_name) 
-        
+        self.libmodel = __import__(lib_name)
+
     def init_model_lib(self):
         self.libmodel.initModel(self.layers, self.minibatch_size, self.device_ids[0])
-        
+
     def init_model_state(self):
         ms = self.model_state
         if self.load_file:
@@ -58,11 +58,11 @@ class ConvNet(IGPUModel):
         else:
             ms['layers'] = lay.LayerParser.parse_layers(self.layer_def, self.layer_params, self)
         self.layers_dic = dict(zip([l['name'] for l in ms['layers']], ms['layers']))
-        
+
         logreg_name = self.op.get_value('logreg_name')
         if logreg_name:
             self.logreg_idx = self.get_layer_idx(logreg_name, check_type='cost.logreg')
-        
+
         # Convert convolutional layers to local
         if len(self.op.get_value('conv_to_local')) > 0:
             for i, layer in enumerate(ms['layers']):
@@ -83,7 +83,7 @@ class ConvNet(IGPUModel):
                         raise ModelStateException("Invalid layer name '%s'; unable to unshare." % name_str)
         self.op.set_value('conv_to_local', [], parse=False)
         self.op.set_value('unshare_weights', [], parse=False)
-    
+
     def get_layer_idx(self, layer_name, check_type=None):
         try:
             layer_idx = [l['name'] for l in self.model_state['layers']].index(layer_name)
@@ -101,7 +101,7 @@ class ConvNet(IGPUModel):
             self.op.set_value('train_batch_range', '0')
             self.op.set_value('test_batch_range', '0')
             self.op.set_value('data_path', '')
-            
+
     # Make sure the data provider returned data in proper format
     def parse_batch_data(self, batch_data, train=True):
         if max(d.dtype != n.single for d in batch_data[2]):
@@ -116,13 +116,13 @@ class ConvNet(IGPUModel):
             self.libmodel.startMultiviewTest(data, self.train_data_provider.num_views, self.logreg_idx)
         else:
             self.libmodel.startBatch(data, not train)
-        
+
     def print_iteration(self):
         print "%d.%d..." % (self.epoch, self.batchnum),
-        
+
     def print_train_time(self, compute_time_py):
         print "(%.3f sec)" % (compute_time_py)
-        
+
     def print_costs(self, cost_outputs):
         costs, num_cases = cost_outputs[0], cost_outputs[1]
         for errname in costs.keys():
@@ -132,19 +132,19 @@ class ConvNet(IGPUModel):
             if sum(m.isnan(v) for v in costs[errname]) > 0 or sum(m.isinf(v) for v in costs[errname]):
                 print "^ got nan or inf!"
                 sys.exit(1)
-        
+
     def print_train_results(self):
         self.print_costs(self.train_outputs[-1])
-        
+
     def print_test_status(self):
         pass
-        
+
     def print_test_results(self):
         print ""
         print "======================Test output======================"
         self.print_costs(self.test_outputs[-1])
         print ""
-        print "-------------------------------------------------------", 
+        print "-------------------------------------------------------",
         for i,l in enumerate(self.layers): # This is kind of hacky but will do for now.
             if 'weights' in l:
                 if type(l['weights']) == n.ndarray:
@@ -154,13 +154,13 @@ class ConvNet(IGPUModel):
                     print NL.join("Layer '%s' weights[%d]: %e [%e]" % (l['name'], i, n.mean(n.abs(w)), n.mean(n.abs(wi))) for i,(w,wi) in enumerate(zip(l['weights'],l['weightsInc']))),
                 print "%sLayer '%s' biases: %e [%e]" % (NL, l['name'], n.mean(n.abs(l['biases'])), n.mean(n.abs(l['biasesInc']))),
         print ""
-        
+
     def conditional_save(self):
         self.save_state()
         print "-------------------------------------------------------"
         print "Saved checkpoint to %s" % os.path.join(self.save_path, self.save_file)
         print "=======================================================",
-        
+
     def aggregate_test_outputs(self, test_outputs):
         num_cases = sum(t[1] for t in test_outputs)
         for i in xrange(1 ,len(test_outputs)):
@@ -168,7 +168,7 @@ class ConvNet(IGPUModel):
                 for j in xrange(len(v)):
                     test_outputs[0][0][k][j] += test_outputs[i][0][k][j]
         return (test_outputs[0][0], num_cases)
-    
+
     @classmethod
     def get_options_parser(cls):
         op = IGPUModel.get_options_parser()
@@ -182,19 +182,19 @@ class ConvNet(IGPUModel):
         op.add_option("conv-to-local", "conv_to_local", ListOptionParser(StringOptionParser), "Convert given conv layers to unshared local", default=[])
         op.add_option("unshare-weights", "unshare_weights", ListOptionParser(StringOptionParser), "Unshare weight matrices in given layers", default=[])
         op.add_option("conserve-mem", "conserve_mem", BooleanOptionParser, "Conserve GPU memory (slower)?", default=0)
-                
+
         op.delete_option('max_test_err')
         op.options["max_filesize_mb"].default = 0
         op.options["testing_freq"].default = 50
         op.options["num_epochs"].default = 50000
         op.options['dp_type'].default = None
-        
+
         DataProvider.register_data_provider('cifar', 'CIFAR', CIFARDataProvider)
         DataProvider.register_data_provider('dummy-cn-n', 'Dummy ConvNet', DummyConvNetDataProvider)
         DataProvider.register_data_provider('cifar-cropped', 'Cropped CIFAR', CroppedCIFARDataProvider)
-        
+
         return op
-    
+
 if __name__ == "__main__":
     #nr.seed(5)
     op = ConvNet.get_options_parser()
