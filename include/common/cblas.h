@@ -20,15 +20,15 @@
  *     - The vDSP types DSPComplex and DSPDoubleComplex, defined in <Accelerate/vecLib/vDSP.h>.
  *     - An array of size two of the corresponding real type.
  *     - A structure containing two elements, each of the corresponding real type.
- * 
+ *
  */
- 
+
 #ifndef CBLAS_H
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-    
+
 #ifndef CBLAS_ENUM_DEFINED_H
 #define CBLAS_ENUM_DEFINED_H
 enum CBLAS_ORDER {CblasRowMajor=101, CblasColMajor=102 };
@@ -632,7 +632,7 @@ void cblas_zher2k(const enum CBLAS_ORDER Order, const enum CBLAS_UPLO Uplo,
  is no longer based on ATLAS, and there are no scratch buffers to release,
  so this routine has been deprecated.  It has been a no-op since OS X
  10.7, and calls to it may be safely removed.
- 
+
  On iOS, this routine has never done anything, so there is no risk in removing
  these calls.
  */
@@ -661,13 +661,13 @@ extern void ATLU_DestroyThreadMemory() __OSX_AVAILABLE_BUT_DEPRECATED(__MAC_10_2
 typedef void (*BLASParamErrorProc)(const char *funcName, const char *paramName,
                                    const int *paramPos,  const int *paramValue);
 void SetBLASParamErrorProc(BLASParamErrorProc ErrorProc) __OSX_AVAILABLE_STARTING(__MAC_10_2,__IPHONE_4_0);
-    
+
 #if defined __SSE__
-    
+
     typedef float __M128  __attribute__((vector_size (16)));
     typedef __M128  VectorFloat;
     typedef VectorFloat ConstVectorFloat;
-    
+
     /*
      -------------------------------------------------------------------------------------------------
      These routines provide optimized, SIMD-only support for common small matrix multiplications.
@@ -676,7 +676,7 @@ void SetBLASParamErrorProc(BLASParamErrorProc ErrorProc) __OSX_AVAILABLE_STARTIN
      these are all square, column major matrices can be multiplied by simply reversing the parameters.
      -------------------------------------------------------------------------------------------------
      */
-    
+
     void vMultVecMat_4x4(ConstVectorFloat X[1], ConstVectorFloat A[4][1], VectorFloat Y[1]);
     void vMultMatVec_4x4(ConstVectorFloat A[4][1], ConstVectorFloat X[1], VectorFloat Y[1]);
     void vMultMatMat_4x4(ConstVectorFloat A[4][1], ConstVectorFloat   B[4][1], VectorFloat C[4][1]);
@@ -689,7 +689,7 @@ void SetBLASParamErrorProc(BLASParamErrorProc ErrorProc) __OSX_AVAILABLE_STARTIN
     void vMultVecMat_32x32(ConstVectorFloat X[8], ConstVectorFloat A[32][8], VectorFloat Y[8]);
     void vMultMatVec_32x32(ConstVectorFloat A[32][8], ConstVectorFloat X[8], VectorFloat Y[8]);
     void vMultMatMat_32x32(ConstVectorFloat A[32][8], ConstVectorFloat   B[32][8], VectorFloat C[32][8]);
-    
+
     /*
      -------------------------------------------------------------------------------------------------
      These routines provide optimized support for common small matrix multiplications. They use
@@ -699,7 +699,7 @@ void SetBLASParamErrorProc(BLASParamErrorProc ErrorProc) __OSX_AVAILABLE_STARTIN
      these are all square, column major matrices can be multiplied by simply reversing the parameters.
      -------------------------------------------------------------------------------------------------
      */
-    
+
     void sMultVecMat_4x4(ConstVectorFloat X[1], ConstVectorFloat A[4][1], VectorFloat Y[1]);
     void sMultMatVec_4x4(ConstVectorFloat A[4][1], ConstVectorFloat X[1], VectorFloat Y[1]);
     void sMultMatMat_4x4(ConstVectorFloat A[4][1], ConstVectorFloat   B[4][1], VectorFloat C[4][1]);
@@ -712,7 +712,7 @@ void SetBLASParamErrorProc(BLASParamErrorProc ErrorProc) __OSX_AVAILABLE_STARTIN
     void sMultVecMat_32x32(ConstVectorFloat X[8], ConstVectorFloat A[32][8], VectorFloat Y[8]);
     void sMultMatVec_32x32(ConstVectorFloat A[32][8], ConstVectorFloat X[8], VectorFloat Y[8]);
     void sMultMatMat_32x32(ConstVectorFloat A[32][8], ConstVectorFloat   B[32][8], VectorFloat C[32][8]);
-    
+
     void dMultVecMat_4x4(const double X[4], const double A[4][4], double Y[4]);
     void dMultMatVec_4x4(const double A[4][4], const double X[4], double Y[4]);
     void dMultMatMat_4x4(const double A[4][4], const double B[4][4], double C[4][4]);
@@ -725,7 +725,7 @@ void SetBLASParamErrorProc(BLASParamErrorProc ErrorProc) __OSX_AVAILABLE_STARTIN
     void dMultVecMat_32x32(const double X[32], const double A[32][32], double Y[32]);
     void dMultMatVec_32x32(const double A[32][32], const double X[32], double Y[32]);
     void dMultMatMat_32x32(const double A[32][32], const double B[32][32], double C[32][32]);
-    
+
 #endif /* defined __SSE__ */
 #endif /* CBLAS_ENUM_ONLY */
 
