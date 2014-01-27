@@ -28,7 +28,7 @@
 #include <vector>
 #include <assert.h>
 #include <cublas.h>
-#include <cutil_inline.h>
+#include <helper_cuda.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <fstream>
@@ -251,7 +251,7 @@ void NVMatrix::_unaryRandomize(NVMatrix& target, Randomizer rnd) {
     }
     assert(isTrans() == target.isTrans());
     kUnaryRandomize<<<NUM_RND_BLOCKS,NUM_RND_THREADS_PER_BLOCK>>>(getDevData(), target.getDevData(), getCurandState(), getNumElements(), rnd);
-    cutilCheckMsg("kUnaryRandomize: Kernel execution failed");
+    getLastCudaError("kUnaryRandomize: Kernel execution failed");
 }
 
 template <class Randomizer>
@@ -265,7 +265,7 @@ void NVMatrix::_binaryRandomize(NVMatrix& data2, NVMatrix& target, Randomizer rn
     }
     assert(isTrans() == target.isTrans());
     kBinaryRandomize<<<NUM_RND_BLOCKS,NUM_RND_THREADS_PER_BLOCK>>>(getDevData(), data2.getDevData(), target.getDevData(), getCurandState(), getNumElements(), rnd);
-    cutilCheckMsg("kBinaryRandomize: Kernel execution failed");
+    getLastCudaError("kBinaryRandomize: Kernel execution failed");
 }
 
 void NVMatrix::initRandom(unsigned long long seed) {
@@ -276,7 +276,7 @@ void NVMatrix::initRandom(unsigned long long seed) {
     CUDA_CALL(cudaMalloc((void **)&rndDevStates[d], NUM_RND_STREAMS * sizeof(curandState)));
     pthread_mutex_unlock(_rndMutex);
     kSetupCurand<<<NUM_RND_BLOCKS, NUM_RND_THREADS_PER_BLOCK>>>(getCurandState(), 1 + seed*2); // so there's no chance it'll be correlated with the other one
-    cutilCheckMsg("initRandom: Kernel execution failed");
+    getLastCudaError("initRandom: Kernel execution failed");
 }
 
 void NVMatrix::initRandom() {
@@ -646,7 +646,7 @@ void NVMatrix::tile(int timesY, int timesX, NVMatrix& target) {
     } else {
         kTile<<<NUM_TILE_BLOCKS,NUM_TILE_THREADS_PER_BLOCK>>>(_devData, target._devData, _numRows, _numCols, target._numRows, target._numCols);
     }
-    cutilCheckMsg("Kernel execution failed");
+    getLastCudaError("Kernel execution failed");
 }
 
 void NVMatrix::addVector(NVMatrix& vec, float scaleVec, NVMatrix& target) {
@@ -713,7 +713,7 @@ void NVMatrix::_aggregate(int axis, NVMatrix& target, Agg agg, BinaryOp op) {
         assert(numBlocks * NUM_SUM_COLS_THREADS_PER_BLOCK >= width);
         assert(numBlocks < NUM_BLOCKS_MAX);
         kDumbAggCols<Agg, BinaryOp><<<numBlocks,NUM_SUM_COLS_THREADS_PER_BLOCK>>>(_devData, target._devData, width, height, agg, op);
-        cutilCheckMsg("kDumbAggCols: Kernel execution failed");
+        getLastCudaError("kDumbAggCols: Kernel execution failed");
     } else { // row sum
         target.resize(_isTrans ? 1 : _numRows, _isTrans ? _numCols : 1);
         if (width > 1) {
@@ -787,7 +787,7 @@ void NVMatrix::_aggregate(int axis, NVMatrix& target, Agg agg, BinaryOp op) {
                             kAggRows<Agg, BinaryOp, 512><<<grid, threads>>>(prevSum->_devData, nvSumAccum->_devData,
                                                        width, height, nvSumAccum->getLeadingDim(), agg, op);
                         }
-                        cutilCheckMsg("agg rows: Kernel execution failed");
+                        getLastCudaError("agg rows: Kernel execution failed");
                         cudaThreadSynchronize();
                         width = numBlocksX; // only true in reduction agg, but for linear agg this doesn't matter anyway
 
@@ -956,7 +956,7 @@ float NVMatrix::_totalAgg(Agg agg) {
         _sum_setParams(src->getNumElements(), &blocks, &threads, &numCols);
         target = new NVMatrix(1, blocks.x);
         kTotalAgg<<<blocks, threads>>>(src->getDevData(), target->getDevData(), numCols, src->getNumElements(), agg);
-        cutilCheckMsg("kTotalAgg: Kernel execution failed");
+        getLastCudaError("kTotalAgg: Kernel execution failed");
         cudaThreadSynchronize(); // not really necessary?
         delete (src == this ? NULL : src);
     }
@@ -990,7 +990,7 @@ float NVMatrix::dotProduct(NVMatrix& b) {
     _sum_setParams(getNumElements(), &blocks, &threads, &numCols);
     NVMatrix target(1, blocks.x);
     kDotProduct_r<<<blocks, threads>>>(getDevData(), b.getDevData(), target.getDevData(), numCols, getNumElements());
-    cutilCheckMsg("kDotProduct: Kernel execution failed");
+    getLastCudaError("kDotProduct: Kernel execution failed");
     cudaThreadSynchronize();
     return target.sum();
 }
