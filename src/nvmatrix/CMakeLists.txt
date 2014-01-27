@@ -4,6 +4,7 @@ CUDA_ADD_LIBRARY (nvmatrix
 )
 
 TARGET_LINK_LIBRARIES (nvmatrix
+  common
   ${BLAS_LIBRARIES}
   ${CUDA_CUBLAS_LIBRARIES}
 )

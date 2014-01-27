@@ -16,5 +16,6 @@ include_directories (
   include/cudaconv2
 )
 
+add_subdirectory (src/common)
 add_subdirectory (src/nvmatrix)
 add_subdirectory (src/cudaconv2)
