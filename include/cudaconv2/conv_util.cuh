@@ -512,7 +512,7 @@ void convLocalPool(NVMatrix& images, NVMatrix& target, int numFilters,
 
     }
 
-    cutilCheckMsg("convLocalPool: kernel execution failed");
+    getLastCudaError("convLocalPool: kernel execution failed");
 }
 
 #endif	/* CONV_UTIL_CUH */
