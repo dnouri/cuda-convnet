@@ -135,7 +135,7 @@ Layer* ConvNet::initLayer(string& layerType, PyObject* paramsDict) {
  * This executes in a new CPU thread so it's OK to initialize CUDA stuff here.
  */
 void ConvNet::initCuda() {
-    cudaSetDevice(_deviceID < 0 ? cutGetMaxGflopsDeviceId() : _deviceID);
+    cudaSetDevice(_deviceID < 0 ? gpuGetMaxGflopsDeviceId() : _deviceID);
     cudaDeviceSetCacheConfig(cudaFuncCachePreferShared);
     cublasInit();
     NVMatrix::initRandom(time(0));

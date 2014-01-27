@@ -29,7 +29,7 @@
 
 #include <vector>
 #include <string>
-#include <cutil_inline.h>
+#include <helper_cuda.h>
 #include <time.h>
 #include <queue.h>
 #include <thread.h>

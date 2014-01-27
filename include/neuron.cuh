@@ -29,8 +29,9 @@
 
 #include <assert.h>
 #include <string>
+#include <Python.h>
 #include <nvmatrix.cuh>
-#include <cutil_inline.h>
+#include <helper_cuda.h>
 
 template <class GradientOp>
 class AddGradientBinaryOperator {

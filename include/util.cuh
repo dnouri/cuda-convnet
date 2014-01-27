@@ -31,7 +31,6 @@
 #include <map>
 #include <string>
 #include <sstream>
-#include <string>
 #include <Python.h>
 #include <nvmatrix.cuh>
 #include <matrix.h>

@@ -238,7 +238,7 @@ static const char *_cudaGetErrorEnum(cudaError_t error)
         case cudaErrorProfilerAlreadyStopped:
             return "cudaErrorProfilerAlreadyStopped";
 
-#if __CUDA_API_VERSION >= 0x4000
+#if __CUDA_API_VERSION >= 4000
 
         case cudaErrorAssert:
             return "cudaErrorAssert";
@@ -755,7 +755,7 @@ static const char *_cudaGetErrorEnum(NppStatus error)
 #endif
 #else
 #ifndef DEVICE_RESET
-#define DEVICE_RESET 
+#define DEVICE_RESET
 #endif
 #endif
 

@@ -27,7 +27,7 @@
 #ifndef LAYER_KERNELS_CUH
 #define	LAYER_KERNELS_CUH
 
-#include <cutil_inline.h>
+#include <helper_cuda.h>
 #include <nvmatrix.cuh>
 
 #define LOGREG_GRAD_THREADS_X      32
