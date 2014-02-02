@@ -42,6 +42,8 @@ using namespace std;
  * =======================
  */
 ConvNet::ConvNet(PyListObject* layerParams, int minibatchSize, int deviceID) : Thread(false),  _deviceID(deviceID), _data(NULL) {
+    //initCuda();
+    cudaSetDevice(_deviceID < 0 ? gpuGetMaxGflopsDeviceId() : _deviceID);
     try {
         int numLayers = PyList_GET_SIZE(layerParams);
     
@@ -86,6 +88,13 @@ ConvNet::ConvNet(PyListObject* layerParams, int minibatchSize, int deviceID) : T
 Layer* ConvNet::initLayer(string& layerType, PyObject* paramsDict) {
     if (layerType == "fc") {
         _layers.push_back(new FCLayer(this, paramsDict));
+    } else if (layerType == "fcdropo") {
+        _layers.push_back(new FCDropOutLayer(this, paramsDict));
+    } else if (layerType == "fcdropc") {
+        _layers.push_back(new FCDropConnectApproxLayer(this, paramsDict));
+    } else if (layerType == "fcdropcf") {
+        //_layers.push_back(new FCDropConnectLayer(this, paramsDict));
+        _layers.push_back(new FCDropConnectBitLayer(this, paramsDict));
     } else if (layerType == "conv") {
         _layers.push_back(new ConvLayer(this, paramsDict));
     } else if (layerType == "local") {
@@ -335,4 +344,40 @@ bool ConvNet::checkGradient(const string& name, float eps, Weights& weights) {
     _numTests++;
     _numFailures += fail;
     return fail;
+}
+
+void ConvNet::scaleEps( float scale ) {
+    for( int i = 0; i < getNumLayers(); i++ ) {
+        WeightLayer* layer = dynamic_cast<WeightLayer*>( _layers[i] );
+        if( layer != NULL ) {
+            layer->scaleEps( scale );
+        }
+    }
+}
+
+void ConvNet::setDropRate( float dropRate ) {
+    for( int i = 0; i < getNumLayers(); i++ ) {
+        FCDropLayer* layer = dynamic_cast<FCDropLayer*>( _layers[i] );
+        if( layer != NULL ) {
+            layer->set_dropRate( dropRate );
+        }
+    }
+}
+
+void ConvNet::resetMom() {
+   for( int i = 0; i < getNumLayers(); i++ ) {
+      WeightLayer* layer = dynamic_cast<WeightLayer*>( _layers[i] );
+      if( layer != NULL ) {
+         layer->resetMom( );
+      }
+   }
+}
+
+void ConvNet::enableMCInference( int numSamples ) {
+   for( int i = 0; i < getNumLayers(); i++ ) {
+      FCDropConnectBitLayer* layer = dynamic_cast<FCDropConnectBitLayer*>( _layers[i] );
+      if( layer != NULL ) {
+         layer->enableMCInference( numSamples );
+      }
+   }
 }

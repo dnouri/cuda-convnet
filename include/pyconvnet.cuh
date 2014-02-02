@@ -40,5 +40,13 @@ PyObject* syncWithHost(PyObject *self, PyObject *args);
 PyObject* startMultiviewTest(PyObject *self, PyObject *args);
 PyObject* startFeatureWriter(PyObject *self, PyObject *args);
 
+// ---- my option ---
+PyObject* scaleModelEps(PyObject *self, PyObject *args);
+PyObject* setDropRate(PyObject *self, PyObject *args);
+PyObject* resetModelMom(PyObject *self, PyObject *args);
+PyObject* preprocess(PyObject *self, PyObject *args);
+PyObject* startMultiviewFeatureWriter(PyObject *self, PyObject *args);
+PyObject* enableMCInference( PyObject *self, PyObject *args);
+
 #endif	/* PYCONVNET3_CUH */
 

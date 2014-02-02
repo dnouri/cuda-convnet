@@ -40,6 +40,7 @@ class ConvNet(IGPUModel):
         filename_options = []
         dp_params['multiview_test'] = op.get_value('multiview_test')
         dp_params['crop_border'] = op.get_value('crop_border')
+        dp_params['img_flip'] = op.get_value('img_flip')
         IGPUModel.__init__(self, "ConvNet", op, load_dic, filename_options, dp_params=dp_params)
         
     def import_model(self):
@@ -189,9 +190,33 @@ class ConvNet(IGPUModel):
         op.options["num_epochs"].default = 50000
         op.options['dp_type'].default = None
         
-        DataProvider.register_data_provider('cifar', 'CIFAR', CIFARDataProvider)
+        # dummy provider
         DataProvider.register_data_provider('dummy-cn-n', 'Dummy ConvNet', DummyConvNetDataProvider)
+        # cifar data provider
+        DataProvider.register_data_provider('cifar-rand', 'CIFAR Random', CIFARDataRandomProvider)
+        DataProvider.register_data_provider('cifar', 'CIFAR', CIFARDataProvider)
+        DataProvider.register_data_provider('cifar-cropped-rand', 'Cropped CIFAR Random', 
+              CroppedCIFARDataRandomProvider)
         DataProvider.register_data_provider('cifar-cropped', 'Cropped CIFAR', CroppedCIFARDataProvider)
+        # general data provider
+        DataProvider.register_data_provider(
+                'general-rand', 'General Random', GeneralDataRandomProvider)
+        DataProvider.register_data_provider('general', 'General', GeneralDataProvider)
+        DataProvider.register_data_provider('general-cropped-rand', 'Cropped General Random', 
+              CroppedGeneralDataRandomProvider)
+        DataProvider.register_data_provider(
+                'general-cropped', 'Cropped General', CroppedGeneralDataProvider)
+
+        # ----------options related with data----------------
+        op.add_option("img-rs", "img_rs", BooleanOptionParser, 
+                "Enable image rotation and scaling transformation", default=False )
+        op.add_option("img-flip", "img_flip", BooleanOptionParser, 
+                "Whether filp training image", default=True )
+        # ----------options related with general data provider----
+        op.add_option("img-size", "img_size", IntegerOptionParser, 
+                "Image Size", default=0 )
+        op.add_option("img-channels", "img_channels", IntegerOptionParser,
+                "Number of channels in image", default=3 )
         
         return op
     

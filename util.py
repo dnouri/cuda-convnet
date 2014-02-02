@@ -108,3 +108,58 @@ def get_cpu():
 
 def is_windows_machine():
     return os.name == 'nt'
+
+def plot_array_image( image, image_size ):
+   import matplotlib.pyplot as plt
+   image = n.round(image.reshape( image_size )).astype(n.uint8)
+   plt.imshow(image)
+   #plt.colorbar()
+   plt.show()
+
+
+def rbgImage2col( image ):
+    assert( image.shape[2] == 3 )
+    w = image.shape[0] 
+    h = image.shape[1]
+    temp_matrix = n.zeros( (w*h*3), n.float32, order='C' )
+    # copy each channel
+    for channel in range(3):
+        s = w * h * channel 
+        e = s + w * h
+        x = image[:,:,channel]
+        temp_matrix[s:e] = x.reshape( (w*h) )
+    return temp_matrix
+
+def plot_col_image( image, w, h, d, text):
+   import matplotlib.pyplot as plt
+   stride = w * h
+   if d==3: #rgb channel
+       assert( image.shape[0] == w*h*d )
+       image_r = n.round(image[0*stride:1*stride]).reshape( (w,h) ).astype(n.uint8)
+       image_g = n.round(image[1*stride:2*stride]).reshape( (w,h) ).astype(n.uint8)
+       image_b = n.round(image[2*stride:3*stride]).reshape( (w,h) ).astype(n.uint8)
+       im = n.zeros( (w,h,3), n.uint8 )
+       im[:,:,0] = image_r
+       im[:,:,1] = image_g
+       im[:,:,2] = image_b
+   else : #show vertical cat image channels
+       im = n.zeros( (w*d,h,3), n.uint8 )
+       for ii in range(d):
+           image_ii = n.round(image[ii*stride:(ii+1)*stride]).reshape( (w,h) ).astype(n.uint8)
+           im_ii= n.zeros( (w,h,3), n.uint8 )
+           im_ii[:,:,0] = image_ii
+           im_ii[:,:,1] = image_ii
+           im_ii[:,:,2] = image_ii
+           im[ii*w:(ii+1)*w,:,:] = im_ii
+ 
+   plt.imshow(im)
+   plt.title( text)
+   #plt.colorbar()
+   plt.show()
+
+# def print network layers
+def print_network_layers( layers ):
+    for i in range( len(layers) ):
+        print i, ": ", " type=", layers[i]['type'],
+        print " name=", layers[i]['name']
+

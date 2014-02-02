@@ -92,6 +92,11 @@ public:
     Cost& getCost();
     Cost& getCost(Cost& cost);
     double getCostValue();
+
+    void scaleEps( float scale );
+    void setDropRate( float dropRate );
+    void resetMom();
+    void enableMCInference( int numSamples );
 };
 
 #endif	/* CONVNET3 */

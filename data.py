@@ -102,7 +102,9 @@ class DataProvider:
         return os.path.join(self.data_dir, 'data_batch_%d' % batchnum)
     
     @classmethod
-    def get_instance(cls, data_dir, batch_range=None, init_epoch=1, init_batchnum=None, type="default", dp_params={}, test=False):
+    def get_instance(cls, data_dir, 
+            img_size, num_colors,  # options i've add to cifar data provider
+            batch_range=None, init_epoch=1, init_batchnum=None, type="default", dp_params={}, test=False):
         # why the fuck can't i reference DataProvider in the original definition?
         #cls.dp_classes['default'] = DataProvider
         type = type or DataProvider.get_batch_meta(data_dir)['dp_type'] # allow data to decide data provider
@@ -114,8 +116,13 @@ class DataProvider:
             dims = int(type.split('-')[-1])
             return _class(dims)
         elif type in dp_types:
-            _class = dp_classes[type]
-            return _class(data_dir, batch_range, init_epoch, init_batchnum, dp_params, test)
+            if img_size == 0:
+                _class = dp_classes[type]
+                return _class(data_dir, batch_range, init_epoch, init_batchnum, dp_params, test)
+            else :
+                _class = dp_classes[type]
+                return _class(data_dir, img_size, num_colors,
+                        batch_range, init_epoch, init_batchnum, dp_params, test)
         
         raise DataProviderException("No such data provider: %s" % type)
     

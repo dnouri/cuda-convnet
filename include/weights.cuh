@@ -184,8 +184,16 @@ public:
         return _epsW;
     }
     
+    void setEps( float epsW ) {
+        _epsW = epsW;
+    }
+    
     float getMom() const {
         return _mom;
+    }
+    
+    void resetMom() {
+       _mom = 0;
     }
     
     float getWC() const {

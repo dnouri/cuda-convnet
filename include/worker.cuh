@@ -97,9 +97,25 @@ class FeatureWorker : public DataWorker {
 protected:
     Matrix* _ftrs;
     int _layerIdx;
+    PASS_TYPE _passType;
 public:
     FeatureWorker(ConvNet& convNet, CPUData& data, Matrix& ftrs, int layerIdx);
     ~FeatureWorker();
+    void run();
+
+    void set_passType( int type );
+};
+
+class MultiviewFeatureWorker : public DataWorker{
+   protected:
+      int _numViews;
+      int _logregIdx;
+      Matrix* _ftrs;
+   public:
+      MultiviewFeatureWorker(ConvNet& convNet, CPUData& data, 
+            Matrix& ftrs, int numViews, int layerIdx );
+      ~MultiviewFeatureWorker();
+
     void run();
 };
 

@@ -799,7 +799,7 @@ __global__ void kCNorm_fewfilter(float* imgs, float* meanDiffs, float* denoms, f
         if (!checkCaseBounds || imgIdx + i * 128 < numImages) {
             #pragma unroll
             for (int f = 0; f < numFilters; f++) {
-                prod[f][i] = 1 + addScale * prod[f][i];
+                prod[f][i] = 2 + addScale * prod[f][i];
                 denoms[f * imgPixels * numImages + i * 128] = prod[f][i];
                 target[f * imgPixels * numImages + i * 128] = imgs[f * imgPixels * numImages + i * 128] * __powf(prod[f][i], -powScale);
             }
@@ -884,7 +884,7 @@ __global__ void kCNorm_manyfilter(float* imgs, float* meanDiffs, float* denoms, 
         if (!checkCaseBounds || imgIdx + i * B_X < numImages) {
             #pragma unroll
             for (int f = 0; f < filtersPerThread; f++) {
-                prod[f][i] = 1 + addScale * prod[f][i];
+                prod[f][i] = 2 + addScale * prod[f][i];
                 denoms[f * B_Y * imgPixels * numImages + i * B_X] = prod[f][i];
                 target[f * B_Y * imgPixels * numImages + i * B_X] = imgs[f * B_Y * imgPixels * numImages + i * B_X] * __powf(prod[f][i], -powScale);
             }
@@ -1008,7 +1008,7 @@ __global__ void kCNorm2(float* imgs, float* meanDiffs, float* denoms, float* tar
             if (!checkCaseBounds || imgIdx + i * B_X < numImages) {
                 #pragma unroll
                 for (int f = 0; f < filtersPerThread; f++) {
-                    prod[f][i] = 1 + addScale * prod[f][i];
+                    prod[f][i] = 2 + addScale * prod[f][i];
                     denoms[f * imgPixels * numImages + i * B_X] = prod[f][i];
                     target[f * imgPixels * numImages + i * B_X] = imgs[f * imgPixels * numImages + i * B_X] * __powf(prod[f][i], -powScale);
                 }
@@ -1081,7 +1081,7 @@ __global__ void kFCNorm(float* imgs, float* meanDiffs, float* denoms, float* tar
     #pragma unroll
     for (int i = 0; i < imgsPerThread; i++) {
         if (!checkCaseBounds || imgIdx + i * B_X < numImages) {
-            prod[i] = 1 + addScale * prod[i];
+            prod[i] = 2 + addScale * prod[i];
             denoms[i * B_X] = prod[i];
             target[i * B_X] = imgs[i * B_X] * __powf(prod[i], -powScale);
         }

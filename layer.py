@@ -795,6 +795,36 @@ class FCLayerParser(WeightLayerParser):
         print "Initialized fully-connected layer '%s', producing %d outputs" % (name, dic['outputs'])
         return dic
 
+class FCDropOutLayerParser( FCLayerParser ):
+    def __init__(self):
+        FCLayerParser.__init__(self)
+    def parse(self, name, mcp, prev_layers, model):
+        dic = FCLayerParser.parse(self, name, mcp, prev_layers, model)
+        dic['rate'] = mcp.safe_get_float( name, 'rate' )
+        assert( dic['rate'] >= 0 and dic['rate'] <= 1 )
+        print "Output Drop rate: ", dic['rate']
+        return dic
+
+class FCDropConnectLayerParser( FCLayerParser ):
+    def __init__(self):
+        FCLayerParser.__init__(self)
+    def parse(self, name, mcp, prev_layers, model):
+        dic = FCLayerParser.parse(self, name, mcp, prev_layers, model)
+        dic['rate'] = mcp.safe_get_float( name, 'rate' )
+        assert( dic['rate'] >= 0 and dic['rate'] <= 1 )
+        print "Connection Drop rate: ", dic['rate']
+        return dic
+
+class FCDropConnectFastLayerParser( FCLayerParser ):
+    def __init__(self):
+        FCLayerParser.__init__(self)
+    def parse(self, name, mcp, prev_layers, model):
+        dic = FCLayerParser.parse(self, name, mcp, prev_layers, model)
+        dic['rate'] = mcp.safe_get_float( name, 'rate' )
+        assert( dic['rate'] >= 0 and dic['rate'] <= 1 )
+        print "Connection Drop rate(fast): ", dic['rate']
+        return dic
+
 class LocalLayerParser(WeightLayerParser):
     def __init__(self):
         WeightLayerParser.__init__(self)
@@ -1118,6 +1148,9 @@ class SumOfSquaresCostParser(CostParser):
 # All the layer parsers
 layer_parsers = {'data': lambda : DataLayerParser(),
                  'fc': lambda : FCLayerParser(),
+                 'fcdropo': lambda : FCDropOutLayerParser(),
+                 'fcdropc': lambda : FCDropConnectLayerParser(),
+                 'fcdropcf': lambda : FCDropConnectFastLayerParser(),
                  'conv': lambda : ConvLayerParser(),
                  'local': lambda : LocalUnsharedLayerParser(),
                  'softmax': lambda : SoftmaxLayerParser(),

@@ -37,6 +37,7 @@
 #include <worker.cuh>
 #include <util.cuh>
 #include <cost.cuh>
+#include "tdata/preprocess.hpp"
 
 #include <pyconvnet.cuh>
 #include <convnet.cuh>
@@ -44,14 +45,22 @@
 using namespace std;
 static ConvNet* model = NULL;
 
-static PyMethodDef _ConvNetMethods[] = {  { "initModel",          initModel,          METH_VARARGS },
-                                              { "startBatch",         startBatch,         METH_VARARGS },
-                                              { "finishBatch",        finishBatch,        METH_VARARGS },
-                                              { "checkGradients",     checkGradients,     METH_VARARGS },
-                                              { "startMultiviewTest", startMultiviewTest, METH_VARARGS },
-                                              { "startFeatureWriter",  startFeatureWriter,         METH_VARARGS },
-                                              { "syncWithHost",       syncWithHost,       METH_VARARGS },
-                                              { NULL, NULL }
+static PyMethodDef _ConvNetMethods[] = {  
+   { "initModel",          initModel,          METH_VARARGS },
+   { "startBatch",         startBatch,         METH_VARARGS },
+   { "finishBatch",        finishBatch,        METH_VARARGS },
+   { "checkGradients",     checkGradients,     METH_VARARGS },
+   { "startMultiviewTest", startMultiviewTest, METH_VARARGS },
+   { "startFeatureWriter",  startFeatureWriter,         METH_VARARGS },
+   { "syncWithHost",       syncWithHost,       METH_VARARGS },
+   // ---- my option ---
+   { "scaleModelEps",       scaleModelEps,       METH_VARARGS },
+   { "resetModelMom",       resetModelMom,       METH_VARARGS },
+   { "setDropRate",       setDropRate,       METH_VARARGS },
+   { "preprocess",         preprocess,         METH_VARARGS },
+   { "startMultiviewFeatureWriter", startMultiviewFeatureWriter, METH_VARARGS },
+   { "enableMCInference", enableMCInference, METH_VARARGS },
+   { NULL, NULL }
 };
 
 #if defined(_WIN64) || defined(_WIN32)
@@ -130,9 +139,10 @@ PyObject* startFeatureWriter(PyObject *self, PyObject *args) {
     assert(model != NULL);
     PyListObject* data;
     int layerIdx;
-    if (!PyArg_ParseTuple(args, "O!i",
+    int pass_type;
+    if (!PyArg_ParseTuple(args, "O!ii",
         &PyList_Type, &data,
-        &layerIdx)) {
+        &layerIdx,&pass_type)) {
         return NULL;
     }
     MatrixV& mvec = *getMatrixV((PyObject*)data);
@@ -140,6 +150,7 @@ PyObject* startFeatureWriter(PyObject *self, PyObject *args) {
     mvec.pop_back();
     
     FeatureWorker* wr = new FeatureWorker(*model, *new CPUData(mvec), ftrs, layerIdx);
+    wr->set_passType( pass_type );
     model->getWorkerQueue().enqueue(wr);
     return Py_BuildValue("i", 0);
 }
@@ -200,6 +211,86 @@ PyObject* syncWithHost(PyObject *self, PyObject *args) {
     assert(res->getResultType() == WorkResult::SYNC_DONE);
     
     delete res;
+    return Py_BuildValue("i", 0);
+}
+
+/**
+ *  scale model learning rate
+ */
+PyObject* scaleModelEps( PyObject *self, PyObject *args) {
+    assert(model != NULL);
+    float scale;
+    if( !PyArg_ParseTuple( args, "f", &scale ) ) 
+        return NULL;
+    model->scaleEps( scale );
+    return Py_BuildValue("i", 0);
+}
+
+/**
+ *  reset model mom 
+ */
+PyObject* resetModelMom( PyObject *self, PyObject *args) {
+    assert(model != NULL);
+    model->resetMom();
+    return Py_BuildValue("i", 0);
+}
+
+/**
+ *  scale model learning rate
+ */
+PyObject* setDropRate( PyObject *self, PyObject *args) {
+    assert(model != NULL);
+    float dropRate;
+    if( !PyArg_ParseTuple( args, "f", &dropRate ) ) 
+        return NULL;
+    model->setDropRate( dropRate );
+    return Py_BuildValue("i", 0);
+}
+
+PyObject* preprocess(PyObject* self, PyObject* args) {
+    float scale, rotate;
+    int w, h, d;
+    PyListObject* data;
+    if( !PyArg_ParseTuple( args, "O!iiiff", 
+                &PyList_Type, &data, 
+                &w, &h, &d,
+                &scale, &rotate) ) {
+        return NULL;
+    }
+
+    MatrixV& mvec = *getMatrixV((PyObject*)data);
+    assert( mvec.size() == 1 );
+    preprocessData( w, h, d, scale, rotate, *mvec[0] );
+
+    return Py_BuildValue("i", 1);
+}
+
+PyObject* startMultiviewFeatureWriter (PyObject *self, PyObject *args) {
+    assert(model != NULL);
+    PyListObject* data;
+    int numViews;
+    int logregIdx;
+    if (!PyArg_ParseTuple(args, "O!ii",
+        &PyList_Type, &data,
+        &numViews,&logregIdx )) {
+        return NULL;
+    }
+    MatrixV& mvec = *getMatrixV((PyObject*)data);
+    Matrix& ftrs = *mvec.back();
+    mvec.pop_back();
+    
+    MultiviewFeatureWorker* wr = new MultiviewFeatureWorker(*model, *new CPUData(mvec), 
+          ftrs, numViews, logregIdx );
+    model->getWorkerQueue().enqueue(wr);
+    return Py_BuildValue("i", 0);
+}
+
+PyObject* enableMCInference( PyObject *self, PyObject *args) {
+    assert(model != NULL);
+    int numSamples;
+    if( !PyArg_ParseTuple( args, "i", &numSamples ) ) 
+        return NULL;
+    model->enableMCInference( numSamples );
     return Py_BuildValue("i", 0);
 }
 

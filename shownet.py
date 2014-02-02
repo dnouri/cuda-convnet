@@ -48,7 +48,13 @@ class ShowConvNet(ConvNet):
         ConvNet.__init__(self, op, load_dic)
     
     def get_gpus(self):
-        self.need_gpu = self.op.get_value('show_preds') or self.op.get_value('write_features')
+        self.need_gpu = ( self.op.get_value('show_preds') or     
+                          self.op.get_value('write_features') or 
+                          self.op.get_value('hist_features') or 
+                          self.op.get_value('nn_analysis') or
+                          self.op.get_value('write_mv_result') or
+                          self.op.get_value('write_mv_mc_result') 
+                          )
         if self.need_gpu:
             ConvNet.get_gpus(self)
     
@@ -66,11 +72,22 @@ class ShowConvNet(ConvNet):
             ConvNet.import_model(self)
             
     def init_model_state(self):
-        #ConvNet.init_model_state(self)
+        ConvNet.init_model_state(self)
         if self.op.get_value('show_preds'):
             self.sotmax_idx = self.get_layer_idx(self.op.get_value('show_preds'), check_type='softmax')
         if self.op.get_value('write_features'):
             self.ftr_layer_idx = self.get_layer_idx(self.op.get_value('write_features'))
+
+        if self.op.get_value('hist_features'):
+            self.ftr_layer_idx = self.get_layer_idx(self.op.get_value('hist_features'))
+
+        if self.op.get_value('nn_analysis'):
+            self.ftr_layer_idx = self.get_layer_idx(self.op.get_value('nn_analysis'))
+
+        if self.op.get_value('write_mv_result'):
+            self.sotmax_idx = self.get_layer_idx('logprob', check_type='cost.logreg')
+        if self.op.get_value('write_mv_mc_result'):
+            self.sotmax_idx = self.get_layer_idx('logprob', check_type='cost.logreg')
             
     def init_model_lib(self):
         if self.need_gpu:
@@ -152,7 +169,7 @@ class ShowConvNet(ConvNet):
             raise ShowNetError("Layer with name '%s' not defined by given convnet." % self.show_filters)
         layer = self.layers[layer_names.index(self.show_filters)]
         filters = layer['weights'][self.input_idx]
-        if layer['type'] == 'fc': # Fully-connected layer
+        if layer['type'] == 'fc' or layer['type'] == 'fcdropo' or layer['type'] == 'fcdropcf': # Fully-connected layer
             num_filters = layer['outputs']
             channels = self.channels
         elif layer['type'] in ('conv', 'local'): # Conv layer
@@ -198,7 +215,7 @@ class ShowConvNet(ConvNet):
         data += [preds]
 
         # Run the model
-        self.libmodel.startFeatureWriter(data, self.sotmax_idx)
+        self.libmodel.startFeatureWriter(data, self.sotmax_idx,1,1)
         self.finish_batch()
         
         fig = pl.figure(3)
@@ -247,7 +264,7 @@ class ShowConvNet(ConvNet):
             batch = next_data[1]
             data = next_data[2]
             ftrs = n.zeros((data[0].shape[1], num_ftrs), dtype=n.single)
-            self.libmodel.startFeatureWriter(data + [ftrs], self.ftr_layer_idx)
+            self.libmodel.startFeatureWriter(data + [ftrs], self.ftr_layer_idx,1)
             
             # load the next batch while the current one is computing
             next_data = self.get_next_batch(train=False)
@@ -259,6 +276,173 @@ class ShowConvNet(ConvNet):
                 break
         pickle(os.path.join(self.feature_path, 'batches.meta'), {'source_model':self.load_file,
                                                                  'num_vis':num_ftrs})
+
+    def do_hist_features(self):
+        train_flag = not self.hist_test
+        next_data = self.get_next_batch(train=train_flag)
+        b1 = next_data[1]
+        num_ftrs = self.layers[self.ftr_layer_idx]['outputs']
+        # allocate sum data
+        out_data = n.zeros((next_data[2][0].shape[1], num_ftrs), dtype=n.single)
+        while True:
+            batch = next_data[1]
+            data = next_data[2]
+            ftrs = n.zeros((data[0].shape[1], num_ftrs), dtype=n.single)
+            self.libmodel.startFeatureWriter(data + [ftrs], self.ftr_layer_idx,1)
+            # load the next batch while the current one is computing
+            next_data = self.get_next_batch(train=train_flag)
+            self.finish_batch()
+            out_data += ftrs
+            if next_data[1] == b1:
+                break
+
+        # plot histogram
+        #import pdb; pdb.set_trace()
+        #print out_data
+
+        fig = pl.figure()
+        # min/max/mean subplot
+        min_value = n.min( out_data, 0 )
+        max_value = n.max( out_data, 0 )
+        mean_value = n.mean( out_data, 0 )
+        x_value = range(num_ftrs)
+        pl.plot( x_value, min_value, 
+                 x_value, max_value, 
+                 x_value, mean_value )
+        pl.xlim( 0, num_ftrs)
+        ply_max = int(n.max(max_value)*1.1)
+        ply_min = int(n.min(min_value) )
+        ply_min = int(ply_min - 0.1*abs(ply_min) ) - 0.5
+        pl.ylim( ply_min, ply_max )
+        pl.title( "Layer: " + str( self.hist_features) + " activations" )
+
+    def do_nn_analysis(self):
+        train_flag = not self.hist_test
+        next_data = self.get_next_batch(train=train_flag)
+        b1 = next_data[1]
+        num_ftrs = self.layers[self.ftr_layer_idx]['outputs']
+        # resize data to only first 128 images
+        data = next_data[2]
+        num_data = 64
+        data[0] = data[0][:,0:num_data]
+        data[1] = data[1][:,0:num_data]
+        #print data[0], data[1]
+        # allocate sum data
+        out_data = []
+        try_times = 5000
+        for i in range(num_data):
+           out_data.append( n.zeros( (try_times, num_ftrs), dtype=n.single) )
+
+        #import pdb; pdb.set_trace()
+        # fille data
+        for i in range(try_times):
+            if i % 100 == 0: 
+                print "\r %d/%d" % (i,try_times),
+                sys.stdout.flush()
+            #batch = next_data[1]
+            #data = next_data[2]
+            ftrs = n.zeros((data[0].shape[1], num_ftrs), dtype=n.single)
+            self.libmodel.startFeatureWriter(data + [ftrs], self.ftr_layer_idx,0)
+            # load the next batch while the current one is computing
+            self.finish_batch()
+            for j in range(num_data):
+               out_data[j][i,:] = ftrs[j,:]
+
+        
+        # analysis out_data code goes here...
+        pl.figure(1)
+        # plot activation min/max/mean
+        pl.subplot(311)
+        data_idx = 0
+        min_value = n.min( out_data[data_idx], 0 )
+        max_value = n.max( out_data[data_idx], 0 )
+        mean_value = n.mean( out_data[data_idx], 0 )
+        x_value = range(num_ftrs)
+        pl.plot( x_value, min_value, 
+                 x_value, max_value, 
+                 x_value, mean_value )
+        pl.xlim( 0, num_ftrs)
+        ply_max = int(n.max(max_value)*1.5)
+        ply_min = int(n.min(min_value) )
+        ply_min = int(ply_min - 0.1*abs(ply_min) ) - 0.5
+        pl.ylim( ply_min, ply_max )
+        pl.title( "Layer: " + str( self.nn_analysis) + " activations (data: " + str(data_idx) + ")" )
+        # plot activation histogram
+        pl.subplot(312)
+        neuron_idx = 0
+        #import pdb; pdb.set_trace()
+        neuron_response = out_data[data_idx][:,neuron_idx]
+        pl.hist( neuron_response, 50 )
+        pl.title( "Neuron " + str(neuron_idx) + " activation hist (data: " + str(data_idx) + ")" )
+
+        pl.subplot(313)
+        neuron_idx = 1
+        #import pdb; pdb.set_trace()
+        neuron_response = out_data[data_idx][:,neuron_idx]
+        pl.hist( neuron_response, 50 )
+        pl.title( "Neuron " + str(neuron_idx) + " activation hist (data: " + str(data_idx) + ")" )
+
+    def do_write_mv_result(self, mcInference = False):
+        num_views = self.test_data_provider.get_num_views() 
+        # enable mcInference if necessary
+        if( mcInference ):
+            numSamples = 1000;
+            self.libmodel.enableMCInference( numSamples );
+        # make sure it is multi-view provider
+        #import pdb; pdb.set_trace()
+        next_data = self.get_next_batch(train=False)
+        b1 = next_data[1]
+        #num_ftrs = self.layers[self.sotmax_idx]['outputs']
+        # cost layer produce no output, thus need check prev-layer
+        num_ftrs = self.layers[self.sotmax_idx]['inputLayers'][1]['outputs']
+        # create result
+        result = {}
+        result['labels'] = []
+        result['preds'] = []
+        # loop over testing batch
+        while True:
+            batch = next_data[1]
+            data = next_data[2]
+            num_cases = data[0].shape[1]/num_views
+            ftrs = n.zeros((num_cases, num_ftrs), dtype=n.single)
+            self.libmodel.startMultiviewFeatureWriter(data + [ftrs], num_views, self.sotmax_idx )
+            
+            # load the next batch while the current one is computing
+            next_data = self.get_next_batch(train=False)
+            self.finish_batch()
+            # add to result
+            #import pdb; pdb.set_trace()
+            result['labels'].append( data[1][0,0:num_cases] )
+            result['preds'].append( ftrs )
+            if next_data[1] == b1:
+                break
+
+        # compute/print accuracy
+        assert( len(result['labels']) == len(result['preds'] ) )
+        num_batches = len(result['labels'])
+        num_cases = 0
+        num_wrong = 0
+        for ii in range( num_batches ):
+           act_index = result['labels'][ii]
+           num_cases_ii = act_index.shape[0] 
+           #import pdb; pdb.set_trace()
+           assert( num_cases_ii == result['preds'][ii].shape[0] )
+           num_cases += num_cases_ii
+           pred_index = n.argmax( result['preds'][ii], 1 )
+           for jj in range( num_cases_ii ):
+              if pred_index[jj] != act_index[jj]:
+                 num_wrong += 1
+
+        print "Testing Error: %2.4f" % ( 1.0 *num_wrong / num_cases )
+
+        # write predicition feature to file: self.write_mv_result
+        if self.write_mv_result:
+            print "Write result to: ", self.write_mv_result
+            pickle( self.write_mv_result, result )
+        else :
+            print "Write result to: ", self.write_mv_mc_result
+            pickle( self.write_mv_mc_result, result )
+
                 
     def start(self):
         self.op.print_values()
@@ -270,6 +454,15 @@ class ShowConvNet(ConvNet):
             self.plot_predictions()
         if self.write_features:
             self.do_write_features()
+
+        if self.hist_features:
+            self.do_hist_features()
+        if self.nn_analysis:
+            self.do_nn_analysis()
+        if self.write_mv_result:
+            self.do_write_mv_result( )
+        if self.write_mv_mc_result:
+            self.do_write_mv_result( True )
         pl.show()
         sys.exit(0)
             
@@ -290,6 +483,19 @@ class ShowConvNet(ConvNet):
         op.add_option("only-errors", "only_errors", BooleanOptionParser, "Show only mistaken predictions (to be used with --show-preds)", default=False, requires=['show_preds'])
         op.add_option("write-features", "write_features", StringOptionParser, "Write test data features from given layer", default="", requires=['feature-path'])
         op.add_option("feature-path", "feature_path", StringOptionParser, "Write test data features to this path (to be used with --write-features)", default="")
+        
+        #----my options----------
+        op.add_option("hist-features", "hist_features", StringOptionParser, 
+              "plot histogram of feature activation", default="")
+        op.add_option("hist-test", "hist_test", BooleanOptionParser,
+              "True: plot hist of test data, False: plot hist of training data", default=True )
+        op.add_option("nn-analysis", "nn_analysis", StringOptionParser,
+              "run inference on training mode for many times and analysis output", default="")
+        #op.add_option("data-provider", "dp_type", StringOptionParser, "Data provider", default="default")
+        #op.add_option("write-mv-result", "write_mv_result", StringOptionParser, "Write test data multiview features to file", default="", requires=['feature-path'])
+        op.add_option("write-mv-result", "write_mv_result", StringOptionParser, "Write test data multiview features to file", default="" )
+        op.add_option("write-mv-mc-result", "write_mv_mc_result", StringOptionParser, "Write test data multiview features on MC inferenceto file", default="" )
+
         
         op.options['load_file'].default = None
         return op

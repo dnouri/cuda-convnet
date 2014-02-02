@@ -361,6 +361,78 @@ Weights& WeightLayer::getWeights(int idx) {
     return _weights[idx];
 }
 
+void WeightLayer::scaleEps( float scale ) {
+    for( int i = 0; i < _weights.getSize(); i++ ) {
+        Weights& wi = _weights[i];
+        float eps = wi.getEps();
+        eps *= scale;
+        wi.setEps( eps );
+    }
+
+    float eps = _biases->getEps();
+    eps *= scale;
+    _biases->setEps( eps );
+}
+
+void WeightLayer::resetMom() {
+   for( int i = 0; i < _weights.getSize(); i++ ) {
+      Weights& wi = _weights[i];
+      wi.resetMom();
+   }
+   _biases->resetMom();
+}
+/* 
+ * =======================
+ * DataVisualizeLayer
+ * =======================
+ */
+DataVisualizeLayer::DataVisualizeLayer(ConvNet* convNet, PyObject* paramsDict) : 
+    WeightLayer(convNet, paramsDict, false, false) 
+{
+    _wStep = 0.1;
+    _bStep = 0.01;
+}
+
+void DataVisualizeLayer::fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType) {
+    throw string( "call fprop without params, this is input layer" );
+}
+
+void DataVisualizeLayer::fprop(PASS_TYPE passType) {
+    // pre-condition check
+    assert( _weights.getSize() == 1 );
+    // copy params to output 
+    getActs().add( *_weights[0] );
+    fpropNext( passType );
+    // no-bias term here, because weights[0] represent input images
+}
+
+void DataVisualizeLayer::fprop(NVMatrixV& data, PASS_TYPE passType) {
+    throw string( "call fprop without params, this is input layer" );
+}
+
+void DataVisualizeLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, 
+        PASS_TYPE passType) {
+    // do nothing for bprop acts because this must be the first layer
+    throw string(" bprop acts is no-define on DataViaulaizeLayer" );
+}
+
+void DataVisualizeLayer::bpropBiases(NVMatrix& v, PASS_TYPE passType) {
+    // do nothing for bias update because no biase is need here
+}
+
+void DataVisualizeLayer::bpropWeights(NVMatrix& v, int inpIdx, PASS_TYPE passType) {
+    assert( inpIdx == 0 );
+    int numCases = v.getNumRows();
+    float scaleInc = (_weights[inpIdx].getNumUpdates() == 0 && passType != PASS_GC) * _weights[inpIdx].getMom();
+    float scaleGrad = passType == PASS_GC ? 1 : _weights[inpIdx].getEps() / numCases;
+    _weights[inpIdx].getInc().add(v, scaleInc, scaleGrad);
+}
+
+bool DataVisualizeLayer::isGradProducer() {
+    return false;
+}
+
+
 /* 
  * =======================
  * FCLayer
@@ -400,6 +472,484 @@ void FCLayer::bpropWeights(NVMatrix& v, int inpIdx, PASS_TYPE passType) {
     _weights[inpIdx].getInc().addProduct(prevActs_T, v, scaleInc, scaleGrad);
     
     delete &prevActs_T;
+}
+
+/* 
+ * =======================
+ * FCLDropOutLayer
+ * =======================
+ */
+FCDropLayer::FCDropLayer( ConvNet* convNet, PyObject* paramsDict) : FCLayer( 
+        convNet, paramsDict ) {
+    _dropRate = pyDictGetFloat( paramsDict, "rate" );
+    _maxDropRate = _dropRate;
+}
+
+void FCDropLayer::set_dropRate( float dropRate ) {
+   if( dropRate <= _maxDropRate ){
+      _dropRate = dropRate;
+      cout << "name: " << _name << " "; 
+      cout << "type: " << _type << " ";
+      cout << "set drop rate: " << dropRate << endl;
+   }
+}
+
+
+/* 
+ * =======================
+ * FCLDropOutLayer
+ * =======================
+ */
+FCDropOutLayer::FCDropOutLayer(ConvNet* convNet, PyObject* paramsDict) : FCDropLayer( 
+        convNet, paramsDict ) {
+}
+
+void FCDropOutLayer::fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType) {
+    FCLayer::fpropActs( inpIdx, scaleTargets, passType );
+    // generate/apply mask
+    if( passType == PASS_TEST ) {
+        // test case, multiple neuron by dropout rate
+        getActs().scale( 1.0f - _dropRate );
+        //getActs().scale( 0.5 );
+    }
+    else if( passType == PASS_GC ){
+        // non test case, drop out with a fixed rate
+        // fix mask for debugging
+        if( _mask.getNumRows() == 0 || _mask.getNumCols() == 0 ){
+            _mask.resize( getActs() );
+            _mask.randomizeUniform();
+            _mask.biggerThanScalar( _dropRate );
+        }
+        getActs().eltwiseMult( _mask );
+    }
+    else{ 
+        _mask.resize( getActs() );
+        _mask.randomizeUniform();
+        _mask.biggerThanScalar( _dropRate );
+        getActs().eltwiseMult( _mask );
+    }
+
+}
+
+void FCDropOutLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType) {
+    v.eltwiseMult( _mask );
+    FCLayer::bpropActs( v, inpIdx, scaleTargets, passType );
+}
+void FCDropOutLayer::bpropBiases(NVMatrix& v, PASS_TYPE passType) {
+    v.eltwiseMult( _mask );
+    FCLayer::bpropBiases( v, passType );
+}
+
+void FCDropOutLayer::bpropWeights(NVMatrix& v, int inpIdx, PASS_TYPE passType) {
+    v.eltwiseMult( _mask );
+    //NVMatrix v2( v );
+    //v.eltwiseMult( _mask, v2 );
+    FCLayer::bpropWeights( v, inpIdx, passType );
+}
+
+//--------------------------------------------------
+// old implementation: approximate drop connection
+// modify date: Dec28-2012
+//--------------------------------------------------
+/* 
+ * =======================
+ * FCLDropConnectApproxLayer
+ * =======================
+ */
+FCDropConnectApproxLayer::FCDropConnectApproxLayer(
+      ConvNet* convNet, PyObject* paramsDict) : FCDropLayer( 
+        convNet, paramsDict ) {
+}
+
+void FCDropConnectApproxLayer::fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType) {
+   assert( inpIdx == 0 );
+   _weights[0].getW().copy( _maskWeight );
+   _biases->getW().copy( _maskBias );
+   // generate _mask matrix
+   if( passType == PASS_TEST ) {
+      // test case, scale test weight
+      _maskWeight.scale( 1.0f - _dropRate );
+      _maskBias.scale( 1.0f - _dropRate );
+   }
+   else if( passType == PASS_GC ){
+      // fix mask for debugging
+      // weights mask
+      if( _mask.getNumRows() == 0 || _mask.getNumCols() == 0 ){
+         _mask.resize( _maskWeight );
+         _mask.randomizeUniform();
+         _mask.biggerThanScalar( _dropRate );
+      }
+      _maskWeight.eltwiseMult( _mask );
+      // bias mask
+      if( _mask2.getNumRows() == 0 || _mask2.getNumCols() == 0 ) {
+          _mask2.resize( _maskBias );
+          _mask2.randomizeUniform();
+          _mask2.biggerThanScalar( _dropRate );
+      }
+      _maskBias.eltwiseMult( _mask2 );
+   }
+   else{ 
+       // weights mask
+      _mask.resize( _maskWeight );
+      _mask.randomizeUniform();
+      _mask.biggerThanScalar( _dropRate );
+      _maskWeight.eltwiseMult( _mask );
+      // bias mask
+      _mask2.resize( _maskBias );
+      _mask2.randomizeUniform();
+      _mask2.biggerThanScalar( _dropRate );
+      _maskBias.eltwiseMult( _mask2 );
+   }
+
+   // compute outputs
+   getActs().addProduct(*_inputs[inpIdx], _maskWeight, scaleTargets, 1);
+   if (scaleTargets == 0) {
+      //getActs().addVector(_biases->getW());
+      getActs().addVector( _maskBias );
+   }
+}
+
+void FCDropConnectApproxLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, 
+      PASS_TYPE passType) {
+
+    NVMatrix& weights_T = _maskWeight.getTranspose();
+    _prev[inpIdx]->getActsGrad().addProduct(v, weights_T, scaleTargets, 1);
+    delete &weights_T;
+}
+
+void FCDropConnectApproxLayer::bpropBiases(NVMatrix& v, PASS_TYPE passType) {
+   //FCDropLayer::bpropBiases( v, passType );
+   int numCases = v.getNumRows();
+   float scaleBGrad = passType == PASS_GC ? 1 : _biases->getEps() / numCases;
+   _biases->getGrad().addSum(v, 0, 0, scaleBGrad);
+
+   // mask out invlaid update
+   _biases->getGrad().eltwiseMult( _mask2 );
+}
+
+void FCDropConnectApproxLayer::bpropWeights(NVMatrix& v, int inpIdx, PASS_TYPE passType) {
+    int numCases = v.getNumRows();
+
+    NVMatrix& prevActs_T = _prev[inpIdx]->getActs().getTranspose();
+    float scaleInc = (_weights[inpIdx].getNumUpdates() == 0 && passType != PASS_GC) * _weights[inpIdx].getMom();
+    float scaleGrad = passType == PASS_GC ? 1 : _weights[inpIdx].getEps() / numCases;
+    
+    _weights[inpIdx].getInc().addProduct(prevActs_T, v, scaleInc, scaleGrad);
+
+    // mask out invalid update
+    _weights[inpIdx].getInc().eltwiseMult( _mask );
+    
+    delete &prevActs_T;
+}
+
+/* 
+ * =======================
+ * FCLDropConnectLayer
+ * =======================
+ */
+FCDropConnectLayer::FCDropConnectLayer(ConvNet* convNet, PyObject* paramsDict) : FCDropLayer( 
+        convNet, paramsDict ) {
+}
+
+void FCDropConnectLayer::mallocRandomMask( int m, int n, int d, PASS_TYPE passType ) {
+   assert( passType == PASS_GC || passType == PASS_TRAIN );
+   NVMatrix& _maskWeights = _mask;  // alians for _mask
+   if( passType == PASS_GC ){
+      // fix mask for debugging
+      // weights mask
+      if( _maskWeights.getNumRows() == 0 || _maskWeights.getNumCols() == 0 ){
+         _maskWeights.setTrans( true ); // col major matrix
+         _maskWeights.resize( n, m*d );
+         _maskWeights.randomizeUniform();
+         _maskWeights.biggerThanScalar( _dropRate );
+      }
+      // bias mask
+      if( _maskBiases.getNumRows() == 0 || _maskBiases.getNumCols() == 0 ) {
+         _maskBiases.setTrans( true ); // row major matrix
+         _maskBiases.resize( d, m );
+         _maskBiases.randomizeUniform();
+         _maskBiases.biggerThanScalar( _dropRate );
+      }
+   }
+   else { // passType == PASS_TRAIN
+      // int prev_d = _maskWeights.getNumCols()/m; // num of col = m*d for maskWeight
+      // TODO: provide optimization when prev_d > d, no need to alloc again
+      _maskWeights.setTrans( true ); // col major matrix
+      _maskWeights.resize( n, m*d );
+      _maskWeights.randomizeUniform();
+      _maskWeights.biggerThanScalar( _dropRate );
+
+      _maskBiases.setTrans( true ); // row major matrix
+      _maskBiases.resize( d, m );
+      _maskBiases.randomizeUniform();
+      _maskBiases.biggerThanScalar( _dropRate );
+   }
+}
+
+void FCDropConnectLayer::fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType) {
+   // current implementation only has one input layer before this
+   assert( inpIdx == 0 ); 
+   NVMatrix& w = _weights[0].getW();
+   NVMatrix& b = _biases->getW();
+   NVMatrix& x = *_inputs[inpIdx];
+   NVMatrix& y = getActs();
+   int m = w.getNumCols();  // output dimension
+   int n = x.getNumCols();  // input dimension
+   int d = x.getNumRows();  // number of data in this bacth
+   assert( n == w.getNumRows() );
+   assert( m == b.getNumCols() );
+
+   // easy form for inference: only take mean of connection
+   if( passType == PASS_TEST ) {
+      NVMatrix tempMaskWeights;
+      NVMatrix tempMaskBiases;
+      _weights[0].getW().copy( tempMaskWeights );
+      _biases->getW().copy( tempMaskBiases );
+      // test case, scale test weight
+      tempMaskWeights.scale( 1.0f - _dropRate );
+      tempMaskBiases.scale( 1.0f - _dropRate );
+      // compute outputs
+      getActs().addProduct( x, tempMaskWeights, scaleTargets, 1);
+      if (scaleTargets == 0) {
+         //getActs().addVector(_biases->getW());
+         getActs().addVector( tempMaskBiases );
+      }
+      return;
+   }
+   mallocRandomMask( m, n, d, passType );
+   NVMatrix& _maskWeights = _mask;  // alians for _mask
+   y.resize( d, m );
+   y.setTrans( true );
+   y.apply( NVMatrixOps::Zero() );
+   computeFCDropC_fprop( x, w, b, _maskWeights, _maskBiases, y );
+}
+
+void FCDropConnectLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, 
+      PASS_TYPE passType) {
+    //NVMatrix& weights_T = _maskWeight.getTranspose();
+    //_prev[inpIdx]->getActsGrad().addProduct(v, weights_T, scaleTargets, 1);
+    //delete &weights_T;
+   assert( inpIdx == 0);
+   NVMatrix& w = _weights[0].getW();
+   int m = w.getNumCols();  // output dimension
+   int n = w.getNumRows();
+   int d = v.getNumRows();
+   NVMatrix& da = _prev[inpIdx]->getActsGrad();
+   NVMatrix& _maskWeights = _mask;  // alians for _mask
+   da.resize( d, n );
+   da.setTrans( true );
+   da.apply( NVMatrixOps::Zero() );
+   computeFCDropC_bpropActs( v, w, 1 , _maskWeights, da, scaleTargets );
+}
+
+void FCDropConnectLayer::bpropBiases(NVMatrix& v, PASS_TYPE passType) {
+   int numCases = v.getNumRows();
+   float scaleBGrad = passType == PASS_GC ? 1 : _biases->getEps() / numCases;
+   NVMatrix p;
+   v.eltwiseMult( _maskBiases, p );
+   _biases->getGrad().addSum(p, 0, 0, scaleBGrad);
+}
+
+void FCDropConnectLayer::bpropWeights(NVMatrix& v, int inpIdx, PASS_TYPE passType) {
+    int numCases = v.getNumRows();
+    float scaleInc = (_weights[inpIdx].getNumUpdates() == 0 && passType != PASS_GC) * _weights[inpIdx].getMom();
+    float scaleGrad = passType == PASS_GC ? 1 : _weights[inpIdx].getEps() / numCases;
+    
+    //NVMatrix& prevActs_T = _prev[inpIdx]->getActs().getTranspose();
+    //_weights[inpIdx].getInc().addProduct(prevActs_T, v, scaleInc, scaleGrad);
+
+    //// mask out invalid update
+    //_weights[inpIdx].getInc().eltwiseMult( _mask );
+    //
+    //delete &prevActs_T;
+    NVMatrix& a = _prev[inpIdx]->getActs();
+    NVMatrix& dw = _weights[inpIdx].getInc();
+    NVMatrix& _maskWeights = _mask;  // alians for _mask
+    computeFCDropC_bpropWeights(
+          a, v, scaleGrad, _maskWeights,
+          dw, scaleInc );
+}
+
+/* 
+ * =======================
+ * FCLDropConnectBitLayer
+ * =======================
+ */
+FCDropConnectBitLayer::FCDropConnectBitLayer(ConvNet* convNet, PyObject* paramsDict) : 
+   FCDropLayer( convNet, paramsDict ), _mcInference(false), _numSamples(0) {
+       _maskWeights.set_onProb( 1 - _dropRate );
+}
+
+void FCDropConnectBitLayer::set_dropRate( float dropRate ) {
+    FCDropLayer::set_dropRate( dropRate );
+    // MaskWeights  use onProb rather than off Prob
+   if( dropRate <= _maxDropRate ){
+        _maskWeights.set_onProb( 1 - dropRate );
+   }
+
+
+}
+
+void FCDropConnectBitLayer::enableMCInference( int numSamples ) {
+    _mcInference = true;
+    assert( numSamples > 0 );
+    _numSamples = numSamples;
+}
+
+void FCDropConnectBitLayer::mallocRandomMask( int m, int n, int d, PASS_TYPE passType ) {
+   assert( passType == PASS_GC || passType == PASS_TRAIN );
+   if( passType == PASS_GC ){
+      // fix mask for debugging
+      // weights mask
+      if( _maskWeights.get_width() == 0 || _maskWeights.get_height() == 0 ) {
+         _maskWeights.resize( m, n, d );
+         _maskWeights.randomize();
+      }
+      // bias mask
+      if( _maskBiases.getNumRows() == 0 || _maskBiases.getNumCols() == 0 ) {
+         _maskBiases.setTrans( true ); // row major matrix
+         _maskBiases.resize( d, m );
+         _maskBiases.randomizeUniform();
+         _maskBiases.biggerThanScalar( _dropRate );
+      }
+   }
+   else { // passType == PASS_TRAIN
+      _maskWeights.resize( m, n, d );
+      _maskWeights.randomize();
+
+      _maskBiases.setTrans( true ); // row major matrix
+      _maskBiases.resize( d, m );
+      _maskBiases.randomizeUniform();
+      _maskBiases.biggerThanScalar( _dropRate );
+   }
+}
+
+void FCDropConnectBitLayer::inference( int inpIdx, float scaleTargets) {
+    // get dimenison info
+    assert( inpIdx == 0 ); 
+    NVMatrix& w = _weights[0].getW();
+    NVMatrix& b = _biases->getW();
+    NVMatrix& x = *_inputs[inpIdx];
+    NVMatrix& y = getActs();
+    int m = w.getNumCols();  // output dimension
+    int n = x.getNumCols();  // input dimension
+    int d = x.getNumRows();  // number of data in this bacth
+    float p = 1.0f - _dropRate;
+    assert( n == w.getNumRows() );
+    assert( m == b.getNumCols() );
+    assert( scaleTargets == 0 );
+    // inference
+    if( _mcInference ) {
+        NVMatrix mu( d, n, true );
+        NVMatrix var( d, n, true );
+        // compute mean
+        mu.addProduct( x, w, 0, 1 );
+        mu.addVector( b );
+        mu.scale( p );
+        // compute var
+        NVMatrix w2;
+        w.copy(w2);
+        w2.eltwiseMult( w );
+
+        NVMatrix x2;
+        x.copy(x2);
+        x2.eltwiseMult( x );
+        var.addProduct( x2, w2, 0, p*(1-p) );
+        // init y
+        y.resize( d, m );
+        y.setTrans( true );
+        y.apply( NVMatrixOps::Zero() );
+        // call inference kernel
+        computeFCDropC_bit_inference( mu, var, _numSamples, y );
+    }
+    else { // E[F(x)] = F(E[X])
+        // get weights and biases
+        NVMatrix tempMaskWeights;
+        NVMatrix tempMaskBiases;
+        _weights[0].getW().copy( tempMaskWeights );
+        _biases->getW().copy( tempMaskBiases );
+        // test case, scale test weight
+        tempMaskWeights.scale( 1.0f - _dropRate );
+        tempMaskBiases.scale( 1.0f - _dropRate );
+        // compute outputs
+        getActs().addProduct( x, tempMaskWeights, scaleTargets, 1);
+        if (scaleTargets == 0) {
+            //getActs().addVector(_biases->getW());
+            getActs().addVector( tempMaskBiases );
+        }
+    }
+}
+
+void FCDropConnectBitLayer::fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType) {
+   // current implementation only has one input layer before this
+   assert( inpIdx == 0 ); 
+   NVMatrix& w = _weights[0].getW();
+   NVMatrix& b = _biases->getW();
+   NVMatrix& x = *_inputs[inpIdx];
+   NVMatrix& y = getActs();
+   int m = w.getNumCols();  // output dimension
+   int n = x.getNumCols();  // input dimension
+   int d = x.getNumRows();  // number of data in this bacth
+   assert( n == w.getNumRows() );
+   assert( m == b.getNumCols() );
+
+   // easy form for inference: only take mean of connection
+   if( passType == PASS_TEST ) {
+       inference( inpIdx, scaleTargets );
+       return;
+   }
+   mallocRandomMask( m, n, d, passType );
+   //NVMatrix& _maskWeights = _mask;  // alians for _mask
+   y.resize( d, m );
+   y.setTrans( true );
+   y.apply( NVMatrixOps::Zero() );
+   computeFCDropC_bit_fprop( x, w, b, _maskWeights, _maskBiases, y );
+}
+
+void FCDropConnectBitLayer::bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, 
+      PASS_TYPE passType) {
+    //NVMatrix& weights_T = _maskWeight.getTranspose();
+    //_prev[inpIdx]->getActsGrad().addProduct(v, weights_T, scaleTargets, 1);
+    //delete &weights_T;
+   assert( inpIdx == 0);
+   NVMatrix& w = _weights[0].getW();
+   int m = w.getNumCols();  // output dimension
+   int n = w.getNumRows();
+   int d = v.getNumRows();
+   NVMatrix& da = _prev[inpIdx]->getActsGrad();
+   //NVMatrix& _maskWeights = _mask;  // alians for _mask
+   da.resize( d, n );
+   da.setTrans( true );
+   da.apply( NVMatrixOps::Zero() );
+   computeFCDropC_bit_bpropActs( v, w, 1 , _maskWeights, da, scaleTargets );
+}
+
+void FCDropConnectBitLayer::bpropBiases(NVMatrix& v, PASS_TYPE passType) {
+   int numCases = v.getNumRows();
+   float scaleBGrad = passType == PASS_GC ? 1 : _biases->getEps() / numCases;
+   NVMatrix p;
+   v.eltwiseMult( _maskBiases, p );
+   _biases->getGrad().addSum(p, 0, 0, scaleBGrad);
+}
+
+void FCDropConnectBitLayer::bpropWeights(NVMatrix& v, int inpIdx, PASS_TYPE passType) {
+    int numCases = v.getNumRows();
+    float scaleInc = (_weights[inpIdx].getNumUpdates() == 0 && passType != PASS_GC) * _weights[inpIdx].getMom();
+    float scaleGrad = passType == PASS_GC ? 1 : _weights[inpIdx].getEps() / numCases;
+    
+    //NVMatrix& prevActs_T = _prev[inpIdx]->getActs().getTranspose();
+    //_weights[inpIdx].getInc().addProduct(prevActs_T, v, scaleInc, scaleGrad);
+
+    //// mask out invalid update
+    //_weights[inpIdx].getInc().eltwiseMult( _mask );
+    //
+    //delete &prevActs_T;
+    NVMatrix& a = _prev[inpIdx]->getActs();
+    NVMatrix& dw = _weights[inpIdx].getInc();
+    //NVMatrix& _maskWeights = _mask;  // alians for _mask
+    computeFCDropC_bit_bpropWeights(
+          a, v, scaleGrad, _maskWeights,
+          dw, scaleInc );
 }
 
 /* 

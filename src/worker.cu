@@ -179,7 +179,7 @@ void MultiviewTestWorker::run() {
  * ====================
  */
 FeatureWorker::FeatureWorker(ConvNet& convNet, CPUData& data, Matrix& ftrs, int layerIdx)
-    : DataWorker(convNet, data), _ftrs(&ftrs), _layerIdx(layerIdx) {
+    : DataWorker(convNet, data), _ftrs(&ftrs), _layerIdx(layerIdx), _passType(PASS_TEST) {
     assert(ftrs.getNumRows() == data.getNumCases());
     assert(!ftrs.isTrans());
 }
@@ -188,12 +188,20 @@ FeatureWorker::~FeatureWorker() {
     delete _ftrs;
 }
 
+void FeatureWorker::set_passType( int type ) {
+   if( type == 0 )
+      _passType = PASS_TRAIN;
+   else
+      _passType = PASS_TEST;
+}
+
 void FeatureWorker::run() {
     _dp->setData(*_data);
     Layer& ftrLayer = _convNet->getLayer(_layerIdx);
     Cost& batchCost = *new Cost(0);
     for (int i = 0; i < _dp->getNumMinibatches(); i++) {
-        _convNet->fprop(i, PASS_TEST);
+        //_convNet->fprop(i, PASS_TEST);
+        _convNet->fprop(i, _passType );
         _convNet->getCost(batchCost);
         Matrix& miniFtrs = _ftrs->sliceRows(i * _dp->getMinibatchSize(),
                                             min(_dp->getNumCases(), (i + 1) * _dp->getMinibatchSize()));
@@ -212,3 +220,66 @@ void FeatureWorker::run() {
     cudaThreadSynchronize();
     _convNet->getResultQueue().enqueue(new WorkResult(WorkResult::BATCH_DONE, batchCost));
 }
+
+/* 
+ * ======================
+ * MultiviewFeatureWorker
+ * ======================
+ */
+MultiviewFeatureWorker::MultiviewFeatureWorker( 
+      ConvNet& convNet, CPUData& data, 
+      Matrix& ftrs, int numViews, int logregIdx ) : 
+   DataWorker( convNet, data ), 
+   _ftrs(&ftrs),  _numViews( numViews ), _logregIdx( logregIdx ) 
+{
+    assert(_data->getNumCases() % _numViews == 0);
+}
+
+MultiviewFeatureWorker::~MultiviewFeatureWorker() {
+    delete _ftrs;
+}
+
+void MultiviewFeatureWorker::run() {
+   _dp->setData(*_data);
+   Layer& logregLayer = _convNet->getLayer(_logregIdx);
+
+   int numCasesReal = _dp->getNumCases() / _numViews;
+   int numMiniReal = DIVUP(numCasesReal, _dp->getMinibatchSize());
+
+   Cost& batchCost = *new Cost(0);
+   for (int i = 0; i < numMiniReal; i++) {
+      // get softmax acts
+      NVMatrix softmaxActs;
+      for (int v = 0; v < _numViews; v++) {
+         GPUData& mini = _dp->getDataSlice(v * numCasesReal + i * _dp->getMinibatchSize(),
+               min((v + 1) * numCasesReal, v * numCasesReal + (i + 1) * _dp->getMinibatchSize()));
+         _convNet->fprop(mini, PASS_TEST);
+         if (v == 0) {
+            logregLayer.getPrev()[1]->getActs().copy(softmaxActs);
+         } else {
+            softmaxActs.add(logregLayer.getPrev()[1]->getActs());
+         }
+      }
+      softmaxActs.scale(1.0 / _numViews);
+      // transpose softmaxActs if necessary
+      NVMatrix acts_T;
+      NVMatrix& acts = softmaxActs;
+      if (acts.isTrans()) {
+         NVMatrix& soft_T = acts.getTranspose();
+         soft_T.transpose(acts_T);
+         delete &soft_T;
+      } else {
+         acts.transpose(acts_T);
+      }
+
+      // copy to ftrs slice
+      Matrix& miniFtrs = _ftrs->sliceRows(i * _dp->getMinibatchSize(),
+            min(numCasesReal, (i + 1) * _dp->getMinibatchSize()));
+      acts_T.copyToHost( miniFtrs );
+      delete &miniFtrs;
+   }
+   cudaThreadSynchronize();
+
+   _convNet->getResultQueue().enqueue(new WorkResult(WorkResult::BATCH_DONE, batchCost));
+}
+                  

@@ -38,6 +38,8 @@
 #include "weights.cuh"
 #include "neuron.cuh"
 
+#include "dropc/dropc_bit_dev.hpp"
+
 class Cost;
 class ConvNet;
 class CostLayer;
@@ -137,16 +139,130 @@ public:
     virtual void copyToGPU();
     void checkGradients();
     Weights& getWeights(int idx);
+
+public:
+    void scaleEps( float scale );
+    void resetMom();
 };
 
+class DataVisualizeLayer : public WeightLayer {
+protected:
+    virtual void fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType);
+    virtual void bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType);
+    virtual void bpropBiases(NVMatrix& v, PASS_TYPE passType);
+    virtual void bpropWeights(NVMatrix& v, int inpIdx, PASS_TYPE passType);
+public:
+    DataVisualizeLayer(ConvNet* convNet, PyObject* paramsDict);
+
+    void fprop( PASS_TYPE passType );
+    void fprop(NVMatrixV& data, PASS_TYPE passType);
+    bool isGradProducer();
+};
+
+
+//class FCLayer : public WeightLayer {
+//protected:
+//    void fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType);
+//    void bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType);
+//    void bpropBiases(NVMatrix& v, PASS_TYPE passType);
+//    void bpropWeights(NVMatrix& v, int inpIdx, PASS_TYPE passType);
+//public:
+//    FCLayer(ConvNet* convNet, PyObject* paramsDict);
+//};
+
 class FCLayer : public WeightLayer {
+protected:
+    virtual void fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType);
+    virtual void bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType);
+    virtual void bpropBiases(NVMatrix& v, PASS_TYPE passType);
+    virtual void bpropWeights(NVMatrix& v, int inpIdx, PASS_TYPE passType);
+public:
+    FCLayer(ConvNet* convNet, PyObject* paramsDict);
+};
+
+
+class FCDropLayer : public FCLayer {
+protected:
+    float _maxDropRate;
+    float _dropRate;
+public:
+    float dropRate() const {
+        return _dropRate;
+    }
+    
+    virtual void set_dropRate( float dropRate ); 
+public:
+    FCDropLayer(ConvNet* convNet, PyObject* paramsDict);
+};
+
+class FCDropOutLayer : public FCDropLayer {
+protected:
+    void fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType);
+    void bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType);
+    void bpropBiases(NVMatrix& v, PASS_TYPE passType);
+    void bpropWeights(NVMatrix& v, int inpIdx, PASS_TYPE passType);
+    NVMatrix _mask;
+public:
+    FCDropOutLayer(ConvNet* convNet, PyObject* paramsDict);
+};
+
+//--------------------------------------------------
+// old implementation: approximate drop connection
+// modify date: Dec28-2012
+//--------------------------------------------------
+class FCDropConnectApproxLayer : public FCDropLayer {
+protected:
+    NVMatrix _maskWeight; // masked weights
+    NVMatrix _maskBias;   // masked bias
+    NVMatrix _mask2;      // rand mask for bias
+    NVMatrix _mask;
 protected:
     void fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType);
     void bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType);
     void bpropBiases(NVMatrix& v, PASS_TYPE passType);
     void bpropWeights(NVMatrix& v, int inpIdx, PASS_TYPE passType);
 public:
-    FCLayer(ConvNet* convNet, PyObject* paramsDict);
+    FCDropConnectApproxLayer(ConvNet* convNet, PyObject* paramsDict);
+};
+
+class FCDropConnectLayer : public FCDropLayer {
+protected:
+    NVMatrix _maskBiases;   // bias mask for each data  : d x m col major matrix
+    NVMatrix _mask;         // maskWeights: _mask for each data: n x (mxd) col major matrix
+protected:
+    void fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType);
+    void bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType);
+    void bpropBiases(NVMatrix& v, PASS_TYPE passType);
+    void bpropWeights(NVMatrix& v, int inpIdx, PASS_TYPE passType);
+public:
+    FCDropConnectLayer(ConvNet* convNet, PyObject* paramsDict);
+
+private:
+    // allocate _mask and _maskBiases
+    void mallocRandomMask( int outDim, int inDim, int numData, PASS_TYPE passType );
+};
+
+class FCDropConnectBitLayer : public FCDropLayer {
+protected:
+    NVMatrix _maskBiases;   // bias mask for each data  : d x m col major matrix
+    MaskWeights _maskWeights;        // mask weight object
+protected:
+    void fpropActs(int inpIdx, float scaleTargets, PASS_TYPE passType);
+    void bpropActs(NVMatrix& v, int inpIdx, float scaleTargets, PASS_TYPE passType);
+    void bpropBiases(NVMatrix& v, PASS_TYPE passType);
+    void bpropWeights(NVMatrix& v, int inpIdx, PASS_TYPE passType);
+public:
+    FCDropConnectBitLayer(ConvNet* convNet, PyObject* paramsDict);
+    void enableMCInference( int numSamples ); 
+    void set_dropRate( float dropRate );
+
+private:
+    // allocate _mask and _maskBiases
+    void mallocRandomMask( int outDim, int inDim, int numData, PASS_TYPE passType );
+    // inference
+    bool _mcInference;
+    int _numSamples;
+    void inference( int inpIdx, float scaleTargets); 
 };
 
 class SoftmaxLayer : public Layer {
