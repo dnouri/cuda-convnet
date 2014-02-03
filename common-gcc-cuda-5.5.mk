@@ -50,7 +50,7 @@ ROOTDIR    ?= $(CUDA_SDK_PATH)
 ROOTBINDIR ?= bin
 BINDIR     ?= $(ROOTBINDIR)/$(OSLOWER)
 ROOTOBJDIR ?= obj
-LIBDIR     := $(ROOTDIR)/lib
+LIBDIR     := $(ROOTDIR)/lib64
 COMMONDIR  := $(ROOTDIR)/samples/common
 SHAREDDIR  := $(ROOTDIR)
 
@@ -148,7 +148,7 @@ LINK      += $(LINKFLAGS) $(CXX_ARCH_FLAGS)
 
 # This option for Mac allows CUDA applications to work without requiring to set DYLD_LIBRARY_PATH
 ifneq ($(DARWIN),)
-   LINK += -Xlinker -rpath $(CUDA_INSTALL_PATH)/lib
+   LINK += -Xlinker -rpath $(CUDA_INSTALL_PATH)/lib64
 endif
 
 # Common flags
