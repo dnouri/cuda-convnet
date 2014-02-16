@@ -5,6 +5,8 @@ find_package (CUDA REQUIRED)
 find_package (BLAS REQUIRED)
 find_package (PythonLibs)
 
+set (BUILD_SHARED_LIBS ON)
+
 LIST(APPEND CUDA_NVCC_FLAGS -ccbin /usr/bin/clang)
 SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libstdc++")
 SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -stdlib=libstdc++")
