@@ -30,7 +30,7 @@
 #define _QUOTEME(x) #x
 #define QUOTEME(x) _QUOTEME(x)
 
-extern "C" void INITNAME();
+extern "C" PyMODINIT_FUNC initconvnet();
 
 PyObject* initModel(PyObject *self, PyObject *args);
 PyObject* startBatch(PyObject *self, PyObject *args);
