@@ -43,7 +43,7 @@ class ConvNet(IGPUModel):
         IGPUModel.__init__(self, "ConvNet", op, load_dic, filename_options, dp_params=dp_params)
 
     def import_model(self):
-        lib_name = "pyconvnet" if is_windows_machine() else "_ConvNet"
+        lib_name = "convnet"
         print "========================="
         print "Importing %s C++ module" % lib_name
         self.libmodel = __import__(lib_name)
