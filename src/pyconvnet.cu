@@ -27,8 +27,6 @@
 #include <Python.h>
 #include <arrayobject.h>
 #include <assert.h>
-#include <cutil_inline.h>
-#include <cublas.h>
 #include <time.h>
 #include <vector>
 

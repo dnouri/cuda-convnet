@@ -15,8 +15,6 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <fstream>
-#include <string>
 
 #if defined(WIN32) || defined(_WIN32) || defined(WIN64)
 #ifndef _CRT_SECURE_NO_DEPRECATE

@@ -27,9 +27,11 @@
 #ifndef NEURONS_CUH
 #define	NEURONS_CUH
 
+#include <Python.h>
+
 #include <assert.h>
 #include <string>
-#include <Python.h>
+
 #include <nvmatrix.cuh>
 #include <helper_cuda.h>
 

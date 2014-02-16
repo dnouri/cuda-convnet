@@ -28,10 +28,8 @@
 #define MATRIX_H_
 
 #include <matrix_funcs.h>
-#ifdef NUMPY_INTERFACE
 #include <Python.h>
 #include <arrayobject.h>
-#endif
 #include <limits>
 #include <assert.h>
 #include <stdio.h>
@@ -134,9 +132,7 @@ public:
     };
     Matrix();
     Matrix(long int numRows, long int numCols);
-#ifdef NUMPY_INTERFACE
     Matrix(const PyArrayObject *src);
-#endif
     Matrix(const Matrix &like);
     Matrix(MTYPE* data, long int numRows, long int numCols);
     Matrix(MTYPE* data, long int numRows, long int numCols, bool transpose);

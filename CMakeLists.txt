@@ -19,6 +19,7 @@ include_directories (
   ${BLAS_INCLUDE_DIR}
   ${CUDA_INCLUDE_DIRS}
   ${PYTHON_INCLUDE_DIRS}
+  include/numpy
   include/common
   include/nvmatrix
   include/cudaconv2

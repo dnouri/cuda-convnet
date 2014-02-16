@@ -31,9 +31,11 @@
 #include <map>
 #include <string>
 #include <sstream>
-#include <Python.h>
+
 #include <nvmatrix.cuh>
 #include <matrix.h>
+
+#include <Python.h>
 
 /*
  * The types of passes that the convnet supports. Used in the fprop and bprop functions in

@@ -67,7 +67,6 @@ Matrix::Matrix(MTYPE* data, long int numRows, long int numCols, bool transpose) 
     _init(data, numRows, numCols, transpose, false);
 }
 
-#ifdef NUMPY_INTERFACE
 Matrix::Matrix(const PyArrayObject *src) {
     this->_data = NULL;
     this->_trans = CblasNoTrans;
@@ -88,7 +87,6 @@ Matrix::Matrix(const PyArrayObject *src) {
         }
     }
 }
-#endif
 Matrix::~Matrix() {
     if(this->_data != NULL && this->_ownsData) {
         delete[] this->_data;
