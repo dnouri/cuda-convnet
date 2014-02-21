@@ -5,17 +5,11 @@ find_package (CUDA REQUIRED)
 find_package (BLAS REQUIRED)
 find_package (PythonLibs)
 
-set (BUILD_SHARED_LIBS ON)
-
 if(APPLE)
 LIST(APPEND CUDA_NVCC_FLAGS -ccbin /usr/bin/clang)
 SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libstdc++")
 SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -stdlib=libstdc++")
 endif(APPLE)
-
-set (CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin)
-set (CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
-set (CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
 
 list(APPEND CUDA_NVCC_FLAGS -gencode arch=compute_30,code=sm_30)
 
@@ -34,7 +28,7 @@ add_subdirectory (src/common)
 add_subdirectory (src/nvmatrix)
 add_subdirectory (src/cudaconv2)
 
-CUDA_ADD_LIBRARY (convnet
+CUDA_ADD_LIBRARY (convnet SHARED
   src/convnet.cu
   src/cost.cu
   src/data.cu
@@ -45,6 +39,12 @@ CUDA_ADD_LIBRARY (convnet
   src/util.cu
   src/weights.cu
   src/worker.cu
+)
+
+set_target_properties (convnet
+  PROPERTIES
+  PREFIX ""
+  SUFFIX ".so"
 )
 
 TARGET_LINK_LIBRARIES (convnet
