@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (c) 2011, Alex Krizhevsky (akrizhevsky@gmail.com)
  * All rights reserved.
  *
@@ -7,7 +7,7 @@
  *
  * - Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * - Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
@@ -54,17 +54,11 @@ static PyMethodDef _ConvNetMethods[] = {  { "initModel",          initModel,    
                                               { NULL, NULL }
 };
 
-#if defined(_WIN64) || defined(_WIN32)
-extern "C" __declspec(dllexport) void initpyconvnet() {
-    (void) Py_InitModule("pyconvnet", _ConvNetMethods);
+PyMODINIT_FUNC
+initconvnet() {
+    (void) Py_InitModule("convnet", _ConvNetMethods);
     import_array();
 }
-#else
-void INITNAME() {
-    (void) Py_InitModule(QUOTEME(MODELNAME), _ConvNetMethods);
-    import_array();
-}
-#endif
 
 PyObject* initModel(PyObject *self, PyObject *args) {
     assert(model == NULL);
@@ -100,7 +94,7 @@ PyObject* startBatch(PyObject *self, PyObject *args) {
         return NULL;
     }
     MatrixV& mvec = *getMatrixV((PyObject*)data);
-    
+
     TrainingWorker* wr = new TrainingWorker(*model, *new CPUData(mvec), test);
     model->getWorkerQueue().enqueue(wr);
     return Py_BuildValue("i", 0);
@@ -120,7 +114,7 @@ PyObject* startMultiviewTest(PyObject *self, PyObject *args) {
         return NULL;
     }
     MatrixV& mvec = *getMatrixV((PyObject*)data);
-    
+
     MultiviewTestWorker* wr = new MultiviewTestWorker(*model, *new CPUData(mvec), numViews, logregIdx);
     model->getWorkerQueue().enqueue(wr);
     return Py_BuildValue("i", 0);
@@ -138,7 +132,7 @@ PyObject* startFeatureWriter(PyObject *self, PyObject *args) {
     MatrixV& mvec = *getMatrixV((PyObject*)data);
     Matrix& ftrs = *mvec.back();
     mvec.pop_back();
-    
+
     FeatureWorker* wr = new FeatureWorker(*model, *new CPUData(mvec), ftrs, layerIdx);
     model->getWorkerQueue().enqueue(wr);
     return Py_BuildValue("i", 0);
@@ -152,7 +146,7 @@ PyObject* finishBatch(PyObject *self, PyObject *args) {
     WorkResult* res = model->getResultQueue().dequeue();
     assert(res != NULL);
     assert(res->getResultType() == WorkResult::BATCH_DONE);
-    
+
     Cost& cost = res->getResults();
     PyObject* dict = PyDict_New();
     CostMap& costMap = cost.getCostMap();
@@ -164,7 +158,7 @@ PyObject* finishBatch(PyObject *self, PyObject *args) {
         }
         PyDict_SetItemString(dict, it->first.c_str(), v);
     }
-    
+
     PyObject* retVal = Py_BuildValue("Ni", dict, cost.getNumCases());
     delete res; // Deletes cost too
     return retVal;
@@ -178,7 +172,7 @@ PyObject* checkGradients(PyObject *self, PyObject *args) {
         return NULL;
     }
     MatrixV& mvec = *getMatrixV((PyObject*)data);
-    
+
     GradCheckWorker* wr = new GradCheckWorker(*model, *new CPUData(mvec));
     model->getWorkerQueue().enqueue(wr);
     WorkResult* res = model->getResultQueue().dequeue();
@@ -198,8 +192,7 @@ PyObject* syncWithHost(PyObject *self, PyObject *args) {
     WorkResult* res = model->getResultQueue().dequeue();
     assert(res != NULL);
     assert(res->getResultType() == WorkResult::SYNC_DONE);
-    
+
     delete res;
     return Py_BuildValue("i", 0);
 }
-

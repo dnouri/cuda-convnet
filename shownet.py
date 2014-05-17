@@ -6,7 +6,7 @@
 #
 # - Redistributions of source code must retain the above copyright notice,
 #   this list of conditions and the following disclaimer.
-# 
+#
 # - Redistributions in binary form must reproduce the above copyright notice,
 #   this list of conditions and the following disclaimer in the documentation
 #   and/or other materials provided with the distribution.
@@ -46,12 +46,12 @@ class ShowNetError(Exception):
 class ShowConvNet(ConvNet):
     def __init__(self, op, load_dic):
         ConvNet.__init__(self, op, load_dic)
-    
+
     def get_gpus(self):
         self.need_gpu = self.op.get_value('show_preds') or self.op.get_value('write_features')
         if self.need_gpu:
             ConvNet.get_gpus(self)
-    
+
     def init_data_providers(self):
         class Dummy:
             def advance_batch(self):
@@ -60,18 +60,18 @@ class ShowConvNet(ConvNet):
             ConvNet.init_data_providers(self)
         else:
             self.train_data_provider = self.test_data_provider = Dummy()
-    
+
     def import_model(self):
         if self.need_gpu:
             ConvNet.import_model(self)
-            
+
     def init_model_state(self):
         #ConvNet.init_model_state(self)
         if self.op.get_value('show_preds'):
             self.sotmax_idx = self.get_layer_idx(self.op.get_value('show_preds'), check_type='softmax')
         if self.op.get_value('write_features'):
             self.ftr_layer_idx = self.get_layer_idx(self.op.get_value('write_features'))
-            
+
     def init_model_lib(self):
         if self.need_gpu:
             ConvNet.init_model_lib(self)
@@ -104,7 +104,7 @@ class ShowConvNet(ConvNet):
         pl.xlabel('Epoch')
 #        pl.ylabel(self.show_cost)
         pl.title(self.show_cost)
-        
+
     def make_filter_fig(self, filters, filter_start, fignum, _title, num_filters, combine_chans):
         FILTERS_PER_ROW = 16
         MAX_ROWS = 16
@@ -113,16 +113,16 @@ class ShowConvNet(ConvNet):
         f_per_row = int(ceil(FILTERS_PER_ROW / float(1 if combine_chans else num_colors)))
         filter_end = min(filter_start+MAX_FILTERS, num_filters)
         filter_rows = int(ceil(float(filter_end - filter_start) / f_per_row))
-    
+
         filter_size = int(sqrt(filters.shape[1]))
         fig = pl.figure(fignum)
-        fig.text(.5, .95, '%s %dx%d filters %d-%d' % (_title, filter_size, filter_size, filter_start, filter_end-1), horizontalalignment='center') 
+        fig.text(.5, .95, '%s %dx%d filters %d-%d' % (_title, filter_size, filter_size, filter_start, filter_end-1), horizontalalignment='center')
         num_filters = filter_end - filter_start
         if not combine_chans:
             bigpic = n.zeros((filter_size * filter_rows + filter_rows + 1, filter_size*num_colors * f_per_row + f_per_row + 1), dtype=n.single)
         else:
             bigpic = n.zeros((3, filter_size * filter_rows + filter_rows + 1, filter_size * f_per_row + f_per_row + 1), dtype=n.single)
-    
+
         for m in xrange(filter_start,filter_end ):
             filter = filters[:,:,m]
             y, x = (m - filter_start) / f_per_row, (m - filter_start) % f_per_row
@@ -136,15 +136,15 @@ class ShowConvNet(ConvNet):
                 bigpic[:,
                        1 + (1 + filter_size) * y:1 + (1 + filter_size) * y + filter_size,
                        1 + (1 + filter_size) * x:1 + (1 + filter_size) * x + filter_size] = filter_pic
-                
+
         pl.xticks([])
         pl.yticks([])
         if not combine_chans:
             pl.imshow(bigpic, cmap=pl.cm.gray, interpolation='nearest')
         else:
             bigpic = bigpic.swapaxes(0,2).swapaxes(0,1)
-            pl.imshow(bigpic, interpolation='nearest')        
-        
+            pl.imshow(bigpic, interpolation='nearest')
+
     def plot_filters(self):
         filter_start = 0 # First filter to show
         layer_names = [l['name'] for l in self.layers]
@@ -172,13 +172,13 @@ class ShowConvNet(ConvNet):
             B = filters[0,:,:] + 2.12798 * filters[1,:,:]
             filters[0,:,:], filters[1,:,:], filters[2,:,:] = R, G, B
         combine_chans = not self.no_rgb and channels == 3
-        
+
         # Make sure you don't modify the backing array itself here -- so no -= or /=
         filters = filters - filters.min()
         filters = filters / filters.max()
 
         self.make_filter_fig(filters, filter_start, 2, 'Layer %s' % self.show_filters, num_filters, combine_chans)
-    
+
     def plot_predictions(self):
         data = self.get_next_batch(train=False)[2] # get a test batch
         num_classes = self.test_data_provider.get_num_classes()
@@ -186,7 +186,7 @@ class ShowConvNet(ConvNet):
         NUM_COLS = 4
         NUM_IMGS = NUM_ROWS * NUM_COLS
         NUM_TOP_CLASSES = min(num_classes, 4) # show this many top labels
-        
+
         label_names = self.test_data_provider.batch_meta['label_names']
         if self.only_errors:
             preds = n.zeros((data[0].shape[1], num_classes), dtype=n.single)
@@ -200,13 +200,13 @@ class ShowConvNet(ConvNet):
         # Run the model
         self.libmodel.startFeatureWriter(data, self.sotmax_idx)
         self.finish_batch()
-        
+
         fig = pl.figure(3)
         fig.text(.4, .95, '%s test case predictions' % ('Mistaken' if self.only_errors else 'Random'))
         if self.only_errors:
             err_idx = nr.permutation(n.where(preds.argmax(axis=1) != data[1][0,:])[0])[:NUM_IMGS] # what the net got wrong
             data[0], data[1], preds = data[0][:,err_idx], data[1][:,err_idx], preds[err_idx,:]
-            
+
         data[0] = self.test_data_provider.get_plottable_data(data[0])
         for r in xrange(NUM_ROWS):
             for c in xrange(NUM_COLS):
@@ -236,7 +236,7 @@ class ShowConvNet(ConvNet):
                 pl.yticks(ylocs + height/2, [l[1] for l in img_labels])
                 pl.xticks([width/2.0, width], ['50%', ''])
                 pl.ylim(0, ylocs[-1] + height*2)
-    
+
     def do_write_features(self):
         if not os.path.exists(self.feature_path):
             os.makedirs(self.feature_path)
@@ -248,7 +248,7 @@ class ShowConvNet(ConvNet):
             data = next_data[2]
             ftrs = n.zeros((data[0].shape[1], num_ftrs), dtype=n.single)
             self.libmodel.startFeatureWriter(data + [ftrs], self.ftr_layer_idx)
-            
+
             # load the next batch while the current one is computing
             next_data = self.get_next_batch(train=False)
             self.finish_batch()
@@ -259,7 +259,7 @@ class ShowConvNet(ConvNet):
                 break
         pickle(os.path.join(self.feature_path, 'batches.meta'), {'source_model':self.load_file,
                                                                  'num_vis':num_ftrs})
-                
+
     def start(self):
         self.op.print_values()
         if self.show_cost:
@@ -272,7 +272,7 @@ class ShowConvNet(ConvNet):
             self.do_write_features()
         pl.show()
         sys.exit(0)
-            
+
     @classmethod
     def get_options_parser(cls):
         op = ConvNet.get_options_parser()
@@ -290,10 +290,10 @@ class ShowConvNet(ConvNet):
         op.add_option("only-errors", "only_errors", BooleanOptionParser, "Show only mistaken predictions (to be used with --show-preds)", default=False, requires=['show_preds'])
         op.add_option("write-features", "write_features", StringOptionParser, "Write test data features from given layer", default="", requires=['feature-path'])
         op.add_option("feature-path", "feature_path", StringOptionParser, "Write test data features to this path (to be used with --write-features)", default="")
-        
+
         op.options['load_file'].default = None
         return op
-    
+
 if __name__ == "__main__":
     try:
         op = ShowConvNet.get_options_parser()
@@ -303,4 +303,4 @@ if __name__ == "__main__":
     except (UnpickleError, ShowNetError, opt.GetoptError), e:
         print "----------------"
         print "Error:"
-        print e 
+        print e

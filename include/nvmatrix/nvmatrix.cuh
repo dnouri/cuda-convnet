@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (c) 2011, Alex Krizhevsky (akrizhevsky@gmail.com)
  * All rights reserved.
  *
@@ -7,7 +7,7 @@
  *
  * - Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * - Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
@@ -58,6 +58,13 @@
                             printf("Error at %s:%d\n",__FILE__,__LINE__);\
                             exit(EXIT_FAILURE);}} while(0)
 
+#ifndef MIN
+#define MIN(a,b) ((a < b) ? a : b)
+#endif
+#ifndef MAX
+#define MAX(a,b) ((a > b) ? a : b)
+#endif
+
 class NVMatrix {
 private:
     int _numCols, _numRows;
@@ -95,7 +102,7 @@ private:
     template<class Agg, class BinaryOp> void _aggregate(int axis, NVMatrix& target, Agg agg, BinaryOp op);
     template<class Agg, class BinaryOp> NVMatrix& _aggregate(int axis, Agg agg, BinaryOp op);
     template <class Randomizer> void _unaryRandomize(NVMatrix& target, Randomizer rnd);
-    template <class Randomizer> void _binaryRandomize(NVMatrix& data2, NVMatrix& target, Randomizer rnd);   
+    template <class Randomizer> void _binaryRandomize(NVMatrix& data2, NVMatrix& target, Randomizer rnd);
 public:
     NVMatrix();
     NVMatrix(bool isTrans);
@@ -184,7 +191,7 @@ public:
             _stride = getLeadingDim();
         }
     }
-    
+
     /*
      * Only use if you know what you're doing!
      * This toggles whether this object will free its GPU memory when it's destroyed.
@@ -196,11 +203,11 @@ public:
     bool isContiguous() const {
         return _stride == getLeadingDim() || getFollowingDim() == 1;
     }
-    
+
     void truncate() {
         resize(0,0);
     }
-   
+
 
     void copyFromHost(const Matrix& hostMatrix);
     void copyFromHost(const Matrix& hostMatrix, bool resizeDeviceMatrix);
@@ -264,11 +271,11 @@ public:
             getLastCudaError("kEltwiseUnaryOpTrans: Kernel execution failed");
         }
     }
-    
+
     template <class Op> void apply(Op op) {
         apply(op, *this);
     }
-    
+
     template <class Op> void applyBinary(Op op, NVMatrix& b) {
         applyBinary(op, b, *this);
     }
@@ -319,7 +326,7 @@ public:
             getLastCudaError("kEltwiseBinaryOpTrans: Kernel execution failed");
         }
     }
-    
+
     template <class Op> void applyTernary(Op op, NVMatrix& b, NVMatrix& c, NVMatrix& target) {
         assert(this->isSameDims(b));
         assert(this->isSameDims(c));
@@ -384,7 +391,7 @@ public:
     float min();
     float norm2();
     float norm();
-    
+
     void inRangeInc(float lower, float upper);
     void inRangeInc(float lower, float upper, NVMatrix& target);
     void inRangeExc(float lower, float upper);

@@ -44,10 +44,8 @@ to set the CURAND library's random seed.  This is important in order
 to get reproducable results.
 
 
-Updated to work with CUDA 5.5
-=============================
+Updated to work with CUDA via CMake
+===================================
 
 The build configuration and code has been updated to work with CUDA
-5.5.  The paths in ``build.sh`` and ``Makefile`` were updated to work
-with the default install directories of the `CUDA Toolkit 5.5
-<https://developer.nvidia.com/cuda-downloads>`_.
+via CMake. Run ``cmake .`` and then ``make``.

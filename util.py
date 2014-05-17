@@ -6,7 +6,7 @@
 #
 # - Redistributions of source code must retain the above copyright notice,
 #   this list of conditions and the following disclaimer.
-# 
+#
 # - Redistributions in binary form must reproduce the above copyright notice,
 #   this list of conditions and the following disclaimer in the documentation
 #   and/or other materials provided with the distribution.
@@ -65,7 +65,7 @@ def pickle(filename, data, compress=False):
         fo = open(filename, "wb")
         cPickle.dump(data, fo, protocol=cPickle.HIGHEST_PROTOCOL)
     fo.close()
-    
+
 def unpickle(filename):
     if not os.path.exists(filename):
         raise UnpickleError("Path '%s' does not exist." % filename)
@@ -78,7 +78,7 @@ def unpickle(filename):
     else:
         fo = open(filename, 'rb')
         dict = cPickle.load(fo)
-    
+
     fo.close()
     return dict
 

@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (c) 2011, Alex Krizhevsky (akrizhevsky@gmail.com)
  * All rights reserved.
  *
@@ -7,7 +7,7 @@
  *
  * - Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * - Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
@@ -76,7 +76,7 @@ __global__ void conv_weight_acts_c(float* images, float* hidActs, float* targets
     const int moduleIdx = partialSum * outputModuleIdx;
     const int blockFilterIdx = B_X * (blockIdx.x % filterBlocksPerModule);
 
-//    const int moduleStride = (imgSize - filterSize + 1) / numModulesX; 
+//    const int moduleStride = (imgSize - filterSize + 1) / numModulesX;
     const int numModules = numModulesY * numModulesX;
 
     const int blockPixelOffset = blockIdx.y * B_Y * pixelsPerThread;
@@ -86,7 +86,7 @@ __global__ void conv_weight_acts_c(float* images, float* hidActs, float* targets
             + blockFilterIdx * numImages * numModules
             + loadY * numImages * numModules
             + loadX;
-    
+
     targets += (outputModuleIdx * numFilters) * filterPixels * numColors
             + blockPixelOffset * numFilters
             + blockFilterIdx
@@ -103,7 +103,7 @@ __global__ void conv_weight_acts_c(float* images, float* hidActs, float* targets
             prod[c][p] = 0;
         }
     }
-    
+
     __shared__ int pxDivs[B_Y*pixelsPerThread];
     if (tidx < B_Y * pixelsPerThread) {
         pxDivs[tidx] = (((blockPixelOffset + tidx) / filterSize) << 16) + ((blockPixelOffset + tidx) % filterSize);
@@ -176,7 +176,7 @@ __global__ void conv_weight_acts_c(float* images, float* hidActs, float* targets
         }
         hidActs += numImages;
     }
-    
+
     if (scale) {
         #pragma unroll
         for (int p = 0; p < pixelsPerThread; p++) {
@@ -227,7 +227,7 @@ __global__ void conv_weight_acts_c(float* images, float* hidActs, float* targets
  * preloadCases one of 16, 32.
  * B_X one of 4, 8, 16, 32
  * B_Y arbitrary (satisfying divisibility constraints)
- * 
+ *
  * This routine is especially fast when numFilters >= 32. That's when it should be used.
  */
 template <int B_Y, int B_X, int filtersPerThread, int colorsPerThread, int preloadCases, bool scale, bool checkCaseBounds>
@@ -252,11 +252,11 @@ __global__ void conv_weight_acts_mc_mf(float* images, float* hidActs, float* tar
     const int moduleIdx = partialSum * outputModuleIdx;
     const int blockFilterIdx = filtersPerThread * B_X * (blockIdx.x % numFilterBlocks);
     const int numModules = numModulesY * numModulesX;
-    
+
     const int numFiltersPerGroup = numFilters / numGroups;
     const int blockGroupIdx = blockFilterIdx / numFiltersPerGroup;
     const int numFilterColors = numImgColors / numGroups;
-    
+
     const int blockPixelOffset = (blockIdx.y / (numFilterColors/colorsPerThread)) * B_Y;
     const int filterColorIdx = (blockIdx.y % (numFilterColors/colorsPerThread)) * colorsPerThread;
     const int imgColorIdx = filterColorIdx + blockGroupIdx * numFilterColors;
@@ -267,7 +267,7 @@ __global__ void conv_weight_acts_mc_mf(float* images, float* hidActs, float* tar
             + blockFilterIdx * numImages * numModules
             + loadY * numImages * numModules
             + loadX;
-    
+
     targets += outputModuleIdx * numFilters * filterPixels * numFilterColors
             + filterColorIdx * filterPixels * numFilters
             + blockPixelOffset * numFilters
@@ -407,7 +407,7 @@ __global__ void conv_weight_acts_mc_mf(float* images, float* hidActs, float* tar
  * preloadCases one of 16, 32.
  * B_X one of 4, 8, 16, 32
  * B_Y arbitrary (satisfying divisibility constraints)
- * 
+ *
  * This routine is especially fast when numFilters >= 32. That's when it should be used.
  */
 template <int B_Y, int B_X, int filtersPerThread, int colorsPerThread, int preloadCases, bool scale, bool checkCaseBounds>
@@ -567,14 +567,14 @@ __global__ void conv_weight_acts_mc_mf_rand(float* images, float* hidActs, float
  * hidActs:     (numFilters, numModules, numImages)
  *
  * targets:     (numModuleY*numModulesX/partialSum, numFilterColors, filterPixels, numFilters)
- * 
+ *
  * TODO: you can get a slight speed boost for local non-convolutional units by writing special
  * routines for partialSum = 1. But I dunno if the code duplication is worth it...
- * 
+ *
  * Note: all of these convolution routines are optimized for the case when
- * the number of images (i.e. the minibatch size) is a multiple of 128. 
+ * the number of images (i.e. the minibatch size) is a multiple of 128.
  * Other batch sizes will work, but but I made no attempt whatsoever
- * to make them work fast. 
+ * to make them work fast.
  */
 void _weightActs(NVMatrix& images, NVMatrix& hidActs, NVMatrix& targets,
         int imgSizeY, int numModulesY, int numModulesX, int filterSize, int paddingStart, int moduleStride, int numImgColors,
@@ -587,7 +587,7 @@ void _weightActs(NVMatrix& images, NVMatrix& hidActs, NVMatrix& targets,
     int numModules = numModulesY * numModulesX;
     int numFilters = hidActs.getNumRows() / numModules;
     int numFiltersPerGroup = numFilters / numGroups;
-    
+
     assert(numImgColors % numGroups == 0);
     assert(numFilters % (16*numGroups) == 0);
     assert(numGroups > 1 || (numImgColors > 0 && (numImgColors <= 3 || numImgColors % 4 == 0)));
@@ -606,7 +606,7 @@ void _weightActs(NVMatrix& images, NVMatrix& hidActs, NVMatrix& targets,
     assert(paddingStart + (numModulesX-1)*moduleStride + filterSize >= imgSizeX);
     assert(paddingStart + (numModulesY-1)*moduleStride + filterSize >= imgSizeY);
     assert(moduleStride <= filterSize);
-    
+
     assert(numModules * numFilters == hidActs.getNumRows());
 
     assert(!images.isTrans());
@@ -615,7 +615,7 @@ void _weightActs(NVMatrix& images, NVMatrix& hidActs, NVMatrix& targets,
 
     assert(!targets.isTrans());
     assert(targets.isContiguous());
-    
+
     int preloadCases = 32;
 
     dim3 blocks, threads;
@@ -633,13 +633,13 @@ void _weightActs(NVMatrix& images, NVMatrix& hidActs, NVMatrix& targets,
         assert(numGroups == 1); // Just for sanity
         pixelsPerThread = numFilters % 32 == 0 ? (numImgColors == 1 ? 8 : 5) : (numImgColors == 1 ? 5 : 2);
         by = numFilters % 32 == 0 ? 4 : 8; // by == 4 seems to work best
-        bx = numFilters % 32 == 0 ? 32 : 16; 
+        bx = numFilters % 32 == 0 ? 32 : 16;
         blocks = dim3((numModules/partialSum)*(numFilters/bx), DIVUP(filterPixels, by*pixelsPerThread));
     }
     assert((by * bx) % preloadCases == 0);
     threads = dim3(bx, by);
     bool checkCaseBounds = numImages % 32 != 0;
-    
+
     if (scaleTargets == 0) {
         targets.resize((numModules/partialSum) * numFilterColors*filterPixels, numFilters);
     } else {
@@ -981,11 +981,11 @@ void localWeightActs(NVMatrix& images, NVMatrix& hidActs, NVMatrix& targets,
  *
  * targets:         (numModules/partialSum, numFilterColors, filterPixels, numFilters)
  * colorIndices:    (numGroups, numFilterColors)
- * 
+ *
  * Note: all of these convolution routines are optimized for the case when
- * the number of images (i.e. the minibatch size) is a multiple of 128. 
+ * the number of images (i.e. the minibatch size) is a multiple of 128.
  * Other batch sizes will work, but but I made no attempt whatsoever
- * to make them work fast. 
+ * to make them work fast.
  */
 void _weightActsSparse(NVMatrix& images, NVMatrix& hidActs, NVMatrix& targets, int* dColorIndices,
                         int imgSizeY, int numModulesY, int numModulesX, int filterSize, int paddingStart, int moduleStride,
@@ -998,7 +998,7 @@ void _weightActsSparse(NVMatrix& images, NVMatrix& hidActs, NVMatrix& targets, i
     int numModules = numModulesY * numModulesX;
     int numFilters = hidActs.getNumRows() / numModules;
     int numFiltersPerGroup = numFilters / numGroups;
-    
+
     assert(numGroups > 1);
     assert(numImgColors % numFilterColors == 0);
     assert((numFilterColors * numGroups) % numImgColors == 0);
@@ -1018,7 +1018,7 @@ void _weightActsSparse(NVMatrix& images, NVMatrix& hidActs, NVMatrix& targets, i
     assert(paddingStart + (numModulesX-1)*moduleStride + filterSize >= imgSizeX);
     assert(paddingStart + (numModulesY-1)*moduleStride + filterSize >= imgSizeY);
     assert(moduleStride <= filterSize);
-    
+
     assert(numModules * numFilters == hidActs.getNumRows());
 
     assert(!images.isTrans());
@@ -1027,7 +1027,7 @@ void _weightActsSparse(NVMatrix& images, NVMatrix& hidActs, NVMatrix& targets, i
 
     assert(!targets.isTrans());
     assert(targets.isContiguous());
-    
+
     int preloadCases = 32;
 
     dim3 blocks, threads;
@@ -1043,14 +1043,14 @@ void _weightActsSparse(NVMatrix& images, NVMatrix& hidActs, NVMatrix& targets, i
     assert((by * bx) % preloadCases == 0);
     threads = dim3(bx, by);
     bool checkCaseBounds = numImages % 32 != 0;
-    
+
     if (scaleTargets == 0) {
         targets.resize((numModules/partialSum) * numFilterColors*filterPixels, numFilters);
     } else {
         assert(targets.getNumRows() == (numModules/partialSum) * numFilterColors*filterPixels);
         assert(targets.getNumCols() == numFilters);
     }
-    
+
     if (scaleTargets == 0) { // do not scale
         if (numFiltersPerGroup % 64 == 0) {
             if (numFilterColors % 8 == 0) {
