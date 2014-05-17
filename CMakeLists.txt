@@ -4,7 +4,7 @@ project (cuda-convnet)
 find_package (CUDA REQUIRED)
 find_package (BLAS REQUIRED)
 find_package (PythonLibs REQUIRED)
-find_package(PythonInterp REQUIRED)
+find_package (PythonInterp REQUIRED)
 
 find_path(BLAS_INCLUDE_DIRS cblas.h)
 
@@ -12,6 +12,7 @@ find_path(CUDA_COMMON_INCLUDE_DIRS
   helper_cuda.h
   PATHS ${CUDA_SDK_SEARCH_PATH}
     "/Developer/NVIDIA/CUDA-6.0"
+    "/usr/local/cuda"
   PATH_SUFFIXES "samples/common/inc"
   DOC "Location of helper_cuda.h"
   NO_DEFAULT_PATH
@@ -53,6 +54,8 @@ include_directories (
   include/
 )
 
+set (BUILD_SHARED_LIBS ON)
+
 add_subdirectory (src/common)
 add_subdirectory (src/nvmatrix)
 add_subdirectory (src/cudaconv2)
@@ -84,3 +87,5 @@ TARGET_LINK_LIBRARIES (convnet
   ${BLAS_LIBRARIES}
   ${CUDA_CUBLAS_LIBRARIES}
 )
+
+CUDA_BUILD_CLEAN_TARGET()
