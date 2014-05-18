@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (c) 2011, Alex Krizhevsky (akrizhevsky@gmail.com)
  * All rights reserved.
  *
@@ -7,7 +7,7 @@
  *
  * - Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * - Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
@@ -28,10 +28,8 @@
 #define MATRIX_H_
 
 #include <matrix_funcs.h>
-#ifdef NUMPY_INTERFACE
 #include <Python.h>
 #include <arrayobject.h>
-#endif
 #include <limits>
 #include <assert.h>
 #include <stdio.h>
@@ -41,7 +39,7 @@
 #if defined(_WIN64) || defined(_WIN32)
 #include <float.h>
 #define isnan(_X) (_isnan(_X))
-#define isinf(_X) (!_finite(_X)) 
+#define isinf(_X) (!_finite(_X))
 #define uint unsigned int
 double sqrt(int _X);
 double log(int _X);
@@ -134,9 +132,7 @@ public:
     };
     Matrix();
     Matrix(long int numRows, long int numCols);
-#ifdef NUMPY_INTERFACE
     Matrix(const PyArrayObject *src);
-#endif
     Matrix(const Matrix &like);
     Matrix(MTYPE* data, long int numRows, long int numCols);
     Matrix(MTYPE* data, long int numRows, long int numCols, bool transpose);

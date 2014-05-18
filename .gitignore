@@ -1,6 +1,40 @@
-*.pyc
+# CMake
+CMakeCache.txt
+CMakeFiles
+Makefile
+cmake_install.cmake
+install_manifest.txt
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+
+# C extensions
+*.so
+*.a
+
+# Distribution / packaging
+.Python
+env/
 bin/
-obj/
-_ConvNet.so
-moredataproviders.py
-whales
+build/
+develop-eggs/
+dist/
+eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Mr Developer
+.mr.developer.cfg
+.project
+.pydevproject

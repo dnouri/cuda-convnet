@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (c) 2011, Alex Krizhevsky (akrizhevsky@gmail.com)
  * All rights reserved.
  *
@@ -7,7 +7,7 @@
  *
  * - Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * - Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
@@ -32,7 +32,7 @@ floatv* getFloatV(PyObject* pyList) {
     if (pyList == NULL) {
         return NULL;
     }
-    floatv* vec = new floatv(); 
+    floatv* vec = new floatv();
     for (int i = 0; i < PyList_GET_SIZE(pyList); i++) {
         vec->push_back(PyFloat_AS_DOUBLE(PyList_GET_ITEM(pyList, i)));
     }
@@ -43,7 +43,7 @@ intv* getIntV(PyObject* pyList) {
     if (pyList == NULL) {
         return NULL;
     }
-    intv* vec = new intv(); 
+    intv* vec = new intv();
     for (int i = 0; i < PyList_GET_SIZE(pyList); i++) {
         vec->push_back(PyInt_AS_LONG(PyList_GET_ITEM(pyList, i)));
     }
@@ -64,7 +64,7 @@ MatrixV* getMatrixV(PyObject* pyList) {
     if (pyList == NULL) {
         return NULL;
     }
-    MatrixV* vec = new MatrixV(); 
+    MatrixV* vec = new MatrixV();
     for (int i = 0; i < PyList_GET_SIZE(pyList); i++) {
         vec->push_back(new Matrix((PyArrayObject*)PyList_GET_ITEM(pyList, i)));
     }

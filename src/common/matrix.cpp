@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (c) 2011, Alex Krizhevsky (akrizhevsky@gmail.com)
  * All rights reserved.
  *
@@ -7,7 +7,7 @@
  *
  * - Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * - Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
@@ -67,7 +67,6 @@ Matrix::Matrix(MTYPE* data, long int numRows, long int numCols, bool transpose) 
     _init(data, numRows, numCols, transpose, false);
 }
 
-#ifdef NUMPY_INTERFACE
 Matrix::Matrix(const PyArrayObject *src) {
     this->_data = NULL;
     this->_trans = CblasNoTrans;
@@ -88,7 +87,6 @@ Matrix::Matrix(const PyArrayObject *src) {
         }
     }
 }
-#endif
 Matrix::~Matrix() {
     if(this->_data != NULL && this->_ownsData) {
         delete[] this->_data;

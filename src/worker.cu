@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (c) 2011, Alex Krizhevsky (akrizhevsky@gmail.com)
  * All rights reserved.
  *
@@ -7,7 +7,7 @@
  *
  * - Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * - Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
@@ -30,7 +30,7 @@
 
 using namespace std;
 
-/* 
+/*
  * ====================
  * WorkResult
  * ====================
@@ -53,7 +53,7 @@ WorkResult::RESULTS WorkResult::getResultType() const {
     return _resultType;
 }
 
-/* 
+/*
  * ====================
  * Worker
  * ====================
@@ -61,7 +61,7 @@ WorkResult::RESULTS WorkResult::getResultType() const {
 Worker::Worker(ConvNet& convNet) : _convNet(&convNet) {
 }
 
-/* 
+/*
  * ====================
  * DataWorker
  * ====================
@@ -74,12 +74,12 @@ DataWorker::~DataWorker() {
     _dp->clearData();
 }
 
-/* 
+/*
  * ====================
  * TrainingWorker
  * ====================
  */
-TrainingWorker::TrainingWorker(ConvNet& convNet, CPUData& data, bool test) 
+TrainingWorker::TrainingWorker(ConvNet& convNet, CPUData& data, bool test)
     : DataWorker(convNet, data), _test(test) {
 }
 
@@ -91,7 +91,7 @@ void TrainingWorker::run() {
     for (int i = 0; i < _dp->getNumMinibatches(); i++) {
         _convNet->fprop(i, _test ? PASS_TEST : PASS_TRAIN);
         _convNet->getCost(batchCost);
-        
+
         if (!_test) {
             _convNet->bprop(PASS_TRAIN);
             _convNet->updateWeights();
@@ -114,12 +114,12 @@ void SyncWorker::run() {
     _convNet->getResultQueue().enqueue(new WorkResult(WorkResult::SYNC_DONE));
 }
 
-/* 
+/*
  * ====================
  * GradCheckWorker
  * ====================
  */
-GradCheckWorker::GradCheckWorker(ConvNet& convNet, CPUData& data) 
+GradCheckWorker::GradCheckWorker(ConvNet& convNet, CPUData& data)
     : DataWorker(convNet, data) {
 }
 
@@ -129,12 +129,12 @@ void GradCheckWorker::run() {
     exit(0);
 }
 
-/* 
+/*
  * ====================
  * MultiviewTestWorker
  * ====================
  */
-MultiviewTestWorker::MultiviewTestWorker(ConvNet& convNet, CPUData& data, int numViews, int logregIdx) 
+MultiviewTestWorker::MultiviewTestWorker(ConvNet& convNet, CPUData& data, int numViews, int logregIdx)
     : DataWorker(convNet, data), _numViews(numViews), _logregIdx(logregIdx) {
     assert(_data->getNumCases() % _numViews == 0);
 }
@@ -145,7 +145,7 @@ void MultiviewTestWorker::run() {
 
     int numCasesReal = _dp->getNumCases() / _numViews;
     int numMiniReal = DIVUP(numCasesReal, _dp->getMinibatchSize());
-    
+
     Cost& batchCost = *new Cost(0);
     for (int i = 0; i < numMiniReal; i++) {
         NVMatrix softmaxActs;
@@ -163,9 +163,9 @@ void MultiviewTestWorker::run() {
         NVMatrixV logregInput;
         logregInput.push_back(&logregLayer.getPrev()[0]->getActs());
         logregInput.push_back(&softmaxActs);
-        
+
         logregLayer.fprop(logregInput, PASS_TEST);
-        
+
         _convNet->getCost(batchCost);
     }
     cudaThreadSynchronize();
@@ -173,7 +173,7 @@ void MultiviewTestWorker::run() {
     _convNet->getResultQueue().enqueue(new WorkResult(WorkResult::BATCH_DONE, batchCost));
 }
 
-/* 
+/*
  * ====================
  * FeatureWorker
  * ====================

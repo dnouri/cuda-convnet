@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (c) 2011, Alex Krizhevsky (akrizhevsky@gmail.com)
  * All rights reserved.
  *
@@ -7,7 +7,7 @@
  *
  * - Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * - Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
@@ -29,9 +29,7 @@
 
 #include <curand_kernel.h>
 
-#if defined(_WIN64) || defined(_WIN32)
 #define uint unsigned int
-#endif
 
 #define NUM_BLOCKS_MAX                      65535
 
@@ -74,7 +72,7 @@
 
 #define AWR_NUM_THREADS           256
 #define WARP_SIZE                 32
-#define AWR_NUM_WARPS             AWR_NUM_THREADS / WARP_SIZE 
+#define AWR_NUM_WARPS             AWR_NUM_THREADS / WARP_SIZE
 #define AWR_LOG_NUM_THREADS       8
 #define LOG_WARP_SIZE             5
 #define AWR_LOG_NUM_WARPS         3
@@ -105,7 +103,7 @@ __global__ void kEltwiseTernaryOp(const float* a, const float* b, const float* c
  * dest here is assumed to be "not transposed" -- height and width correspond to it.
  * b is assumed to be transposed.
  * a can be either transposed or not -- depending on parameter.
- * 
+ *
  * Performs dest := op(a, b)
  */
 template<class Op, bool checkBounds, bool aTrans, bool reverse>
@@ -338,7 +336,7 @@ __global__ void kAggRows_wholerow(const float* mat, float* matSum, const uint wi
     __shared__ float accum[AWR_NUM_THREADS];
     volatile float* vMyAccum = &accum[tidx];
     float* myAccum = &accum[tidx];
-    
+
     matSum += blockIdx.y;
     mat += width * blockIdx.y;
 
@@ -383,7 +381,7 @@ __global__ void kAggRows_wholerow_nosync(const float* mat, float* matSum, const 
     const uint tidx = threadIdx.x;
     const uint warpIdx = tidx / WARP_SIZE;
     const uint tidxInWarp = tidx % WARP_SIZE;
-    
+
     __shared__ float accum[(WARP_SIZE + 1) * AWR_NUM_WARPS + WARP_SIZE/2];
     __shared__ float finalAccum[AWR_NUM_WARPS + AWR_NUM_WARPS / 2];
 
@@ -398,7 +396,7 @@ __global__ void kAggRows_wholerow_nosync(const float* mat, float* matSum, const 
             rAccum = agg(rAccum, mat[x]);
         }
         myAccum[0] = rAccum;
-        
+
         // Each warp does a reduction that doesn't require synchronizatoin
         #pragma unroll
         for (uint i = 0; i < LOG_WARP_SIZE; i++) {
