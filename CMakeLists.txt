@@ -32,6 +32,7 @@ list(APPEND CUDA_NVCC_FLAGS -gencode arch=compute_30,code=sm_30)
 
 IF(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
   list(APPEND CMAKE_CXX_FLAGS -fPIC)
+  list(APPEND BLAS_LIBRARIES cblas)
 ENDIF(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
 
 execute_process(COMMAND "${PYTHON_EXECUTABLE}" "-c"
