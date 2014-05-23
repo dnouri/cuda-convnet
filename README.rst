@@ -32,8 +32,10 @@ by modifying the section for the fc10 layer to look like so::
   # ...
   dropout=0.5
 
-In practice, you'll probably also want to double the number of
-``outputs`` in that layer.
+In practice, you'll probably want to double the number of
+``outputs`` in each layer with dropout, since dropout minimizes
+overfitting.  For example, you can add a new
+hidden layer ``fc20`` with outputs=20 and dropout=0.5.
 
 
 CURAND random seeding
