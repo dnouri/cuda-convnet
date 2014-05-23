@@ -30,7 +30,7 @@ list(APPEND CUDA_NVCC_FLAGS -gencode arch=compute_30,code=sm_30)
 #list(APPEND CUDA_NVCC_FLAGS -gencode arch=compute_35,code=sm_35)
 #list(APPEND CUDA_NVCC_FLAGS -gencode arch=compute_50,code=sm_50)
 
-list(APPEND CUDA_NVCC_FLAGS -Xcompiler -fpic)
+list(APPEND CMAKE_CXX_FLAGS -fPIC)
 
 execute_process(COMMAND "${PYTHON_EXECUTABLE}" "-c"
   "import numpy as n; print(n.get_include());"
