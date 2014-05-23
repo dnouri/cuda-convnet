@@ -24,7 +24,13 @@ if(APPLE)
   SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -stdlib=libstdc++")
 endif(APPLE)
 
+#list(APPEND CUDA_NVCC_FLAGS -gencode arch=compute_20,code=sm_20)
 list(APPEND CUDA_NVCC_FLAGS -gencode arch=compute_30,code=sm_30)
+#list(APPEND CUDA_NVCC_FLAGS -gencode arch=compute_32,code=sm_32)
+#list(APPEND CUDA_NVCC_FLAGS -gencode arch=compute_35,code=sm_35)
+#list(APPEND CUDA_NVCC_FLAGS -gencode arch=compute_50,code=sm_50)
+
+list(APPEND CUDA_NVCC_FLAGS -Xcompiler -fpic)
 
 execute_process(COMMAND "${PYTHON_EXECUTABLE}" "-c"
   "import numpy as n; print(n.get_include());"
@@ -53,8 +59,6 @@ include_directories (
   include/cudaconv2
   include/
 )
-
-set (BUILD_SHARED_LIBS ON)
 
 add_subdirectory (src/common)
 add_subdirectory (src/nvmatrix)
