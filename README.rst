@@ -49,4 +49,4 @@ Updated to work with CUDA via CMake
 
 The build configuration and code has been updated to work with CUDA
 via CMake. Run ``cmake .`` and then ``make``. If you have an alternative
-BLAS library just set it with for example `cmake -DBLAS_LIBRARIES=/usr/lib/libcblas.so  .`.
+BLAS library just set it with for example ``cmake -DBLAS_LIBRARIES=/usr/lib/libcblas.so  .``.
