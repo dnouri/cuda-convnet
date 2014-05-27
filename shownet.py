@@ -31,7 +31,7 @@ import os
 from gpumodel import IGPUModel
 import random as r
 import numpy.random as nr
-from convnet import ConvNet
+from convnet_ import ConvNet
 from options import *
 
 try:
