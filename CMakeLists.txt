@@ -82,7 +82,7 @@ CUDA_ADD_LIBRARY (convnet SHARED
 set_target_properties (convnet
   PROPERTIES
   PREFIX ""
-  SUFFIX ".so"
+  SUFFIX "_.so"
 )
 
 TARGET_LINK_LIBRARIES (convnet

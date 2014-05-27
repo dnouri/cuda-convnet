@@ -55,8 +55,8 @@ static PyMethodDef _ConvNetMethods[] = {  { "initModel",          initModel,    
 };
 
 PyMODINIT_FUNC
-initconvnet() {
-    (void) Py_InitModule("convnet", _ConvNetMethods);
+initconvnet_() {
+    (void) Py_InitModule("convnet_", _ConvNetMethods);
     import_array();
 }
 
