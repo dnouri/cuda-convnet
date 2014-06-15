@@ -1,18 +1,31 @@
 cmake_minimum_required (VERSION 2.8)
-project (cuda-convnet)
+project (cuda-convnet )
+
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
+set(THREADS_USE_PTHREADS_WIN32 TRUE)
+
+if(MSVC)
+  string(REGEX REPLACE "/Z[iI7]" ""
+         CMAKE_CXX_FLAGS_RELEASE
+         "${CMAKE_CXX_FLAGS_RELEASE}")
+  set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Z7")
+endif()
 
 find_package (CUDA REQUIRED)
-find_package (BLAS REQUIRED)
+#find_package (BLAS REQUIRED)
+find_package (MKL REQUIRED)
 find_package (PythonLibs REQUIRED)
 find_package (PythonInterp REQUIRED)
+find_package (Threads REQUIRED)
 
-find_path(BLAS_INCLUDE_DIRS cblas.h)
+#find_path(BLAS_INCLUDE_DIRS cblas.h)
 
 find_path(CUDA_COMMON_INCLUDE_DIRS
   helper_cuda.h
   PATHS ${CUDA_SDK_SEARCH_PATH}
     "/Developer/NVIDIA/CUDA-6.0"
     "/usr/local/cuda"
+    "C:/ProgramData/NVIDIA Corporation/CUDA Samples/v6.0/common/inc"
   PATH_SUFFIXES "samples/common/inc"
   DOC "Location of helper_cuda.h"
   NO_DEFAULT_PATH
@@ -51,11 +64,12 @@ else()
 endif()
 
 include_directories (
-  ${BLAS_INCLUDE_DIRS}
   ${CUDA_INCLUDE_DIRS}
   ${CUDA_COMMON_INCLUDE_DIRS}
   ${PYTHON_INCLUDE_DIRS}
   ${NUMPY_INCLUDE_DIRS}/numpy
+  ${MKL_INCLUDE_DIR}
+  ${THREADS_PTHREADS_INCLUDE_DIR}
   include/common
   include/nvmatrix
   include/cudaconv2
@@ -82,7 +96,7 @@ CUDA_ADD_LIBRARY (convnet SHARED
 set_target_properties (convnet
   PROPERTIES
   PREFIX ""
-  SUFFIX "_.so"
+  SUFFIX "_.pyd"
 )
 
 TARGET_LINK_LIBRARIES (convnet
@@ -90,8 +104,9 @@ TARGET_LINK_LIBRARIES (convnet
   nvmatrix
   cudaconv2
   ${PYTHON_LIBRARIES}
-  ${BLAS_LIBRARIES}
   ${CUDA_CUBLAS_LIBRARIES}
+  ${MKL_LIBRARIES}
+  ${CMAKE_THREAD_LIBS_INIT}
 )
 
 CUDA_BUILD_CLEAN_TARGET()

@@ -39,7 +39,7 @@
 #include <helper_cuda.h>
 #include <time.h>
 #include <curand_kernel.h>
-
+#include <pthread.h>
 #include <helper_image.h>
 #include <matrix.h>
 #include "nvmatrix_kernels.cuh"
