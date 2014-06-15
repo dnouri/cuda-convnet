@@ -83,7 +83,7 @@ ELSEIF(_Threads_ptwin32)
   FIND_PATH(THREADS_PTHREADS_INCLUDE_DIR 
     pthread.h 
     PATHS 
-      "C:/cuda-convnet/pthreads-w32-2-9-1-release/Pre-built.2/include"
+    ${THREADS_PTHREAD_WIN32_INC}
     )
   
   # Determine the library filename

@@ -5,6 +5,12 @@ if(MSVC)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
 set(THREADS_USE_PTHREADS_WIN32 TRUE)
 
+# set the place of pthread.h
+set(THREADS_PTHREAD_WIN32_INC "C:/cuda-convnet/pthreads-w32-2-9-1-release/Pre-built.2/include")
+
+# set the place you install mkl (the folder containing "./mkl")
+set(MKL_ROOT "C:/Program Files (x86)/Intel/Composer XE 2013")
+
   string(REGEX REPLACE "/Z[iI7]" ""
          CMAKE_CXX_FLAGS_RELEASE
          "${CMAKE_CXX_FLAGS_RELEASE}")
@@ -14,13 +20,14 @@ endif()
 find_package (CUDA REQUIRED)
 if(MSVC)
     find_package (MKL REQUIRED)
+    find_package (Threads REQUIRED)
 else()
     find_package (BLAS REQUIRED)
     find_path(BLAS_INCLUDE_DIRS cblas.h)
 endif()
 find_package (PythonLibs REQUIRED)
 find_package (PythonInterp REQUIRED)
-find_package (Threads REQUIRED)
+
 
 
 
