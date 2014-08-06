@@ -1,13 +1,48 @@
 cmake_minimum_required (VERSION 2.8)
-project (cuda-convnet)
+project (cuda-convnet )
+
+if(MSVC)
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
+set(THREADS_USE_PTHREADS_WIN32 TRUE)
+
+# set the place of pthread.h
+set(THREADS_PTHREAD_WIN32_INC "C:/cuda-convnet/pthreads-w32-2-9-1-release/Pre-built.2/include")
+
+# set the place you install mkl (the folder containing "./mkl")
+set(MKL_ROOT "C:/Program Files (x86)/Intel/Composer XE 2013")
+
+  string(REGEX REPLACE "/Z[iI7]" ""
+         CMAKE_CXX_FLAGS_RELEASE
+         "${CMAKE_CXX_FLAGS_RELEASE}")
+  set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Z7")
+endif()
 
 find_package (CUDA REQUIRED)
-find_package (BLAS REQUIRED)
+if(MSVC)
+    find_package (MKL REQUIRED)
+    find_package (Threads REQUIRED)
+else()
+    find_package (BLAS REQUIRED)
+    find_path(BLAS_INCLUDE_DIRS cblas.h)
+endif()
 find_package (PythonLibs REQUIRED)
 find_package (PythonInterp REQUIRED)
 
-find_path(BLAS_INCLUDE_DIRS cblas.h)
 
+
+
+if (MSVC)
+find_path(CUDA_COMMON_INCLUDE_DIRS
+  helper_cuda.h
+  PATHS ${CUDA_SDK_SEARCH_PATH}
+    "/Developer/NVIDIA/CUDA-6.0"
+    "/usr/local/cuda"
+    "C:/ProgramData/NVIDIA Corporation/CUDA Samples/v6.0/common/inc"
+  PATH_SUFFIXES "samples/common/inc"
+  DOC "Location of helper_cuda.h"
+  NO_DEFAULT_PATH
+)
+else()
 find_path(CUDA_COMMON_INCLUDE_DIRS
   helper_cuda.h
   PATHS ${CUDA_SDK_SEARCH_PATH}
@@ -17,6 +52,7 @@ find_path(CUDA_COMMON_INCLUDE_DIRS
   DOC "Location of helper_cuda.h"
   NO_DEFAULT_PATH
 )
+endif()
 
 if(APPLE)
   LIST(APPEND CUDA_NVCC_FLAGS -ccbin /usr/bin/clang)
@@ -50,6 +86,20 @@ else()
   message(FATAL_ERROR "NumPy import failure:\n${_NUMPY_ERROR_VALUE}")
 endif()
 
+if (MSVC)
+include_directories (
+  ${CUDA_INCLUDE_DIRS}
+  ${CUDA_COMMON_INCLUDE_DIRS}
+  ${PYTHON_INCLUDE_DIRS}
+  ${NUMPY_INCLUDE_DIRS}/numpy
+  ${MKL_INCLUDE_DIR}
+  ${THREADS_PTHREADS_INCLUDE_DIR}
+  include/common
+  include/nvmatrix
+  include/cudaconv2
+  include/
+)
+else()
 include_directories (
   ${BLAS_INCLUDE_DIRS}
   ${CUDA_INCLUDE_DIRS}
@@ -61,6 +111,7 @@ include_directories (
   include/cudaconv2
   include/
 )
+endif()
 
 add_subdirectory (src/common)
 add_subdirectory (src/nvmatrix)
@@ -79,13 +130,33 @@ CUDA_ADD_LIBRARY (convnet SHARED
   src/worker.cu
 )
 
+if(MSVC)
+set_target_properties (convnet
+  PROPERTIES
+  PREFIX ""
+  SUFFIX "_.pyd"
+)
+else()
 set_target_properties (convnet
   PROPERTIES
   PREFIX ""
   SUFFIX "_.so"
 )
+endif()
 
-TARGET_LINK_LIBRARIES (convnet
+
+if(MSVC)
+  TARGET_LINK_LIBRARIES (convnet
+  common
+  nvmatrix
+  cudaconv2
+  ${PYTHON_LIBRARIES}
+  ${CUDA_CUBLAS_LIBRARIES}
+  ${MKL_LIBRARIES}
+  ${CMAKE_THREAD_LIBS_INIT}
+)
+else()
+  TARGET_LINK_LIBRARIES (convnet
   common
   nvmatrix
   cudaconv2
@@ -93,5 +164,7 @@ TARGET_LINK_LIBRARIES (convnet
   ${BLAS_LIBRARIES}
   ${CUDA_CUBLAS_LIBRARIES}
 )
+endif()
+
 
 CUDA_BUILD_CLEAN_TARGET()
