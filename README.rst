@@ -4,6 +4,10 @@ implementation written by Alex Krizhevsky.
 ``cuda-convnet`` has quite extensive documentation itself.  Find the
 `MAIN DOCUMENTATION HERE <http://code.google.com/p/cuda-convnet/>`_.
 
+**Update**: A newer version, `cuda-convnet 2
+<https://code.google.com/p/cuda-convnet2/>`_, has been released by
+Alex.  This fork is still based on the original cuda-convnet.
+
 ===================
 Additional features
 ===================
