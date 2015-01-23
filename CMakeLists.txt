@@ -23,10 +23,14 @@ if(MSVC)
   find_package (Threads REQUIRED)
 else()
   find_package (BLAS REQUIRED)
-  find_path(BLAS_INCLUDE_DIRS cblas.h)
+  find_path(BLAS_INCLUDE_DIRS cblas.h
+    HINTS
+      "/System/Library/Frameworks/vecLib.framework/Versions/Current/Headers/"
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.9.sdk/System/Library/Frameworks/Accelerate.framework/Versions/Current/Frameworks/vecLib.framework/Headers/"
+  )
 endif()
-find_package (PythonLibs REQUIRED)
-find_package (PythonInterp REQUIRED)
+find_package (PythonLibs 2.7 REQUIRED)
+find_package (PythonInterp 2.7 REQUIRED)
 
 find_path(CUDA_COMMON_INCLUDE_DIRS
   helper_cuda.h
